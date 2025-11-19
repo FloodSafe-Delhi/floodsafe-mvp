@@ -1,0 +1,108 @@
+/**
+ * City-specific map configurations for FloodSafe
+ *
+ * Each city has its own:
+ * - Geographic center and bounds
+ * - PMTiles files for basemap and flood layers
+ * - Metro/transit data files
+ * - Default zoom and display settings
+ */
+
+export interface CityConfig {
+    name: string;
+    displayName: string;
+    center: [number, number]; // [longitude, latitude]
+    zoom: number;
+    pitch?: number;
+    maxZoom: number;
+    minZoom: number;
+    bounds: [[number, number], [number, number]]; // [[minLng, minLat], [maxLng, maxLat]]
+    pmtiles: {
+        basemap: string;
+        flood: string;
+    };
+    metro: {
+        lines: string;
+        stations: string;
+    };
+}
+
+export const CITIES = {
+    bangalore: {
+        name: 'bangalore',
+        displayName: 'Bangalore',
+        center: [77.5777, 12.9776] as [number, number],
+        zoom: 12.7,
+        pitch: 45,
+        maxZoom: 15,
+        minZoom: 12,
+        bounds: [
+            [77.199861111, 12.600138889], // [minLng, minLat]
+            [77.899861111, 13.400138889]  // [maxLng, maxLat]
+        ] as [[number, number], [number, number]],
+        pmtiles: {
+            basemap: '/basemap.pmtiles',
+            flood: '/tiles.pmtiles'
+        },
+        metro: {
+            lines: '/metro-lines.geojson',
+            stations: '/metro-stations.geojson'
+        }
+    },
+    delhi: {
+        name: 'delhi',
+        displayName: 'Delhi',
+        center: [77.2090, 28.6139] as [number, number],
+        zoom: 12.5,
+        pitch: 45,
+        maxZoom: 15,
+        minZoom: 12,
+        bounds: [
+            [76.94, 28.42],   // [minLng, minLat]
+            [77.46, 28.88]    // [maxLng, maxLat]
+        ] as [[number, number], [number, number]],
+        pmtiles: {
+            basemap: '/delhi-basemap.pmtiles',
+            flood: '/delhi-tiles.pmtiles'
+        },
+        metro: {
+            lines: '/delhi-metro-lines.geojson',
+            stations: '/delhi-metro-stations.geojson'
+        }
+    }
+} as const;
+
+export type CityKey = keyof typeof CITIES;
+
+/**
+ * Helper function to get city configuration by key
+ */
+export function getCityConfig(cityKey: CityKey): CityConfig {
+    return CITIES[cityKey];
+}
+
+/**
+ * Helper function to check if coordinates are within city bounds
+ */
+export function isWithinCityBounds(
+    lng: number,
+    lat: number,
+    cityKey: CityKey
+): boolean {
+    const city = CITIES[cityKey];
+    const [[minLng, minLat], [maxLng, maxLat]] = city.bounds;
+
+    return (
+        lng >= minLng &&
+        lng <= maxLng &&
+        lat >= minLat &&
+        lat <= maxLat
+    );
+}
+
+/**
+ * Get all available city keys
+ */
+export function getAvailableCities(): CityKey[] {
+    return Object.keys(CITIES) as CityKey[];
+}

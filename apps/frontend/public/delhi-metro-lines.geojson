@@ -1,0 +1,39 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Red Line",
+        "ref": "Red",
+        "colour": "#e41e26",
+        "network": "Delhi Metro",
+        "note": "PLACEHOLDER - Real data needs to be added"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [77.2090, 28.6139],
+          [77.2190, 28.6239]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Blue Line",
+        "ref": "Blue",
+        "colour": "#0047ba",
+        "network": "Delhi Metro",
+        "note": "PLACEHOLDER - Real data needs to be added"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [77.1990, 28.6039],
+          [77.2290, 28.6239]
+        ]
+      }
+    }
+  ]
+}

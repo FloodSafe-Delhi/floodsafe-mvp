@@ -52,6 +52,23 @@ export default function MapLegend({ className }: MapLegendProps) {
                         </div>
                     </div>
 
+                    {/* Community Reports */}
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-700 mb-2">Community Reports</h4>
+                        <div className="space-y-1.5">
+                            <LegendItem color="#3b82f6" label="Ankle Deep" shape="circle" />
+                            <LegendItem color="#f59e0b" label="Knee Deep" shape="circle" />
+                            <LegendItem color="#f97316" label="Waist Deep" shape="circle" />
+                            <LegendItem color="#ef4444" label="Impassable" shape="circle" />
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <div className="w-4 h-4 rounded-full border-2 border-green-500 bg-gray-300"></div>
+                                <span>Verified</span>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Routes */}
                     <div>
                         <h4 className="text-xs font-medium text-gray-700 mb-2">Routes</h4>

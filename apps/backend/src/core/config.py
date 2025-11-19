@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         "http://localhost:5173",  # Vite Frontend
         "http://localhost:5174",  # Vite Frontend (alternate)
         "http://localhost:5175",  # Vite Frontend (alternate)
+        "http://localhost:5176",  # Vite Frontend (current)
         "http://localhost:3000",  # Alternative Frontend
         "http://localhost:8000",  # Swagger UI
     ]

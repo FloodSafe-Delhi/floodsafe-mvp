@@ -4,7 +4,7 @@ import { useSensors } from '../lib/api/hooks';
 import maplibregl from 'maplibre-gl';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Plus, Minus, Navigation, Layers } from 'lucide-react';
+import { Plus, Minus, Navigation, Layers, Train } from 'lucide-react';
 import MapLegend from './MapLegend';
 
 interface MapComponentProps {
@@ -20,7 +20,8 @@ export default function MapComponent({ className, title, showControls }: MapComp
     const [layersVisible, setLayersVisible] = useState({
         flood: true,
         sensors: true,
-        routes: true
+        routes: true,
+        metro: true
     });
 
     // Force resize when the component mounts or className changes
@@ -154,6 +155,13 @@ export default function MapComponent({ className, title, showControls }: MapComp
         if (map.getLayer('routes-layer')) {
             map.setLayoutProperty('routes-layer', 'visibility', layersVisible.routes ? 'visible' : 'none');
         }
+
+        // Toggle metro layers
+        ['railway-transit', 'railway'].forEach(layerId => {
+            if (map.getLayer(layerId)) {
+                map.setLayoutProperty(layerId, 'visibility', layersVisible.metro ? 'visible' : 'none');
+            }
+        });
     }, [map, isLoaded, layersVisible]);
 
     const handleZoomIn = () => {
@@ -215,9 +223,8 @@ export default function MapComponent({ className, title, showControls }: MapComp
 
     const toggleLayers = () => {
         setLayersVisible(prev => ({
-            flood: !prev.flood,
-            sensors: prev.sensors,
-            routes: prev.routes
+            ...prev,
+            flood: !prev.flood
         }));
     };
 
@@ -275,6 +282,14 @@ export default function MapComponent({ className, title, showControls }: MapComp
                             title="Toggle flood layer"
                         >
                             <Layers className="h-5 w-5" />
+                        </Button>
+                        <Button
+                            size="icon"
+                            onClick={() => setLayersVisible(prev => ({ ...prev, metro: !prev.metro }))}
+                            className={`${layersVisible.metro ? '!bg-indigo-500 !hover:bg-indigo-600 !text-white' : '!bg-white !hover:bg-gray-100 !text-gray-800 border-2 border-gray-300'} shadow-xl rounded-full w-11 h-11 !opacity-100`}
+                            title="Toggle metro routes"
+                        >
+                            <Train className="h-5 w-5" />
                         </Button>
                     </div>
 

@@ -73,6 +73,15 @@ class Report(Base):
     verification_score = Column(Integer, default=0)
     upvotes = Column(Integer, default=0)
 
+    # Community reporting fields
+    phone_number = Column(String(20), nullable=True)
+    phone_verified = Column(Boolean, default=False)
+    water_depth = Column(String(20), nullable=True)  # ankle, knee, waist, impassable
+    vehicle_passability = Column(String(30), nullable=True)  # all, high-clearance, none
+    iot_validation_score = Column(Integer, default=0)  # 0-100
+    nearby_sensor_ids = Column(String, default="[]")  # JSON array
+    prophet_prediction_match = Column(Boolean, nullable=True)  # Future: Prophet integration
+
     @hybrid_property
     def latitude(self):
         """Extract latitude from PostGIS POINT geometry"""

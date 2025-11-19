@@ -61,6 +61,15 @@ class Report(BaseModel):
     verification_score: int = 0  # Computed from upvotes/user reputation
     upvotes: int = 0
 
+    # Community reporting fields
+    phone_number: Optional[str] = None
+    phone_verified: bool = False
+    water_depth: Optional[str] = None  # ankle, knee, waist, impassable
+    vehicle_passability: Optional[str] = None  # all, high-clearance, none
+    iot_validation_score: int = 0  # 0-100 score from IoT sensor validation
+    nearby_sensor_ids: str = "[]"  # JSON array of nearby sensor UUIDs
+    prophet_prediction_match: Optional[bool] = None  # Future: matches Prophet forecast
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -94,6 +103,12 @@ class ReportCreate(BaseModel):
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
     media_type: str = "image"
+
+    # Community reporting fields
+    phone_number: str = Field(..., min_length=10, max_length=20)
+    phone_verification_token: Optional[str] = None
+    water_depth: Optional[str] = Field(None, pattern="^(ankle|knee|waist|impassable)$")
+    vehicle_passability: Optional[str] = Field(None, pattern="^(all|high-clearance|none)$")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -157,6 +172,12 @@ class ReportResponse(BaseModel):
     verification_score: int
     upvotes: int
     timestamp: datetime
+
+    # Community reporting fields (phone_number excluded for privacy)
+    phone_verified: bool
+    water_depth: Optional[str]
+    vehicle_passability: Optional[str]
+    iot_validation_score: int
 
     model_config = ConfigDict(from_attributes=True)
 

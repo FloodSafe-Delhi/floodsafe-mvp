@@ -13,6 +13,13 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     role = Column(String, default="user")
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Gamification
+    points = Column(Integer, default=0)
+    level = Column(Integer, default=1)
+    reports_count = Column(Integer, default=0)
+    verified_reports_count = Column(Integer, default=0)
+    badges = Column(String, default="[]") # JSON string
 
 class Sensor(Base):
     __tablename__ = "sensors"
@@ -30,7 +37,7 @@ class Reading(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     sensor = relationship("Sensor", back_populates="readings")
 
-class Report(BaseModel):
+class Report(Base):
     __tablename__ = "reports"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))

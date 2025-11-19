@@ -30,15 +30,19 @@ class Reading(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     sensor = relationship("Sensor", back_populates="readings")
 
-class Report(Base):
+class Report(BaseModel):
     __tablename__ = "reports"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     description = Column(String)
     location = Column(Geometry('POINT', srid=4326))
-    image_url = Column(String, nullable=True)
+    media_url = Column(String, nullable=True)
+    media_type = Column(String, default="image")
+    media_metadata = Column(String, default="{}") # JSON string
     timestamp = Column(DateTime, default=datetime.utcnow)
     verified = Column(Boolean, default=False)
+    verification_score = Column(Integer, default=0)
+    upvotes = Column(Integer, default=0)
 
 class FloodZone(Base):
     __tablename__ = "flood_zones"

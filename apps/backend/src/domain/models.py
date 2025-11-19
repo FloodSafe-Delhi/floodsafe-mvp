@@ -35,9 +35,13 @@ class Report(BaseModel):
     description: str
     location_lat: float
     location_lng: float
-    image_url: Optional[str] = None
+    media_url: Optional[str] = None
+    media_type: str = "image" # image, video
+    media_metadata: dict = {} # EXIF, Geotags, Device Info
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     verified: bool = False
+    verification_score: int = 0 # Computed from upvotes/user reputation
+    upvotes: int = 0
     
     model_config = ConfigDict(from_attributes=True)
 

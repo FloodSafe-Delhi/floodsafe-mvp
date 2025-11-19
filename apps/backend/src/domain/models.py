@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -98,6 +98,15 @@ class ReportCreate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SensorCreate(BaseModel):
+    """Request DTO for registering a new sensor"""
+    location_lat: float = Field(..., ge=-90, le=90)
+    location_lng: float = Field(..., ge=-180, le=180)
+    status: str = "active"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SensorReading(BaseModel):
     """Request DTO for IoT sensor data ingestion"""
     sensor_id: UUID
@@ -122,6 +131,17 @@ class UserResponse(BaseModel):
     reports_count: int
     verified_reports_count: int
     badges: List[str]  # Parsed JSON array
+
+    @field_validator('badges', mode='before')
+    @classmethod
+    def parse_badges(cls, v):
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return []
+        return v
 
     model_config = ConfigDict(from_attributes=True)
 

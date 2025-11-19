@@ -1,0 +1,280 @@
+    INFO: 2025-11-19 08:22:18,786:               log.py:   20: Logging to C:\Users\Anirudh Mohan\Desktop\FloodSafe\mdpdf.log
+   DEBUG: 2025-11-19 08:22:18,792:               cli.py:  103: README.md
+    INFO: 2025-11-19 08:22:18,793:         converter.py:   14: README.md
+   DEBUG: 2025-11-19 08:22:18,796:      pdf_renderer.py:  470: printSegment: 📘 FloodSafe Project Guide
+   DEBUG: 2025-11-19 08:22:18,880:      pdf_renderer.py:  470: printSegment: Welcome
+   DEBUG: 2025-11-19 08:22:18,880:      pdf_renderer.py:  470: printSegment: !
+   DEBUG: 2025-11-19 08:22:18,880:      pdf_renderer.py:  470: printSegment:  This guide is designed to help you understand the 
+   DEBUG: 2025-11-19 08:22:18,880:      pdf_renderer.py:  470: printSegment: FloodSafe
+   DEBUG: 2025-11-19 08:22:18,886:      pdf_renderer.py:  470: printSegment:  codebase, its architecture, and the vision
+   DEBUG: 2025-11-19 08:22:18,896:      pdf_renderer.py:  470: printSegment: behind it. Whether you are a student or a contributor, this document will walk you through everything from the
+   DEBUG: 2025-11-19 08:22:18,897:      pdf_renderer.py:  470: printSegment: folder structure to the future roadmap.
+   DEBUG: 2025-11-19 08:22:18,897:      pdf_renderer.py:  470: printSegment: 🏗️ 1. Understanding the Codebase
+   DEBUG: 2025-11-19 08:22:18,897:      pdf_renderer.py:  470: printSegment: We use a 
+   DEBUG: 2025-11-19 08:22:18,897:      pdf_renderer.py:  470: printSegment: Monorepo
+   DEBUG: 2025-11-19 08:22:18,900:      pdf_renderer.py:  470: printSegment:  structure. This means all our different projects (Backend, Frontend, IoT) live in one single
+   DEBUG: 2025-11-19 08:22:18,900:      pdf_renderer.py:  470: printSegment: repository. This makes it easier to share code and run everything together.
+   DEBUG: 2025-11-19 08:22:18,903:      pdf_renderer.py:  470: printSegment: 📂 Directory Structure
+   DEBUG: 2025-11-19 08:22:18,903:      pdf_renderer.py:  470: printSegment: FloodSafe/
+   DEBUG: 2025-11-19 08:22:18,903:      pdf_renderer.py:  470: printSegment: ├── apps/                  # Where the actual code lives
+   DEBUG: 2025-11-19 08:22:18,911:      pdf_renderer.py:  470: printSegment: │   ├── backend/           # The Brain (Python/FastAPI)
+   DEBUG: 2025-11-19 08:22:18,911:      pdf_renderer.py:  470: printSegment: │   ├── frontend/          # The Face (React/Vite)
+   DEBUG: 2025-11-19 08:22:18,911:      pdf_renderer.py:  470: printSegment: │   └── iot-ingestion/     # The Ears (Python/IoT)
+   DEBUG: 2025-11-19 08:22:18,911:      pdf_renderer.py:  470: printSegment: ├── docker-compose.yml     # The Orchestra Conductor
+   DEBUG: 2025-11-19 08:22:18,911:      pdf_renderer.py:  470: printSegment: └── pnpm-workspace.yaml    # The Glue (links everything)
+   DEBUG: 2025-11-19 08:22:18,911:      pdf_renderer.py:  470: printSegment: 🧠 The Backend (
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: apps/backend
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: )
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: Tech
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: : Python, FastAPI, SQLAlchemy, PostGIS.
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: Pattern
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: : 
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: Clean Architecture
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2025-11-19 08:22:18,990:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:18,995:      pdf_renderer.py:  470: printSegment: Why?
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment:  We separate the 
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: Business Logic
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment:  (Domain) from the 
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: Database
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment:  (Infrastructure). This means
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: if we change the database later, our core logic doesn
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: t break.
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: Key Files
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:18,996:      pdf_renderer.py:  470: printSegment: src/domain/models.py
+   DEBUG: 2025-11-19 08:22:19,005:      pdf_renderer.py:  470: printSegment: : Defines what a 
+   DEBUG: 2025-11-19 08:22:19,006:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,006:      pdf_renderer.py:  470: printSegment: User
+   DEBUG: 2025-11-19 08:22:19,006:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,006:      pdf_renderer.py:  470: printSegment:  or 
+   DEBUG: 2025-11-19 08:22:19,007:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,008:      pdf_renderer.py:  470: printSegment: Report
+   DEBUG: 2025-11-19 08:22:19,008:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,008:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2025-11-19 08:22:19,009:      pdf_renderer.py:  470: printSegment: is
+   DEBUG: 2025-11-19 08:22:19,010:      pdf_renderer.py:  470: printSegment:  (Pydantic
+   DEBUG: 2025-11-19 08:22:19,011:      pdf_renderer.py:  470: printSegment: models).
+   DEBUG: 2025-11-19 08:22:19,011:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,012:      pdf_renderer.py:  470: printSegment: src/api/reports.py
+   DEBUG: 2025-11-19 08:22:19,013:      pdf_renderer.py:  470: printSegment: : Handles the logic when someone uploads a flood report
+   DEBUG: 2025-11-19 08:22:19,013:      pdf_renderer.py:  470: printSegment: (including Geotag verification
+   DEBUG: 2025-11-19 08:22:19,013:      pdf_renderer.py:  470: printSegment: !
+   DEBUG: 2025-11-19 08:22:19,014:      pdf_renderer.py:  470: printSegment: ).
+   DEBUG: 2025-11-19 08:22:19,014:      pdf_renderer.py:  470: printSegment: 🎨 The Frontend (
+   DEBUG: 2025-11-19 08:22:19,015:      pdf_renderer.py:  470: printSegment: apps/frontend
+   DEBUG: 2025-11-19 08:22:19,015:      pdf_renderer.py:  470: printSegment: )
+   DEBUG: 2025-11-19 08:22:19,016:      pdf_renderer.py:  470: printSegment: Tech
+   DEBUG: 2025-11-19 08:22:19,016:      pdf_renderer.py:  470: printSegment: : React, TypeScript, MapLibre GL.
+   DEBUG: 2025-11-19 08:22:19,017:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2025-11-19 08:22:19,017:      pdf_renderer.py:  470: printSegment: Key Feature
+   DEBUG: 2025-11-19 08:22:19,018:      pdf_renderer.py:  470: printSegment: : 
+   DEBUG: 2025-11-19 08:22:19,018:      pdf_renderer.py:  470: printSegment: Vector Maps
+   DEBUG: 2025-11-19 08:22:19,019:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2025-11-19 08:22:19,019:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,020:      pdf_renderer.py:  470: printSegment: Why?
+   DEBUG: 2025-11-19 08:22:19,020:      pdf_renderer.py:  470: printSegment:  Instead of loading heavy images for the map, we use 
+   DEBUG: 2025-11-19 08:22:19,021:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,021:      pdf_renderer.py:  470: printSegment: Vector Tiles
+   DEBUG: 2025-11-19 08:22:19,021:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,022:      pdf_renderer.py:  470: printSegment:  (
+   DEBUG: 2025-11-19 08:22:19,022:      pdf_renderer.py:  470: printSegment: .pmtiles
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: ). This
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: makes the map fast and zoomable without needing a generic Google Maps API key.
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: Key Files
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: src/lib/map/useMap.ts
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: : The hook that loads the map and handles the layers.
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: 📡 IoT Ingestion (
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: apps/iot-ingestion
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: )
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: Tech
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: : Python (FastAPI).
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment:  
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: Purpose
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: : To listen to thousands of sensors.
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,024:      pdf_renderer.py:  470: printSegment: Why separate?
+   DEBUG: 2025-11-19 08:22:19,032:      pdf_renderer.py:  470: printSegment:  If 10,000 sensors send data at once, we don
+   DEBUG: 2025-11-19 08:22:19,032:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2025-11-19 08:22:19,033:      pdf_renderer.py:  470: printSegment: t want the main website to slow down.
+   DEBUG: 2025-11-19 08:22:19,033:      pdf_renderer.py:  470: printSegment: This service handles the noise.
+   DEBUG: 2025-11-19 08:22:19,033:      pdf_renderer.py:  470: printSegment: 🚀 2. Current Features (MVP)
+   DEBUG: 2025-11-19 08:22:19,033:      pdf_renderer.py:  470: printSegment: This is what works 
+   DEBUG: 2025-11-19 08:22:19,033:      pdf_renderer.py:  470: printSegment: right now
+   DEBUG: 2025-11-19 08:22:19,033:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2025-11-19 08:22:19,033:      pdf_renderer.py:  470: printSegment:  1 
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: Interactive Flood Map
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: You can see a detailed map of the city (Bangalore/Delhi) with flood zones.
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment:  2 
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: Geotagged Reporting
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: Users can upload a photo of a flood.
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,038:      pdf_renderer.py:  470: printSegment: Smart Check
+   DEBUG: 2025-11-19 08:22:19,041:      pdf_renderer.py:  470: printSegment: : The backend reads the GPS data (EXIF) from the photo to verify if it
+   DEBUG: 2025-11-19 08:22:19,041:      pdf_renderer.py:  470: printSegment: was actually taken at that location.
+   DEBUG: 2025-11-19 08:22:19,041:      pdf_renderer.py:  470: printSegment:  3 
+   DEBUG: 2025-11-19 08:22:19,041:      pdf_renderer.py:  470: printSegment: Real-time Sensor Data
+   DEBUG: 2025-11-19 08:22:19,041:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2025-11-19 08:22:19,041:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,041:      pdf_renderer.py:  470: printSegment: The system can receive and display water level data from IoT sensors.
+   DEBUG: 2025-11-19 08:22:19,045:      pdf_renderer.py:  470: printSegment:  4 
+   DEBUG: 2025-11-19 08:22:19,045:      pdf_renderer.py:  470: printSegment: SOS Webhook
+   DEBUG: 2025-11-19 08:22:19,045:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2025-11-19 08:22:19,046:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: A placeholder endpoint exists to receive WhatsApp Location SOS messages.
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: 📱 3. The Mobile App Path
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: We designed this system to be 
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: Mobile-First
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: . Here is how we turn this into an app:
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: Strategy: 
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: Capacitor
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,047:      pdf_renderer.py:  470: printSegment:  (The Fast Way)
+   DEBUG: 2025-11-19 08:22:19,051:      pdf_renderer.py:  470: printSegment: We don
+   DEBUG: 2025-11-19 08:22:19,051:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2025-11-19 08:22:19,051:      pdf_renderer.py:  470: printSegment: t need to rewrite the code. We can use a tool called 
+   DEBUG: 2025-11-19 08:22:19,051:      pdf_renderer.py:  470: printSegment: Capacitor
+   DEBUG: 2025-11-19 08:22:19,051:      pdf_renderer.py:  470: printSegment:  to wrap our React website into a native
+   DEBUG: 2025-11-19 08:22:19,051:      pdf_renderer.py:  470: printSegment: Android/iOS app.
+   DEBUG: 2025-11-19 08:22:19,051:      pdf_renderer.py:  470: printSegment:  1 
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: Install Capacitor
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment:  in 
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: apps/frontend
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: .
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment:  2 
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: Build
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: : It takes the web code and puts it inside a native container.
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment:  3 
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: Deploy
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: : You get an 
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: .apk
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment:  file to install on your phone.
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: Why this is cool
+   DEBUG: 2025-11-19 08:22:19,054:      pdf_renderer.py:  470: printSegment: :
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: The 
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: Backend
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment:  doesn
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: t care if it
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: s a web or mobile app. It just serves JSON.
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: We can access native features like 
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: Push Notifications
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment:  and 
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: Background Geolocation
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment:  using
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: Capacitor plugins.
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: 🔮 4. Production Features 
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment: &
+   DEBUG: 2025-11-19 08:22:19,060:      pdf_renderer.py:  470: printSegment:  Gaps
+   DEBUG: 2025-11-19 08:22:19,068:      pdf_renderer.py:  470: printSegment: These are the 
+   DEBUG: 2025-11-19 08:22:19,068:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,068:      pdf_renderer.py:  470: printSegment: Big League
+   DEBUG: 2025-11-19 08:22:19,068:      pdf_renderer.py:  470: printSegment: "
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment:  features we have architected but haven
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment: t fully built yet.
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment: 🚧 Gaps (For You to Build)
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment:  1 
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment: Video Reporting (Deferred)
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment: The Goal
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment: : Allow users to upload videos.
+   DEBUG: 2025-11-19 08:22:19,069:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: The Gap
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: : Storing large videos on a server is hard. We need to connect to 
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: AWS S3
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: 
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: or 
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: Google Cloud Storage
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment:  to handle this efficiently.
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: Code Prep
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: : The 
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: Report
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment:  model already has 
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: media_type="video"
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment:  ready to go
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: !
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment:  2 
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: AI Prediction (Prophet)
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: The Goal
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: : Predict floods 2 hours before they happen.
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: The Gap
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: : We need historical data to train the AI.
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: Code Prep
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: : We created an interface 
+   DEBUG: 2025-11-19 08:22:19,074:      pdf_renderer.py:  470: printSegment: IPredictionService
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: . You just need to
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: write the code that fills in the blanks.
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment:  3 
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: WhatsApp SOS Integration
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: The Goal
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: : Real-time SOS via WhatsApp.
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: The Gap
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: : We need a 
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: Twilio
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment:  account and WhatsApp Business approval.
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: Code Prep
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: : The endpoint 
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: /api/webhooks/whatsapp
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment:  is already written and
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: waiting for the connection.
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: 🎓 Final Advice for Students
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: Start Small
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: : Try to run the 
+   DEBUG: 2025-11-19 08:22:19,086:      pdf_renderer.py:  470: printSegment: docker-compose up
+   DEBUG: 2025-11-19 08:22:19,095:      pdf_renderer.py:  470: printSegment:  command and get the map showing.
+   DEBUG: 2025-11-19 08:22:19,095:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: Explore
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: : Look at 
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: apps/backend/src/domain/models.py
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: . Try adding a new field to the 
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: User
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment:  model.
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: l
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: Break Things
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: : It
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: '
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: s the best way to learn. If the map stops loading, check the browser console
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: !
+   DEBUG: 2025-11-19 08:22:19,096:      pdf_renderer.py:  470: printSegment: Happy Coding
+   DEBUG: 2025-11-19 08:22:19,101:      pdf_renderer.py:  470: printSegment: !
+   DEBUG: 2025-11-19 08:22:19,101:      pdf_renderer.py:  470: printSegment:  🚀
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 0, [1, '📘 FloodSafe Project Guide', 1, 68.0]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 1, [2, '🏗️ 1. Understanding the Codebase', 1, 160.0]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 2, [3, '📂 Directory Structure', 1, 223.20000000000002]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 3, [3, '🧠 The Backend (', 1, 348.0]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 4, [3, '🎨 The Frontend (', 1, 502.79999999999995]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 5, [3, '📡 IoT Ingestion (', 1, 621.5999999999999]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 6, [2, '🚀 2. Current Features (MVP)', 2, 70.0]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 7, [2, '📱 3. The Mobile App Path', 2, 313.6]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 8, [3, 'Strategy: ', 2, 364.8]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 9, [2, '🔮 4. Production Features ', 2, 550.0]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 10, [3, '🚧 Gaps (For You to Build)', 2, 601.1999999999999]
+   DEBUG: 2025-11-19 08:22:19,174:      pdf_renderer.py:   53: 11, [2, '🎓 Final Advice for Students', 3, 236.8]

@@ -14,6 +14,20 @@ from ..core.utils import get_exif_data, get_lat_lon
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+from typing import List
+
+@router.get("/", response_model=List[ReportResponse])
+def list_reports(db: Session = Depends(get_db)):
+    """
+    List all flood reports.
+    """
+    try:
+        reports = db.query(models.Report).order_by(models.Report.timestamp.desc()).all()
+        return reports
+    except Exception as e:
+        logger.error(f"Error listing reports: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list reports")
+
 @router.post("/", response_model=ReportResponse)
 async def create_report(
     user_id: UUID = Form(...),
@@ -87,3 +101,60 @@ async def create_report(
         logger.error(f"Database error creating report: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create report")
+
+@router.post("/{report_id}/verify", response_model=ReportResponse)
+def verify_report(report_id: UUID, db: Session = Depends(get_db)):
+    """
+    Verify a report and award points to the user.
+    """
+    try:
+        report = db.query(models.Report).filter(models.Report.id == report_id).first()
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+            
+        if report.verified:
+            return ReportResponse(
+                id=report.id,
+                description=report.description,
+                latitude=report.latitude,
+                longitude=report.longitude,
+                media_url=report.media_url,
+                verified=report.verified,
+                verification_score=report.verification_score,
+                upvotes=report.upvotes,
+                timestamp=report.timestamp
+            )
+
+        # Mark as verified
+        report.verified = True
+        report.verification_score += 10
+        
+        # Award points to user
+        user = db.query(models.User).filter(models.User.id == report.user_id).first()
+        if user:
+            user.points += 10
+            user.verified_reports_count += 1
+            # Level up logic: 1 level per 100 points
+            user.level = (user.points // 100) + 1
+            
+        db.commit()
+        db.refresh(report)
+        
+        return ReportResponse(
+            id=report.id,
+            description=report.description,
+            latitude=report.latitude,
+            longitude=report.longitude,
+            media_url=report.media_url,
+            verified=report.verified,
+            verification_score=report.verification_score,
+            upvotes=report.upvotes,
+            timestamp=report.timestamp
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verifying report: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to verify report")

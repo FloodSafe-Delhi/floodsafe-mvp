@@ -4,7 +4,7 @@ from PIL.ExifTags import TAGS, GPSTAGS
 def get_exif_data(image):
     """Returns a dictionary from the exif data of an PIL Image item. Also converts the GPS Tags"""
     exif_data = {}
-    info = image._getexif()
+    info = image.getexif()
     if info:
         for tag, value in info.items():
             decoded = TAGS.get(tag, tag)

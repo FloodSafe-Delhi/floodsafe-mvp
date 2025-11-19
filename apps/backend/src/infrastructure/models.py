@@ -1,7 +1,9 @@
 from sqlalchemy import Column, String, Float, DateTime, Boolean, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, object_session
+from sqlalchemy.ext.hybrid import hybrid_property
 from geoalchemy2 import Geometry
+from geoalchemy2.functions import ST_X, ST_Y
 from .database import Base
 import uuid
 from datetime import datetime
@@ -29,6 +31,26 @@ class Sensor(Base):
     last_ping = Column(DateTime, nullable=True)
     readings = relationship("Reading", back_populates="sensor")
 
+    @hybrid_property
+    def latitude(self):
+        """Extract latitude from PostGIS POINT geometry"""
+        if self.location is not None:
+            session = object_session(self)
+            if session:
+                result = session.scalar(ST_Y(self.location))
+                return float(result) if result is not None else None
+        return None
+
+    @hybrid_property
+    def longitude(self):
+        """Extract longitude from PostGIS POINT geometry"""
+        if self.location is not None:
+            session = object_session(self)
+            if session:
+                result = session.scalar(ST_X(self.location))
+                return float(result) if result is not None else None
+        return None
+
 class Reading(Base):
     __tablename__ = "readings"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -50,6 +72,26 @@ class Report(Base):
     verified = Column(Boolean, default=False)
     verification_score = Column(Integer, default=0)
     upvotes = Column(Integer, default=0)
+
+    @hybrid_property
+    def latitude(self):
+        """Extract latitude from PostGIS POINT geometry"""
+        if self.location is not None:
+            session = object_session(self)
+            if session:
+                result = session.scalar(ST_Y(self.location))
+                return float(result) if result is not None else None
+        return None
+
+    @hybrid_property
+    def longitude(self):
+        """Extract longitude from PostGIS POINT geometry"""
+        if self.location is not None:
+            session = object_session(self)
+            if session:
+                result = session.scalar(ST_X(self.location))
+                return float(result) if result is not None else None
+        return None
 
 class FloodZone(Base):
     __tablename__ = "flood_zones"

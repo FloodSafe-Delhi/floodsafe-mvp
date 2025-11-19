@@ -15,9 +15,10 @@ import { toast } from 'sonner';
 interface ReportScreenProps {
     onBack: () => void;
     onSubmit: () => void;
+    onSelectLocation: () => void;
 }
 
-export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
+export function ReportScreen({ onBack, onSubmit, onSelectLocation }: ReportScreenProps) {
     const [step, setStep] = useState(1);
     const [waterDepth, setWaterDepth] = useState<WaterDepth>('knee');
     const [vehiclePassability, setVehiclePassability] = useState<VehiclePassability>('high-clearance');
@@ -44,7 +45,8 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                 latitude: 12.9716,
                 longitude: 77.5946,
                 description: `${description} - Depth: ${waterDepth}, Passability: ${vehiclePassability}`,
-                image: null // Image upload not implemented in UI yet
+                user_id: "d53568ca-649e-4a59-92d4-135058513a91", // TODO: Use actual auth
+                image: undefined // Image upload not implemented in UI yet
             });
             toast.success('Report submitted successfully!');
             onSubmit();
@@ -122,7 +124,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
                             <div className="text-center text-gray-500 text-sm">OR</div>
 
-                            <Button variant="outline" className="w-full">
+                            <Button variant="outline" className="w-full" onClick={onSelectLocation}>
                                 <MapPin className="w-4 h-4 mr-2" />
                                 Select from Map
                             </Button>

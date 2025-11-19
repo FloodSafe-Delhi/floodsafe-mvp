@@ -11,7 +11,18 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
     useEffect(() => {
         if (!containerRef.current || mapRef.current) return;
 
+        // Initialize PMTiles protocol
         const protocol = new Protocol();
+
+        // Add basemap PMTiles
+        const basemapPMTiles = new PMTiles(MAP_CONSTANTS.BASEMAP_URL);
+        protocol.add(basemapPMTiles);
+
+        // Add flood tiles PMTiles
+        const floodPMTiles = new PMTiles(MAP_CONSTANTS.PMTILES_URL);
+        protocol.add(floodPMTiles);
+
+        // Register protocol with MapLibre
         maplibregl.addProtocol('pmtiles', protocol.tile);
 
         // Use the comprehensive OpenMapTiles style with flood data overlay
@@ -49,7 +60,12 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
         });
 
         map.on('load', () => {
+            console.log('✅ Map loaded successfully');
             setIsLoaded(true);
+        });
+
+        map.on('error', (e) => {
+            console.error('❌ Map error:', e);
         });
 
         mapRef.current = map;

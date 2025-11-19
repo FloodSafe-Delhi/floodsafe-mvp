@@ -3,14 +3,17 @@ import { useMap } from '../lib/map/useMap';
 import { useSensors } from '../lib/api/hooks';
 import maplibregl from 'maplibre-gl';
 import { Button } from './ui/button';
+import { Badge } from './ui/badge';
 import { Plus, Minus, Navigation, Layers } from 'lucide-react';
 import MapLegend from './MapLegend';
 
 interface MapComponentProps {
     className?: string;
+    title?: string;
+    showControls?: boolean;
 }
 
-export default function MapComponent({ className }: MapComponentProps) {
+export default function MapComponent({ className, title, showControls }: MapComponentProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const { map, isLoaded } = useMap(mapContainer);
     const { data: sensors } = useSensors();
@@ -220,13 +223,27 @@ export default function MapComponent({ className }: MapComponentProps) {
 
     return (
         <div className="relative w-full h-full">
+            {title && (
+                <div className="absolute top-4 left-4 right-4 z-10 flex justify-between items-start pointer-events-none">
+                    <div className="bg-white/90 backdrop-blur-md shadow-lg rounded-lg px-4 py-2 pointer-events-auto">
+                        <h1 className="text-lg font-bold text-gray-900">{title}</h1>
+                        <p className="text-xs text-gray-500">Real-time flood monitoring</p>
+                    </div>
+
+                    <div className="pointer-events-auto">
+                        <Badge variant="secondary" className="bg-white shadow">
+                            Online
+                        </Badge>
+                    </div>
+                </div>
+            )}
             <div ref={mapContainer} className={className} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
 
             {/* Map Controls Overlay */}
-            {isLoaded && (
+            {showControls && isLoaded && (
                 <>
                     {/* Zoom Controls - Bottom Right */}
-                    <div className="absolute bottom-24 md:bottom-6 right-4 flex flex-col gap-2 z-50">
+                    <div className="absolute right-4 flex flex-col gap-2 z-[60]" style={{ bottom: '144px' }}>
                         <Button
                             size="icon"
                             onClick={handleZoomIn}
@@ -262,7 +279,9 @@ export default function MapComponent({ className }: MapComponentProps) {
                     </div>
 
                     {/* Map Legend - Bottom Left */}
-                    <MapLegend className="absolute bottom-24 md:bottom-6 left-4 z-50" />
+                    <div className="absolute z-[60]" style={{ bottom: '144px', left: '24px' }}>
+                        <MapLegend className="max-w-xs" />
+                    </div>
                 </>
             )}
         </div>

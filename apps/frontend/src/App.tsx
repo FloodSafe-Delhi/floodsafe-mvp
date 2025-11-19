@@ -57,7 +57,7 @@ function FloodSafeApp() {
             case 'map':
                 return <FloodAtlasScreen />;
             case 'report':
-                return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} />;
+                return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} onSelectLocation={() => setActiveTab('map')} />;
             case 'alerts':
                 return <AlertsListScreen onAlertClick={handleAlertClick} />;
             case 'profile':

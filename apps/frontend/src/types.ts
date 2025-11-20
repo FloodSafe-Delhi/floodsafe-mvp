@@ -12,3 +12,54 @@ export interface FloodAlert {
 
 export type WaterDepth = 'ankle' | 'knee' | 'waist' | 'impassable';
 export type VehiclePassability = 'all' | 'high-clearance' | 'none';
+
+// Location-related types
+export interface LocationCoordinates {
+    latitude: number;
+    longitude: number;
+}
+
+export interface LocationData extends LocationCoordinates {
+    accuracy: number;
+}
+
+export interface LocationWithAddress extends LocationData {
+    locationName: string;
+}
+
+// Map Picker types
+export interface MapPickerProps {
+    isOpen: boolean;
+    onClose: () => void;
+    initialLocation: LocationData | null;
+    onLocationSelect: (location: LocationWithAddress) => void;
+}
+
+export interface GeocodingResult {
+    display_name: string;
+    lat: string;
+    lon: string;
+    address?: {
+        road?: string;
+        suburb?: string;
+        city?: string;
+        state?: string;
+        country?: string;
+    };
+}
+
+export interface MapBounds {
+    minLng: number;
+    maxLng: number;
+    minLat: number;
+    maxLat: number;
+}
+
+export interface CityConfig {
+    name: string;
+    center: [number, number];
+    bounds: MapBounds;
+    defaultZoom: number;
+    maxZoom: number;
+    minZoom: number;
+}

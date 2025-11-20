@@ -10,7 +10,7 @@ export default function MapLegend({ className }: MapLegendProps) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     return (
-        <div className={`bg-white rounded-lg shadow-lg ${className}`}>
+        <div className={`bg-white rounded-lg shadow-xl border border-gray-200 ${className}`}>
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b">
                 <h3 className="text-sm font-semibold text-gray-900">Map Legend</h3>
@@ -52,12 +52,29 @@ export default function MapLegend({ className }: MapLegendProps) {
                         </div>
                     </div>
 
+                    {/* Community Reports */}
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-700 mb-2">Community Reports</h4>
+                        <div className="space-y-1.5">
+                            <LegendItem color="#3b82f6" label="Ankle Deep" shape="circle" />
+                            <LegendItem color="#f59e0b" label="Knee Deep" shape="circle" />
+                            <LegendItem color="#f97316" label="Waist Deep" shape="circle" />
+                            <LegendItem color="#ef4444" label="Impassable" shape="circle" />
+                        </div>
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <div className="w-4 h-4 rounded-full border-2 border-green-500 bg-gray-300"></div>
+                                <span>Verified</span>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Routes */}
                     <div>
                         <h4 className="text-xs font-medium text-gray-700 mb-2">Routes</h4>
                         <div className="space-y-1.5">
                             <LegendItem color="#22c55e" label="Safe Route" shape="line" />
-                            <LegendItem color="#ef4444" label="Flooded Route" shape="line" />
+                            <LegendItem color="#ef4444" label="Flooded Route" shape="line" thickness="thick" />
                         </div>
                     </div>
                 </div>
@@ -70,9 +87,10 @@ interface LegendItemProps {
     color: string;
     label: string;
     shape?: 'square' | 'circle' | 'line';
+    thickness?: 'normal' | 'thick';
 }
 
-function LegendItem({ color, label, shape = 'square' }: LegendItemProps) {
+function LegendItem({ color, label, shape = 'square', thickness = 'normal' }: LegendItemProps) {
     return (
         <div className="flex items-center gap-2">
             {shape === 'square' && (
@@ -88,7 +106,10 @@ function LegendItem({ color, label, shape = 'square' }: LegendItemProps) {
                 />
             )}
             {shape === 'line' && (
-                <div className="w-6 h-0.5 rounded" style={{ backgroundColor: color }} />
+                <div
+                    className={`w-6 rounded ${thickness === 'thick' ? 'h-1 shadow-md' : 'h-0.5'}`}
+                    style={{ backgroundColor: color }}
+                />
             )}
             <span className="text-xs text-gray-600">{label}</span>
         </div>

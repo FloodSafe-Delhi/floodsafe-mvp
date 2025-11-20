@@ -1,0 +1,7 @@
+# Large files are now tracked with Git LFS
+# See .gitattributes in project root
+
+# Keep the scripts and final outputs
+!dem/*.ps1
+!dem/*.py
+!dem/*.tif

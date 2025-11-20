@@ -1,3 +1,6 @@
+export type AlertLevel = 'safe' | 'watch' | 'advisory' | 'warning' | 'emergency';
+export type AlertColor = 'green' | 'yellow' | 'orange' | 'red' | 'black';
+
 export interface FloodAlert {
     id: string;
     level: 'critical' | 'warning' | 'watch' | 'safe';
@@ -13,7 +16,35 @@ export interface FloodAlert {
 export type WaterDepth = 'ankle' | 'knee' | 'waist' | 'impassable';
 export type VehiclePassability = 'all' | 'high-clearance' | 'none';
 
-// Location-related types
+// User type - used across the application
+export interface User {
+    id: string;
+    username: string;
+    email: string;
+    phone?: string;
+    profile_photo_url?: string;
+    role: string;
+    created_at: string;
+    points: number;
+    level: number;
+    reports_count: number;
+    verified_reports_count: number;
+    badges?: string[];
+    // Profile-specific optional fields
+    language?: string;
+    notification_push?: boolean;
+    notification_sms?: boolean;
+    notification_whatsapp?: boolean;
+    notification_email?: boolean;
+    alert_preferences?: {
+        watch: boolean;
+        advisory: boolean;
+        warning: boolean;
+        emergency: boolean;
+    };
+}
+
+// Location-related types for MapPicker
 export interface LocationCoordinates {
     latitude: number;
     longitude: number;
@@ -46,20 +77,4 @@ export interface GeocodingResult {
         state?: string;
         country?: string;
     };
-}
-
-export interface MapBounds {
-    minLng: number;
-    maxLng: number;
-    minLat: number;
-    maxLat: number;
-}
-
-export interface CityConfig {
-    name: string;
-    center: [number, number];
-    bounds: MapBounds;
-    defaultZoom: number;
-    maxZoom: number;
-    minZoom: number;
 }

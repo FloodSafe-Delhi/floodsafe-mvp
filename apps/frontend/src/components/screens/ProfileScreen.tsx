@@ -14,38 +14,13 @@ import { Input } from '../ui/input';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
+import { User } from '../../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // For demo purposes, using a hardcoded user ID
 // In production, this would come from auth context
 const DEMO_USER_ID = 'admin'; // Will be created by seed script
-
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  phone?: string;
-  profile_photo_url?: string;
-  role: string;
-  created_at: string;
-  points: number;
-  level: number;
-  reports_count: number;
-  verified_reports_count: number;
-  badges: string[];
-  language: string;
-  notification_push: boolean;
-  notification_sms: boolean;
-  notification_whatsapp: boolean;
-  notification_email: boolean;
-  alert_preferences: {
-    watch: boolean;
-    advisory: boolean;
-    warning: boolean;
-    emergency: boolean;
-  };
-}
 
 interface WatchArea {
   id: string;
@@ -56,31 +31,51 @@ interface WatchArea {
   created_at: string;
 }
 
+// Helper function to normalize user data with defaults
+const normalizeUserData = (userData: User): User => {
+  return {
+    ...userData,
+    language: userData.language || 'english',
+    notification_push: userData.notification_push ?? true,
+    notification_sms: userData.notification_sms ?? false,
+    notification_whatsapp: userData.notification_whatsapp ?? false,
+    notification_email: userData.notification_email ?? true,
+    alert_preferences: userData.alert_preferences || {
+      watch: true,
+      advisory: true,
+      warning: true,
+      emergency: true,
+    },
+  };
+};
+
 export function ProfileScreen() {
   const queryClient = useQueryClient();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Fetch user profile
-  const { data: user, isLoading } = useQuery<User>({
+  const { data: rawUser, isLoading } = useQuery<User>({
     queryKey: ['user', DEMO_USER_ID],
     queryFn: async () => {
       // Try to get admin user first
-      const usersResponse = await fetch(`${API_URL}/api/users/leaderboard/top?limit=100`);
+      const usersResponse = await fetch(`${API_URL}/api/leaderboards/top?limit=50`);
       const users = await usersResponse.json();
       const adminUser = users.find((u: User) => u.username === 'admin');
 
       if (adminUser) {
-        return adminUser;
+        return normalizeUserData(adminUser);
       }
 
       // If no admin user, get first user or show error
       if (users.length > 0) {
-        return users[0];
+        return normalizeUserData(users[0]);
       }
 
       throw new Error('No users found. Please seed the database.');
     },
   });
+
+  const user = rawUser;
 
   // Fetch watch areas
   const { data: watchAreas = [] } = useQuery<WatchArea[]>({
@@ -120,10 +115,10 @@ export function ProfileScreen() {
   };
 
   const handleAlertPreferenceToggle = (alertType: string, value: boolean) => {
-    if (!user) return;
+    if (!user || !user.alert_preferences) return;
     const newPreferences = { ...user.alert_preferences, [alertType]: value };
     updateUserMutation.mutate({
-      alert_preferences: JSON.stringify(newPreferences)
+      alert_preferences: newPreferences
     } as Partial<User>);
   };
 
@@ -151,7 +146,8 @@ export function ProfileScreen() {
     );
   }
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | undefined) => {
+    if (!name) return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
@@ -237,7 +233,7 @@ export function ProfileScreen() {
             </div>
           </div>
 
-          {user.badges.length > 0 && (
+          {user.badges && user.badges.length > 0 && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="text-sm font-medium text-blue-900 mb-2">Badges Earned</div>
               <div className="flex flex-wrap gap-2">
@@ -302,7 +298,7 @@ export function ProfileScreen() {
               </Label>
               <Switch
                 id="push"
-                checked={user.notification_push}
+                checked={user.notification_push ?? true}
                 onCheckedChange={(checked) => handleNotificationToggle('notification_push', checked)}
               />
             </div>
@@ -313,7 +309,7 @@ export function ProfileScreen() {
               </Label>
               <Switch
                 id="sms"
-                checked={user.notification_sms}
+                checked={user.notification_sms ?? false}
                 onCheckedChange={(checked) => handleNotificationToggle('notification_sms', checked)}
               />
             </div>
@@ -324,7 +320,7 @@ export function ProfileScreen() {
               </Label>
               <Switch
                 id="whatsapp"
-                checked={user.notification_whatsapp}
+                checked={user.notification_whatsapp ?? false}
                 onCheckedChange={(checked) => handleNotificationToggle('notification_whatsapp', checked)}
               />
             </div>
@@ -335,7 +331,7 @@ export function ProfileScreen() {
               </Label>
               <Switch
                 id="email"
-                checked={user.notification_email}
+                checked={user.notification_email ?? true}
                 onCheckedChange={(checked) => handleNotificationToggle('notification_email', checked)}
               />
             </div>
@@ -354,7 +350,7 @@ export function ProfileScreen() {
                   <div key={alert.id} className="flex items-center gap-2">
                     <Checkbox
                       id={alert.id}
-                      checked={user.alert_preferences[alert.id as keyof typeof user.alert_preferences]}
+                      checked={user.alert_preferences?.[alert.id as keyof typeof user.alert_preferences] ?? true}
                       onCheckedChange={(checked) =>
                         handleAlertPreferenceToggle(alert.id, checked as boolean)
                       }
@@ -377,7 +373,7 @@ export function ProfileScreen() {
             Language
           </h3>
 
-          <RadioGroup value={user.language} onValueChange={handleLanguageChange}>
+          <RadioGroup value={user.language || 'english'} onValueChange={handleLanguageChange}>
             <div className="flex items-center space-x-2">
               <RadioGroupItem value="english" id="english" />
               <Label htmlFor="english" className="cursor-pointer font-normal">English</Label>

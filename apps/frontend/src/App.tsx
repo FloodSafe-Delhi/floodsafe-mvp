@@ -9,6 +9,8 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { FloodAlert } from './types';
 import { Toaster } from './components/ui/sonner';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { CityProvider } from './contexts/CityContext';
+import { UserProvider } from './contexts/UserContext';
 
 const queryClient = new QueryClient();
 
@@ -125,7 +127,11 @@ function FloodSafeApp() {
 export default function App() {
     return (
         <QueryClientProvider client={queryClient}>
-            <FloodSafeApp />
+            <UserProvider>
+                <CityProvider>
+                    <FloodSafeApp />
+                </CityProvider>
+            </UserProvider>
         </QueryClientProvider>
     );
 }

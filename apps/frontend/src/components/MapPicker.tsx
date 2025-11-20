@@ -138,8 +138,8 @@ export default function MapPicker({ isOpen, onClose, initialLocation, onLocation
     const handleLocationUpdate = (longitude: number, latitude: number) => {
         // Validate bounds
         if (!isWithinCityBounds(latitude, longitude)) {
-            toast.error(`Location is outside ${cityConfig.name} bounds`);
-            setGeocodingError(`Location must be within ${cityConfig.name}`);
+            toast.error(`Location is outside ${cityConfig.displayName} bounds`);
+            setGeocodingError(`Location must be within ${cityConfig.displayName}`);
             return;
         }
 
@@ -216,7 +216,7 @@ export default function MapPicker({ isOpen, onClose, initialLocation, onLocation
 
                     // Validate bounds
                     if (!isWithinCityBounds(latitude, longitude)) {
-                        toast.error(`Your location is outside ${cityConfig.name} bounds`);
+                        toast.error(`Your location is outside ${cityConfig.displayName} bounds`);
                         return;
                     }
 
@@ -301,7 +301,7 @@ export default function MapPicker({ isOpen, onClose, initialLocation, onLocation
                         Select Location on Map
                     </SheetTitle>
                     <SheetDescription>
-                        Click or drag the marker to select a location in {cityConfig.name}
+                        Click or drag the marker to select a location in {cityConfig.displayName}
                     </SheetDescription>
                 </SheetHeader>
 

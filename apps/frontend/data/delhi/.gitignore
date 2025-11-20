@@ -1,5 +1,5 @@
-# Ignore intermediate processing files (too large for Git)
-dem/tiles/
+# Large files are now tracked with Git LFS
+# See .gitattributes in project root
 
 # Keep the scripts and final outputs
 !dem/*.ps1

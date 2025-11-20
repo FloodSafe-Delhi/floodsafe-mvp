@@ -44,15 +44,43 @@ function FloodSafeApp() {
         setActiveTab('profile');
     };
 
+    const handleNavigateToMap = () => {
+        setActiveTab('map');
+    };
+
+    const handleNavigateToReport = () => {
+        setActiveTab('report');
+    };
+
+    const handleNavigateToAlerts = () => {
+        setActiveTab('alerts');
+    };
+
+    const handleNavigateToProfile = () => {
+        setActiveTab('profile');
+    };
+
     const renderScreen = () => {
         switch (activeTab) {
             case 'home':
-                return <HomeScreen onAlertClick={handleAlertClick} />;
+                return <HomeScreen
+                    onAlertClick={handleAlertClick}
+                    onNavigateToMap={handleNavigateToMap}
+                    onNavigateToReport={handleNavigateToReport}
+                    onNavigateToAlerts={handleNavigateToAlerts}
+                    onNavigateToProfile={handleNavigateToProfile}
+                />;
             case 'alert-detail':
                 return selectedAlert ? (
                     <AlertDetailScreen alert={selectedAlert} onBack={handleBackFromDetail} />
                 ) : (
-                    <HomeScreen onAlertClick={handleAlertClick} />
+                    <HomeScreen
+                        onAlertClick={handleAlertClick}
+                        onNavigateToMap={handleNavigateToMap}
+                        onNavigateToReport={handleNavigateToReport}
+                        onNavigateToAlerts={handleNavigateToAlerts}
+                        onNavigateToProfile={handleNavigateToProfile}
+                    />
                 );
             case 'map':
                 return <FloodAtlasScreen />;
@@ -63,7 +91,13 @@ function FloodSafeApp() {
             case 'profile':
                 return <ProfileScreen />;
             default:
-                return <HomeScreen onAlertClick={handleAlertClick} />;
+                return <HomeScreen
+                    onAlertClick={handleAlertClick}
+                    onNavigateToMap={handleNavigateToMap}
+                    onNavigateToReport={handleNavigateToReport}
+                    onNavigateToAlerts={handleNavigateToAlerts}
+                    onNavigateToProfile={handleNavigateToProfile}
+                />;
         }
     };
 

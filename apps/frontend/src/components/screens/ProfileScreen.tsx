@@ -65,7 +65,7 @@ export function ProfileScreen() {
     queryKey: ['user', DEMO_USER_ID],
     queryFn: async () => {
       // Try to get admin user first
-      const usersResponse = await fetch(`${API_URL}/api/users/leaderboard/top?limit=100`);
+      const usersResponse = await fetch(`${API_URL}/api/leaderboards/top?limit=100`);
       const users = await usersResponse.json();
       const adminUser = users.find((u: User) => u.username === 'admin');
 

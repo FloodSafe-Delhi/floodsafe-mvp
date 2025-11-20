@@ -162,7 +162,7 @@ class ReputationHistory(Base):
     points_change = Column(Integer, default=0)
     new_total = Column(Integer, nullable=False)
     reason = Column(String, nullable=True)
-    metadata = Column(String, default="{}") # JSON string
+    extra_metadata = Column(String, default="{}") # JSON string
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Badge(Base):

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, uploadFile } from './client';
 import { User } from '../../types';
+import { validateUsers, validateSensors, validateReports, validateUser } from './validators';
 
 // Types
 export interface Sensor {
@@ -50,7 +51,10 @@ export type { User };
 export function useSensors() {
     return useQuery({
         queryKey: ['sensors'],
-        queryFn: () => fetchJson<Sensor[]>('/sensors/'),
+        queryFn: async () => {
+            const data = await fetchJson<unknown>('/sensors/');
+            return validateSensors(data);
+        },
         refetchInterval: 30000, // Default 30 second refresh
     });
 }
@@ -58,7 +62,10 @@ export function useSensors() {
 export function useReports() {
     return useQuery({
         queryKey: ['reports'],
-        queryFn: () => fetchJson<Report[]>('/reports/'),
+        queryFn: async () => {
+            const data = await fetchJson<unknown>('/reports/');
+            return validateReports(data);
+        },
         refetchInterval: 30000, // Default 30 second refresh
     });
 }
@@ -66,7 +73,10 @@ export function useReports() {
 export function useUsers() {
     return useQuery({
         queryKey: ['users'],
-        queryFn: () => fetchJson<User[]>('/users/'),
+        queryFn: async () => {
+            const data = await fetchJson<unknown>('/users/');
+            return validateUsers(data);
+        },
     });
 }
 

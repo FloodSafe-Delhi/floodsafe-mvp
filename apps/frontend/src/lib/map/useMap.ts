@@ -122,40 +122,63 @@ export function useMap(
 
         const map = new maplibregl.Map({
             container: containerRef.current,
-            style: style as any,
+            style: style as maplibregl.StyleSpecification,
             ...getMapConfig(cityKey)
         });
 
         map.on('load', () => {
             console.log('✅ Map loaded successfully');
-            console.log('📋 Available sources:', Object.keys(map.getStyle().sources));
-            console.log('📋 Available layers:', map.getStyle().layers.map(l => l.id));
 
-            // Debug: Check if railway layers exist
-            const railwayLayers = map.getStyle().layers.filter(l => l.id.includes('railway'));
-            console.log('🚇 Railway layers found:', railwayLayers.map(l => l.id));
+            // Safely access map style with type guards
+            const mapStyle = map.getStyle();
+            if (mapStyle?.sources) {
+                console.log('📋 Available sources:', Object.keys(mapStyle.sources));
+            }
+
+            if (mapStyle?.layers && Array.isArray(mapStyle.layers)) {
+                console.log('📋 Available layers:', mapStyle.layers.map(l => l.id));
+
+                // Debug: Check if railway layers exist
+                const railwayLayers = mapStyle.layers.filter(l =>
+                    typeof l.id === 'string' && l.id.includes('railway')
+                );
+                console.log('🚇 Railway layers found:', railwayLayers.map(l => l.id));
+            }
 
             // Debug: Try to query features from transportation layer at current view
             setTimeout(() => {
                 try {
                     const style = map.getStyle();
-                    if (!style || !style.sources) {
+                    if (!style?.sources || typeof style.sources !== 'object') {
                         console.log('ℹ️ Map style not ready yet');
                         return;
                     }
 
-                    const sources = style.sources;
-                    const sourceKey = Object.keys(sources).find(key =>
-                        key.includes('basemap') || key.includes('openmaptiles')
+                    const sourceKeys = Object.keys(style.sources);
+                    const sourceKey = sourceKeys.find(key =>
+                        typeof key === 'string' && (key.includes('basemap') || key.includes('openmaptiles'))
                     );
 
-                    if (sourceKey && map.getSource(sourceKey)) {
+                    if (sourceKey) {
+                        const source = map.getSource(sourceKey);
+                        if (!source) {
+                            console.log('ℹ️ Source not found:', sourceKey);
+                            return;
+                        }
+
                         const features = map.querySourceFeatures(sourceKey, {
                             sourceLayer: 'transportation'
                         });
-                        console.log('🚗 Transportation features sample:', features.slice(0, 5));
-                        const transitFeatures = features.filter(f => f.properties?.class === 'transit');
-                        console.log('🚇 Transit features:', transitFeatures.length, transitFeatures.slice(0, 3));
+
+                        if (features && Array.isArray(features) && features.length > 0) {
+                            console.log('🚗 Transportation features sample:', features.slice(0, 5));
+                            const transitFeatures = features.filter(f =>
+                                f.properties && typeof f.properties === 'object' && f.properties.class === 'transit'
+                            );
+                            if (transitFeatures.length > 0) {
+                                console.log('🚇 Transit features:', transitFeatures.length, transitFeatures.slice(0, 3));
+                            }
+                        }
                     } else {
                         console.log('ℹ️ No basemap source found for querying transportation features');
                     }

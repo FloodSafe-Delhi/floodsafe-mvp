@@ -11,6 +11,7 @@ import MapComponent from '../MapComponent';
 import { useSensors, useReports, useUsers, useActiveReporters, useNearbyReporters, useLocationDetails } from '../../lib/api/hooks';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import { getNestedValue, getNestedArray, hasLocationData } from '../../lib/safe-access';
 import {
     Select,
     SelectContent,
@@ -600,26 +601,28 @@ export function HomeScreen({
 
                     {locationDetails && (
                         <div className="space-y-4">
-                            <div className="text-sm text-gray-600">
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="w-4 h-4" />
-                                    <span>
-                                        {locationDetails.location.latitude.toFixed(4)}, {locationDetails.location.longitude.toFixed(4)}
-                                    </span>
+                            {hasLocationData(locationDetails.location) && (
+                                <div className="text-sm text-gray-600">
+                                    <div className="flex items-center gap-2">
+                                        <MapPin className="w-4 h-4" />
+                                        <span>
+                                            {locationDetails.location.latitude.toFixed(4)}, {locationDetails.location.longitude.toFixed(4)}
+                                        </span>
+                                    </div>
+                                    <div className="mt-1">
+                                        Search Radius: {locationDetails.location.radius_meters || 500}m
+                                    </div>
                                 </div>
-                                <div className="mt-1">
-                                    Search Radius: {locationDetails.location.radius_meters}m
-                                </div>
-                            </div>
+                            )}
 
                             <div>
                                 <h4 className="font-semibold mb-2">
-                                    Total Reports: {locationDetails.total_reports}
+                                    Total Reports: {locationDetails.total_reports || 0}
                                 </h4>
 
-                                {locationDetails.reports.length > 0 ? (
+                                {getNestedArray(locationDetails, ['reports']).length > 0 ? (
                                     <div className="space-y-2">
-                                        {locationDetails.reports.map((report) => (
+                                        {getNestedArray(locationDetails, ['reports']).map((report: any) => (
                                             <Card key={report.id} className="p-3">
                                                 <div className="flex items-start justify-between">
                                                     <div className="flex-1">
@@ -645,12 +648,12 @@ export function HomeScreen({
 
                             <div>
                                 <h4 className="font-semibold mb-2">
-                                    Reporters ({locationDetails.reporters.length})
+                                    Reporters ({getNestedArray(locationDetails, ['reporters']).length})
                                 </h4>
 
-                                {locationDetails.reporters.length > 0 ? (
+                                {getNestedArray(locationDetails, ['reporters']).length > 0 ? (
                                     <div className="space-y-2">
-                                        {locationDetails.reporters.map((reporter) => (
+                                        {getNestedArray(locationDetails, ['reporters']).map((reporter: any) => (
                                             <Card key={reporter.id} className="p-3">
                                                 <div className="flex items-center justify-between">
                                                     <div>

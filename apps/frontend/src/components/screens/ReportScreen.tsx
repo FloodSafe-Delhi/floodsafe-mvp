@@ -392,7 +392,6 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
     // Calculate character count
     const characterCount = description.length;
-    const isDescriptionTooLong = characterCount > MAX_DESCRIPTION_LENGTH;
 
     // Check if current step is valid
     const isStepValid = () => {

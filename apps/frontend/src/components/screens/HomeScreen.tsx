@@ -11,7 +11,7 @@ import MapComponent from '../MapComponent';
 import { useSensors, useReports, useUsers, useActiveReporters, useNearbyReporters, useLocationDetails } from '../../lib/api/hooks';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
-import { getNestedValue, getNestedArray, hasLocationData } from '../../lib/safe-access';
+import { getNestedArray, hasLocationData } from '../../lib/safe-access';
 import {
     Select,
     SelectContent,
@@ -169,7 +169,7 @@ export function HomeScreen({
         toast.success('Opening safe routes map');
     };
 
-    const handleShare = (alertId: string) => {
+    const handleShare = (_alertId: string) => {
         toast.success('Alert shared successfully');
     };
 

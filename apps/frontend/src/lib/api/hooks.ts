@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, uploadFile } from './client';
 import { User } from '../../types';
-import { validateUsers, validateSensors, validateReports, validateUser } from './validators';
+import { validateUsers, validateSensors, validateReports } from './validators';
 
 // Types
 export interface Sensor {

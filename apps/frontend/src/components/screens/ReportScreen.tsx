@@ -30,6 +30,17 @@ const QUICK_TAGS = [
 
 const MAX_DESCRIPTION_LENGTH = 500;
 
+// Helper to detect iOS devices
+const isIOSDevice = () => {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+// Helper to detect Android devices
+const isAndroidDevice = () => {
+    return /Android/.test(navigator.userAgent);
+};
+
 export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     const [step, setStep] = useState(1);
     const [waterDepth, setWaterDepth] = useState<WaterDepth>('knee');
@@ -41,76 +52,207 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     const [voiceSupported, setVoiceSupported] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string>('');
     const [errorType, setErrorType] = useState<'gps' | 'photo' | 'network' | null>(null);
+    const [isMobile, setIsMobile] = useState(false);
 
     const recognitionRef = useRef<any>(null);
+    const isRecordingRef = useRef(false);
     const reportMutation = useReportMutation();
 
     const totalSteps = 4;
     const progressValue = (step / totalSteps) * 100;
 
-    // Check for Web Speech API support
+    // Check for Web Speech API support and mobile platform
     useEffect(() => {
+        // Detect if user is on mobile
+        const mobile = isIOSDevice() || isAndroidDevice() ||
+                      /mobile/i.test(navigator.userAgent) ||
+                      window.matchMedia('(max-width: 768px)').matches;
+        setIsMobile(mobile);
+
+        // Check for Web Speech API
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
         if (SpeechRecognition) {
-            setVoiceSupported(true);
-            recognitionRef.current = new SpeechRecognition();
-            recognitionRef.current.continuous = true;
-            recognitionRef.current.interimResults = true;
-            recognitionRef.current.lang = 'en-US';
+            try {
+                const recognition = new SpeechRecognition();
 
-            recognitionRef.current.onresult = (event: any) => {
-                let finalTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    const transcript = event.results[i][0].transcript;
-                    if (event.results[i].isFinal) {
-                        finalTranscript += transcript + ' ';
-                    }
-                }
-                if (finalTranscript) {
-                    setDescription(prev => {
-                        const newText = (prev + ' ' + finalTranscript).trim();
-                        return newText.slice(0, MAX_DESCRIPTION_LENGTH);
-                    });
-                }
-            };
-
-            recognitionRef.current.onerror = (event: any) => {
-                console.error('Speech recognition error:', event.error);
-                setIsRecording(false);
-                if (event.error === 'not-allowed') {
-                    toast.error('Microphone access denied. Please enable microphone permissions.');
+                // Configure recognition based on platform
+                if (isIOSDevice()) {
+                    // iOS Safari has limited support - use simpler config
+                    recognition.continuous = false; // iOS doesn't support continuous well
+                    recognition.interimResults = false; // iOS doesn't support interim results reliably
                 } else {
-                    toast.error('Voice input failed. Please try again.');
+                    // Android Chrome and desktop browsers support full features
+                    recognition.continuous = true;
+                    recognition.interimResults = true;
                 }
-            };
 
-            recognitionRef.current.onend = () => {
-                setIsRecording(false);
-            };
+                recognition.lang = 'en-US';
+                recognition.maxAlternatives = 1;
+
+                recognition.onresult = (event: any) => {
+                    let transcript = '';
+
+                    // Collect final results
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        if (event.results[i].isFinal) {
+                            transcript += event.results[i][0].transcript + ' ';
+                        } else if (!isIOSDevice()) {
+                            // Only use interim results on non-iOS devices
+                            transcript += event.results[i][0].transcript + ' ';
+                        }
+                    }
+
+                    if (transcript.trim()) {
+                        setDescription(prev => {
+                            const newText = (prev + ' ' + transcript).trim();
+                            return newText.slice(0, MAX_DESCRIPTION_LENGTH);
+                        });
+
+                        // On iOS, automatically restart for continuous recording
+                        if (isIOSDevice() && isRecordingRef.current) {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                // Ignore if already started
+                            }
+                        }
+                    }
+                };
+
+                recognition.onerror = (event: any) => {
+                    console.error('Speech recognition error:', event.error);
+
+                    // Handle specific mobile errors
+                    if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+                        setIsRecording(false);
+                        isRecordingRef.current = false;
+                        if (mobile) {
+                            toast.error('Microphone access denied. Please check your browser settings and allow microphone access.');
+                        } else {
+                            toast.error('Microphone access denied. Please enable microphone permissions.');
+                        }
+                    } else if (event.error === 'no-speech') {
+                        // On mobile, this is common - just retry
+                        if (mobile && isRecordingRef.current) {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                // Ignore
+                            }
+                        } else {
+                            toast.info('No speech detected. Please try again.');
+                            setIsRecording(false);
+                            isRecordingRef.current = false;
+                        }
+                    } else if (event.error === 'audio-capture') {
+                        setIsRecording(false);
+                        isRecordingRef.current = false;
+                        toast.error('Microphone not found or not working. Please check your device.');
+                    } else if (event.error === 'network') {
+                        setIsRecording(false);
+                        isRecordingRef.current = false;
+                        toast.error('Network error during voice recognition. Please check your internet connection.');
+                    } else if (event.error === 'aborted') {
+                        // User manually stopped - this is expected
+                        setIsRecording(false);
+                        isRecordingRef.current = false;
+                    } else {
+                        setIsRecording(false);
+                        isRecordingRef.current = false;
+                        toast.error(`Voice input failed: ${event.error}. Please try typing instead.`);
+                    }
+                };
+
+                recognition.onend = () => {
+                    // On iOS, recognition ends after each phrase
+                    if (isIOSDevice() && isRecordingRef.current) {
+                        // Auto-restart on iOS for continuous recording
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                            setIsRecording(false);
+                            isRecordingRef.current = false;
+                        }
+                    } else {
+                        setIsRecording(false);
+                        isRecordingRef.current = false;
+                    }
+                };
+
+                recognition.onstart = () => {
+                    console.log('Speech recognition started');
+                };
+
+                recognitionRef.current = recognition;
+                setVoiceSupported(true);
+
+            } catch (error) {
+                console.error('Failed to initialize speech recognition:', error);
+                setVoiceSupported(false);
+            }
+        } else {
+            setVoiceSupported(false);
+            console.log('Speech recognition not supported in this browser');
         }
 
         return () => {
             if (recognitionRef.current) {
-                recognitionRef.current.stop();
+                try {
+                    recognitionRef.current.stop();
+                } catch (e) {
+                    // Ignore errors on cleanup
+                }
             }
         };
     }, []);
 
-    // Toggle voice recording
+    // Toggle voice recording with mobile-specific handling
     const toggleVoiceRecording = () => {
         if (!recognitionRef.current) return;
 
         if (isRecording) {
-            recognitionRef.current.stop();
-            setIsRecording(false);
+            try {
+                recognitionRef.current.stop();
+                setIsRecording(false);
+                isRecordingRef.current = false;
+                toast.success('Voice recording stopped');
+            } catch (error) {
+                console.error('Failed to stop voice recognition:', error);
+                setIsRecording(false);
+                isRecordingRef.current = false;
+            }
         } else {
             try {
                 recognitionRef.current.start();
                 setIsRecording(true);
-                toast.info('Listening... Speak now');
-            } catch (error) {
+                isRecordingRef.current = true;
+
+                // Different messages for mobile vs desktop
+                if (isMobile) {
+                    if (isIOSDevice()) {
+                        toast.info('🎤 Listening... Speak clearly. Recording will auto-restart after each phrase.');
+                    } else {
+                        toast.info('🎤 Listening... Speak now');
+                    }
+                } else {
+                    toast.info('🎤 Listening... Speak now');
+                }
+            } catch (error: any) {
                 console.error('Failed to start voice recognition:', error);
-                toast.error('Failed to start voice input');
+
+                // Provide helpful error messages for mobile
+                if (error.name === 'NotAllowedError') {
+                    if (isMobile) {
+                        toast.error('Microphone blocked. Go to Settings > Safari/Chrome > Microphone and allow access.');
+                    } else {
+                        toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
+                    }
+                } else {
+                    toast.error('Failed to start voice input. Please try again or type your description.');
+                }
+                setIsRecording(false);
+                isRecordingRef.current = false;
             }
         }
     };
@@ -268,7 +410,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                         <Textarea
                                             id="desc"
                                             placeholder="e.g., 'Road flooded near Bus Stop 123' or 'Heavy waterlogging at Main Street intersection'"
-                                            className="min-h-24 pr-12"
+                                            className="min-h-28 pr-14"
                                             value={description}
                                             onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
                                             maxLength={MAX_DESCRIPTION_LENGTH}
@@ -278,17 +420,18 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                             <button
                                                 type="button"
                                                 onClick={toggleVoiceRecording}
-                                                className={`absolute right-3 top-3 p-2 rounded-md transition-colors ${
+                                                className={`absolute right-2 top-2 min-w-[44px] min-h-[44px] p-2 rounded-lg transition-all active:scale-95 ${
                                                     isRecording
-                                                        ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-200 ring-2 ring-red-300 ring-offset-2'
+                                                        : 'bg-blue-500 text-white hover:bg-blue-600 shadow-md hover:shadow-lg'
                                                 }`}
                                                 title={isRecording ? 'Stop recording' : 'Start voice input'}
+                                                aria-label={isRecording ? 'Stop voice recording' : 'Start voice recording'}
                                             >
                                                 {isRecording ? (
-                                                    <MicOff className="w-4 h-4 animate-pulse" />
+                                                    <MicOff className="w-5 h-5 animate-pulse" />
                                                 ) : (
-                                                    <Mic className="w-4 h-4" />
+                                                    <Mic className="w-5 h-5" />
                                                 )}
                                             </button>
                                         )}
@@ -321,21 +464,43 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                     </p>
                                 </div>
 
-                                {!voiceSupported && (
+                                {!voiceSupported && isMobile && (
+                                    <Alert>
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertTitle>Voice Input Not Available</AlertTitle>
+                                        <AlertDescription>
+                                            {isIOSDevice() ? (
+                                                <p>Voice input is not supported on iOS Safari. Please type your description or try using Chrome for iOS.</p>
+                                            ) : (
+                                                <p>Voice input is not supported in your browser. Please type your description.</p>
+                                            )}
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+
+                                {!voiceSupported && !isMobile && (
                                     <Alert>
                                         <AlertCircle className="h-4 w-4" />
                                         <AlertDescription>
-                                            Voice input is not supported in your browser. You can still type your description.
+                                            Voice input is not supported in your browser. Please type your description or try using Chrome/Edge.
                                         </AlertDescription>
                                     </Alert>
                                 )}
 
                                 {isRecording && (
-                                    <Alert>
-                                        <Mic className="h-4 w-4 animate-pulse text-red-600" />
-                                        <AlertTitle>Listening...</AlertTitle>
-                                        <AlertDescription>
-                                            Speak clearly to record your description. Tap the microphone again to stop.
+                                    <Alert className="border-blue-200 bg-blue-50">
+                                        <Mic className="h-4 w-4 animate-pulse text-blue-600" />
+                                        <AlertTitle className="text-blue-900">🎤 Listening...</AlertTitle>
+                                        <AlertDescription className="text-blue-800">
+                                            {isMobile ? (
+                                                isIOSDevice() ? (
+                                                    <span>Speak clearly. On iOS, recording will pause and restart after each phrase. Tap the red microphone button to stop.</span>
+                                                ) : (
+                                                    <span>Speak clearly into your device microphone. Tap the red microphone button to stop recording.</span>
+                                                )
+                                            ) : (
+                                                <span>Speak clearly to record your description. Click the microphone button again to stop.</span>
+                                            )}
                                         </AlertDescription>
                                     </Alert>
                                 )}

@@ -12,6 +12,18 @@ export interface Sensor {
     last_ping?: string;
 }
 
+export interface Report {
+    id: string;
+    description: string;
+    latitude: number;
+    longitude: number;
+    media_url?: string;
+    verified: boolean;
+    verification_score: number;
+    upvotes: number;
+    timestamp: string;
+}
+
 export interface ReportCreate {
     user_id: string;
     description: string;
@@ -20,12 +32,40 @@ export interface ReportCreate {
     image?: File;
 }
 
+export interface User {
+    id: string;
+    username: string;
+    email: string;
+    role: string;
+    points: number;
+    level: number;
+    reports_count: number;
+    verified_reports_count: number;
+    badges: string[];
+}
+
 // Hooks
 
 export function useSensors() {
     return useQuery({
         queryKey: ['sensors'],
         queryFn: () => fetchJson<Sensor[]>('/sensors/'),
+        refetchInterval: 30000, // Default 30 second refresh
+    });
+}
+
+export function useReports() {
+    return useQuery({
+        queryKey: ['reports'],
+        queryFn: () => fetchJson<Report[]>('/reports/'),
+        refetchInterval: 30000, // Default 30 second refresh
+    });
+}
+
+export function useUsers() {
+    return useQuery({
+        queryKey: ['users'],
+        queryFn: () => fetchJson<User[]>('/users/'),
     });
 }
 

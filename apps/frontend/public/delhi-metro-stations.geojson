@@ -4,10 +4,27 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Rajiv Chowk",
-        "color": "#e41e26",
+        "name": "Kashmere Gate",
+        "name_hi": "कश्मीरी गेट",
         "network": "Delhi Metro",
-        "note": "PLACEHOLDER - Real data needs to be added"
+        "lines": ["Red Line", "Yellow Line", "Violet Line"],
+        "interchange": true,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.2282, 28.6674]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rajiv Chowk",
+        "name_hi": "राजीव चौक",
+        "network": "Delhi Metro",
+        "lines": ["Blue Line", "Yellow Line"],
+        "interchange": true,
+        "wheelchair": "yes"
       },
       "geometry": {
         "type": "Point",
@@ -17,14 +34,196 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Kashmere Gate",
-        "color": "#0047ba",
+        "name": "New Delhi",
+        "name_hi": "नई दिल्ली",
         "network": "Delhi Metro",
-        "note": "PLACEHOLDER - Real data needs to be added"
+        "lines": ["Yellow Line"],
+        "interchange": false,
+        "wheelchair": "yes"
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [77.2272, 28.6672]
+        "coordinates": [77.2227, 28.6435]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Central Secretariat",
+        "name_hi": "सेंट्रल सचिवालय",
+        "network": "Delhi Metro",
+        "lines": ["Yellow Line", "Violet Line"],
+        "interchange": true,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.2120, 28.6149]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Dwarka Sector 21",
+        "name_hi": "द्वारका सेक्टर 21",
+        "network": "Delhi Metro",
+        "lines": ["Blue Line"],
+        "interchange": false,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.0586, 28.5519]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Noida City Centre",
+        "name_hi": "नोएडा सिटी सेंटर",
+        "network": "Delhi Metro",
+        "lines": ["Blue Line"],
+        "interchange": false,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.3564, 28.5747]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rithala",
+        "name_hi": "रिठाला",
+        "network": "Delhi Metro",
+        "lines": ["Red Line"],
+        "interchange": false,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.1072, 28.7208]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Inderlok",
+        "name_hi": "इंदरलोक",
+        "network": "Delhi Metro",
+        "lines": ["Red Line", "Green Line"],
+        "interchange": true,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.1669, 28.6727]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Patel Nagar",
+        "name_hi": "पटेल नगर",
+        "network": "Delhi Metro",
+        "lines": ["Blue Line"],
+        "interchange": false,
+        "wheelchair": "limited"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.1693, 28.6450]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Ramesh Nagar",
+        "name_hi": "रमेश नगर",
+        "network": "Delhi Metro",
+        "lines": ["Blue Line"],
+        "interchange": false,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.1316, 28.6527]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "IGI Airport",
+        "name_hi": "आईजीआई हवाई अड्डा",
+        "network": "Delhi Metro",
+        "lines": ["Airport Express", "Orange Line"],
+        "interchange": true,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.0931, 28.5565]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hauz Khas",
+        "name_hi": "हौज़ खास",
+        "network": "Delhi Metro",
+        "lines": ["Yellow Line", "Magenta Line"],
+        "interchange": true,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.2067, 28.5435]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kirti Nagar",
+        "name_hi": "कीर्ति नगर",
+        "network": "Delhi Metro",
+        "lines": ["Blue Line", "Green Line"],
+        "interchange": true,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.1485, 28.6520]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Connaught Place",
+        "name_hi": "कनॉट प्लेस",
+        "network": "Delhi Metro",
+        "lines": ["Yellow Line"],
+        "interchange": false,
+        "wheelchair": "yes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.2185, 28.6281]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Chandni Chowk",
+        "name_hi": "चांदनी चौक",
+        "network": "Delhi Metro",
+        "lines": ["Yellow Line"],
+        "interchange": false,
+        "wheelchair": "limited"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.2313, 28.6567]
       }
     }
   ]

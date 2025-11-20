@@ -1,0 +1,7 @@
+# Ignore intermediate processing files (too large for Git)
+dem/tiles/
+
+# Keep the scripts and final outputs
+!dem/*.ps1
+!dem/*.py
+!dem/*.tif

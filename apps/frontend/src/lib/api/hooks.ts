@@ -22,10 +22,15 @@ export interface Report {
     verification_score: number;
     upvotes: number;
     timestamp: string;
-    phone_verified: boolean;
+    // OTP/Phone verification fields
+    phone_verified?: boolean;
     water_depth?: string;
     vehicle_passability?: string;
-    iot_validation_score: number;
+    iot_validation_score?: number;
+    // Gamification fields
+    downvotes?: number;
+    quality_score?: number;
+    verified_at?: string;
 }
 
 export interface ReportCreate {
@@ -33,51 +38,19 @@ export interface ReportCreate {
     description: string;
     latitude: number;
     longitude: number;
-    phone_number: string;
-    phone_verification_token: string;
-    water_depth?: string;
-    vehicle_passability?: string;
-    image: File; // MANDATORY
+    image?: File;
 }
 
-export interface SendOTPRequest {
-    phone_number: string;
-}
-
-export interface SendOTPResponse {
-    success: boolean;
-    message: string;
-    expires_in: number;
-}
-
-export interface VerifyOTPRequest {
-    phone_number: string;
-    otp_code: string;
-}
-
-export interface VerifyOTPResponse {
-    verified: boolean;
-    message: string;
-    token?: string;
-}
-
-export interface HyperlocalStatus {
-    reports: Report[];
-    status: 'safe' | 'caution' | 'warning' | 'critical' | 'unknown';
-    area_summary: {
-        total_reports: number;
-        verified_reports: number;
-        avg_water_depth?: string;
-        avg_validation_score: number;
-        last_updated?: string;
-    };
-    sensor_summary: {
-        sensor_count: number;
-        avg_water_level: number;
-        max_water_level: number;
-        active_sensors: number;
-        status: string;
-    };
+export interface User {
+    id: string;
+    username: string;
+    email: string;
+    role: string;
+    points: number;
+    level: number;
+    reports_count: number;
+    verified_reports_count: number;
+    badges: string[];
 }
 
 // Hooks
@@ -86,6 +59,7 @@ export function useSensors() {
     return useQuery({
         queryKey: ['sensors'],
         queryFn: () => fetchJson<Sensor[]>('/sensors/'),
+        refetchInterval: 30000, // Default 30 second refresh
     });
 }
 
@@ -93,39 +67,83 @@ export function useReports() {
     return useQuery({
         queryKey: ['reports'],
         queryFn: () => fetchJson<Report[]>('/reports/'),
-        refetchInterval: 30000, // Refetch every 30 seconds
+        refetchInterval: 30000, // Default 30 second refresh
     });
 }
 
-export function useHyperlocalStatus(lat: number, lng: number, radius: number = 500) {
+export function useUsers() {
     return useQuery({
-        queryKey: ['hyperlocal', lat, lng, radius],
-        queryFn: () => fetchJson<HyperlocalStatus>(`/reports/hyperlocal?lat=${lat}&lng=${lng}&radius=${radius}`),
-        enabled: lat !== 0 && lng !== 0, // Only fetch if valid coordinates
+        queryKey: ['users'],
+        queryFn: () => fetchJson<User[]>('/users/'),
     });
 }
 
-export function useSendOTP() {
-    return useMutation({
-        mutationFn: async (data: SendOTPRequest) => {
-            return fetchJson<SendOTPResponse>('/otp/send', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-            });
-        },
+export interface ActiveReportersStats {
+    count: number;
+    period_days: number;
+}
+
+export interface NearbyReportersStats {
+    count: number;
+    radius_km: number;
+    center: {
+        latitude: number;
+        longitude: number;
+    };
+}
+
+export interface LocationDetails {
+    location: {
+        latitude: number;
+        longitude: number;
+        radius_meters: number;
+    };
+    total_reports: number;
+    reports: Array<{
+        id: string;
+        description: string;
+        latitude: number;
+        longitude: number;
+        verified: boolean;
+        upvotes: number;
+        timestamp: string;
+        user_id: string;
+    }>;
+    reporters: Array<{
+        id: string;
+        username: string;
+        reports_count: number;
+        verified_reports_count: number;
+        level: number;
+    }>;
+}
+
+export function useActiveReporters() {
+    return useQuery({
+        queryKey: ['users', 'stats', 'active-reporters'],
+        queryFn: () => fetchJson<ActiveReportersStats>('/users/stats/active-reporters'),
+        refetchInterval: 600000, // Refresh every 10 minutes
     });
 }
 
-export function useVerifyOTP() {
-    return useMutation({
-        mutationFn: async (data: VerifyOTPRequest) => {
-            return fetchJson<VerifyOTPResponse>('/otp/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
-            });
-        },
+export function useNearbyReporters(latitude: number, longitude: number, radiusKm: number = 5.0) {
+    return useQuery({
+        queryKey: ['users', 'stats', 'nearby-reporters', latitude, longitude, radiusKm],
+        queryFn: () => fetchJson<NearbyReportersStats>(
+            `/users/stats/nearby-reporters?latitude=${latitude}&longitude=${longitude}&radius_km=${radiusKm}`
+        ),
+        refetchInterval: 600000, // Refresh every 10 minutes
+        enabled: !!(latitude && longitude), // Only run if coordinates are provided
+    });
+}
+
+export function useLocationDetails(latitude: number | null, longitude: number | null, radiusMeters: number = 500) {
+    return useQuery({
+        queryKey: ['reports', 'location', 'details', latitude, longitude, radiusMeters],
+        queryFn: () => fetchJson<LocationDetails>(
+            `/reports/location/details?latitude=${latitude}&longitude=${longitude}&radius_meters=${radiusMeters}`
+        ),
+        enabled: !!(latitude && longitude), // Only run if coordinates are provided
     });
 }
 
@@ -139,19 +157,9 @@ export function useReportMutation() {
             formData.append('description', data.description);
             formData.append('latitude', data.latitude.toString());
             formData.append('longitude', data.longitude.toString());
-            formData.append('phone_number', data.phone_number);
-            formData.append('phone_verification_token', data.phone_verification_token);
-
-            if (data.water_depth) {
-                formData.append('water_depth', data.water_depth);
+            if (data.image) {
+                formData.append('image', data.image);
             }
-            if (data.vehicle_passability) {
-                formData.append('vehicle_passability', data.vehicle_passability);
-            }
-
-            // Image is mandatory
-            formData.append('image', data.image);
-
             return uploadFile('/reports/', formData);
         },
         onSuccess: () => {

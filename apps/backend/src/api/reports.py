@@ -1,6 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from PIL import Image
 import io
@@ -9,15 +9,16 @@ import json
 
 from ..infrastructure.database import get_db
 from ..infrastructure import models
-from ..domain.models import ReportResponse, Report as ReportDomain
+from ..domain.models import ReportResponse, Report as ReportDomain, UserResponse
+from ..domain.reputation_models import ReportVerificationRequest
+from ..domain.services.reputation_service import ReputationService
 from ..core.utils import get_exif_data, get_lat_lon
 from ..domain.services.otp_service import get_otp_service
 from ..domain.services.validation_service import ReportValidationService
+from geoalchemy2.functions import ST_DWithin, ST_MakePoint
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-from typing import List
 
 @router.get("/", response_model=List[ReportResponse])
 def list_reports(db: Session = Depends(get_db)):
@@ -30,6 +31,81 @@ def list_reports(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error listing reports: {e}")
         raise HTTPException(status_code=500, detail="Failed to list reports")
+
+@router.get("/location/details", response_model=dict)
+def get_location_details(
+    latitude: float = Query(..., ge=-90, le=90),
+    longitude: float = Query(..., ge=-180, le=180),
+    radius_meters: float = Query(500, gt=0, le=5000),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all reports and user information at a specific location.
+    This is used when user clicks "Locate" on an alert to see details.
+
+    Returns:
+    - List of reports at this location
+    - Users who reported (with their report counts)
+    - Count of total reports
+    """
+    try:
+        # Create a point for the query location
+        query_point = ST_MakePoint(longitude, latitude)
+
+        # Find all reports within radius
+        nearby_reports = db.query(models.Report).filter(
+            ST_DWithin(
+                models.Report.location,
+                query_point,
+                radius_meters,
+                True  # Use spheroid for accurate distance
+            )
+        ).order_by(models.Report.timestamp.desc()).all()
+
+        # Get unique user IDs from these reports
+        user_ids = list(set([r.user_id for r in nearby_reports]))
+
+        # Get user details
+        users = db.query(models.User).filter(models.User.id.in_(user_ids)).all() if user_ids else []
+
+        # Build response
+        report_details = []
+        for report in nearby_reports:
+            report_details.append({
+                "id": str(report.id),
+                "description": report.description,
+                "latitude": report.latitude,
+                "longitude": report.longitude,
+                "verified": report.verified,
+                "upvotes": report.upvotes,
+                "timestamp": report.timestamp.isoformat(),
+                "user_id": str(report.user_id)
+            })
+
+        user_details = []
+        for user in users:
+            user_details.append({
+                "id": str(user.id),
+                "username": user.username,
+                "reports_count": user.reports_count,
+                "verified_reports_count": user.verified_reports_count,
+                "level": user.level
+            })
+
+        return {
+            "location": {
+                "latitude": latitude,
+                "longitude": longitude,
+                "radius_meters": radius_meters
+            },
+            "total_reports": len(nearby_reports),
+            "reports": report_details,
+            "reporters": user_details
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting location details: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get location details")
 
 @router.post("/", response_model=ReportResponse)
 async def create_report(
@@ -154,7 +230,7 @@ async def create_report(
             new_report.verified = True
             new_report.verification_score += 20
 
-            # Award points to user
+            # Award points to user with reputation system
             user = db.query(models.User).filter(models.User.id == user_id).first()
             if user:
                 user.points += 15  # Bonus for IoT-validated report
@@ -162,17 +238,29 @@ async def create_report(
                 user.verified_reports_count += 1
                 user.level = (user.points // 100) + 1
         else:
-            # Update counts even if not auto-verified
+            # Update counts and give base points even if not auto-verified
             user = db.query(models.User).filter(models.User.id == user_id).first()
             if user:
                 user.reports_count += 1
+                user.points += 5  # Base submission points
+                user.level = (user.points // 100) + 1
+
+        db.commit()
+        db.refresh(new_report)
 
         db.commit()
         db.refresh(new_report)
 
         logger.info(f"Report created: {new_report.id}, IoT score: {iot_score}, verified: {new_report.verified}")
 
-        # Return response with new fields
+        # Update streak (using reputation service)
+        reputation_service = ReputationService(db)
+        streak_bonus = reputation_service.update_streak(user_id)
+
+        if streak_bonus:
+            logger.info(f"User {user_id} earned streak bonus: {streak_bonus} points")
+
+        # Return response with combined fields from both features
         return ReportResponse(
             id=new_report.id,
             description=new_report.description,
@@ -182,6 +270,9 @@ async def create_report(
             verified=new_report.verified,
             verification_score=new_report.verification_score,
             upvotes=new_report.upvotes,
+            downvotes=new_report.downvotes,
+            quality_score=new_report.quality_score,
+            verified_at=new_report.verified_at,
             timestamp=new_report.timestamp,
             phone_verified=new_report.phone_verified,
             water_depth=new_report.water_depth,
@@ -315,59 +406,119 @@ def get_hyperlocal_status(
         raise HTTPException(status_code=500, detail=f"Failed to get hyperlocal status: {str(e)}")
 
 
-@router.post("/{report_id}/verify", response_model=ReportResponse)
-def verify_report(report_id: UUID, db: Session = Depends(get_db)):
+@router.post("/{report_id}/verify")
+def verify_report(
+    report_id: UUID,
+    verification: ReportVerificationRequest,
+    db: Session = Depends(get_db)
+):
     """
-    Verify a report and award points to the user.
+    Verify or reject a report with quality scoring.
+
+    Uses the reputation system to:
+    - Calculate quality score
+    - Award points based on quality
+    - Update user reputation
+    - Check for badges
+    - Log history
     """
     try:
         report = db.query(models.Report).filter(models.Report.id == report_id).first()
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
-            
-        if report.verified:
-            return ReportResponse(
-                id=report.id,
-                description=report.description,
-                latitude=report.latitude,
-                longitude=report.longitude,
-                media_url=report.media_url,
-                verified=report.verified,
-                verification_score=report.verification_score,
-                upvotes=report.upvotes,
-                timestamp=report.timestamp
-            )
 
-        # Mark as verified
-        report.verified = True
-        report.verification_score += 10
-        
-        # Award points to user
-        user = db.query(models.User).filter(models.User.id == report.user_id).first()
-        if user:
-            user.points += 10
-            user.verified_reports_count += 1
-            # Level up logic: 1 level per 100 points
-            user.level = (user.points // 100) + 1
-            
-        db.commit()
-        db.refresh(report)
-        
-        return ReportResponse(
-            id=report.id,
-            description=report.description,
-            latitude=report.latitude,
-            longitude=report.longitude,
-            media_url=report.media_url,
-            verified=report.verified,
-            verification_score=report.verification_score,
-            upvotes=report.upvotes,
-            timestamp=report.timestamp
+        if report.verified:
+            # Already verified
+            return {
+                'message': 'Report already verified',
+                'report_id': report_id,
+                'verified': True,
+                'quality_score': report.quality_score
+            }
+
+        # Process verification through reputation service
+        reputation_service = ReputationService(db)
+        result = reputation_service.process_report_verification(
+            report_id=report_id,
+            verified=verification.verified,
+            quality_score=verification.quality_score
         )
-        
+
+        return {
+            'message': 'Report verified' if verification.verified else 'Report rejected',
+            'report_id': report_id,
+            'verified': verification.verified,
+            **result
+        }
+
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error verifying report: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to verify report")
+
+
+@router.post("/{report_id}/upvote")
+def upvote_report(report_id: UUID, db: Session = Depends(get_db)):
+    """
+    Upvote a report.
+    Awards small bonus to report owner.
+    """
+    try:
+        report = db.query(models.Report).filter(models.Report.id == report_id).first()
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        # Increment upvotes
+        report.upvotes += 1
+        db.commit()
+
+        # Award bonus to report owner
+        reputation_service = ReputationService(db)
+        result = reputation_service.process_report_upvote(report_id)
+
+        return {
+            'message': 'Report upvoted',
+            'report_id': report_id,
+            'upvotes': report.upvotes,
+            **result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error upvoting report: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to upvote report")
+
+
+@router.post("/{report_id}/downvote")
+def downvote_report(report_id: UUID, db: Session = Depends(get_db)):
+    """
+    Downvote a report.
+    Used to flag potentially false reports.
+    """
+    try:
+        report = db.query(models.Report).filter(models.Report.id == report_id).first()
+        if not report:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        # Increment downvotes
+        report.downvotes += 1
+        db.commit()
+
+        return {
+            'message': 'Report downvoted',
+            'report_id': report_id,
+            'downvotes': report.downvotes
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downvoting report: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to downvote report")

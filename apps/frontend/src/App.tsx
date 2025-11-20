@@ -3,7 +3,8 @@ import { ResponsiveLayout } from './components/ResponsiveLayout';
 import { HomeScreen } from './components/screens/HomeScreen';
 import { FloodAtlasScreen } from './components/screens/FloodAtlasScreen';
 import { ReportScreen } from './components/screens/ReportScreen';
-import { AlertDetailScreen, AlertsListScreen, ProfileScreen } from './components/screens/Placeholders';
+import { ProfileScreen } from './components/screens/ProfileScreen';
+import { AlertDetailScreen, AlertsListScreen } from './components/screens/Placeholders';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FloodAlert } from './types';
 import { Toaster } from './components/ui/sonner';
@@ -45,15 +46,43 @@ function FloodSafeApp() {
         setActiveTab('profile');
     };
 
+    const handleNavigateToMap = () => {
+        setActiveTab('map');
+    };
+
+    const handleNavigateToReport = () => {
+        setActiveTab('report');
+    };
+
+    const handleNavigateToAlerts = () => {
+        setActiveTab('alerts');
+    };
+
+    const handleNavigateToProfile = () => {
+        setActiveTab('profile');
+    };
+
     const renderScreen = () => {
         switch (activeTab) {
             case 'home':
-                return <HomeScreen onAlertClick={handleAlertClick} />;
+                return <HomeScreen
+                    onAlertClick={handleAlertClick}
+                    onNavigateToMap={handleNavigateToMap}
+                    onNavigateToReport={handleNavigateToReport}
+                    onNavigateToAlerts={handleNavigateToAlerts}
+                    onNavigateToProfile={handleNavigateToProfile}
+                />;
             case 'alert-detail':
                 return selectedAlert ? (
                     <AlertDetailScreen alert={selectedAlert} onBack={handleBackFromDetail} />
                 ) : (
-                    <HomeScreen onAlertClick={handleAlertClick} />
+                    <HomeScreen
+                        onAlertClick={handleAlertClick}
+                        onNavigateToMap={handleNavigateToMap}
+                        onNavigateToReport={handleNavigateToReport}
+                        onNavigateToAlerts={handleNavigateToAlerts}
+                        onNavigateToProfile={handleNavigateToProfile}
+                    />
                 );
             case 'map':
                 return <FloodAtlasScreen />;
@@ -64,7 +93,13 @@ function FloodSafeApp() {
             case 'profile':
                 return <ProfileScreen />;
             default:
-                return <HomeScreen onAlertClick={handleAlertClick} />;
+                return <HomeScreen
+                    onAlertClick={handleAlertClick}
+                    onNavigateToMap={handleNavigateToMap}
+                    onNavigateToReport={handleNavigateToReport}
+                    onNavigateToAlerts={handleNavigateToAlerts}
+                    onNavigateToProfile={handleNavigateToProfile}
+                />;
         }
     };
 

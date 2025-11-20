@@ -15,13 +15,25 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     role = Column(String, default="user")
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Gamification
     points = Column(Integer, default=0)
     level = Column(Integer, default=1)
     reports_count = Column(Integer, default=0)
     verified_reports_count = Column(Integer, default=0)
     badges = Column(String, default="[]") # JSON string
+
+    # Profile fields
+    phone = Column(String, nullable=True)
+    profile_photo_url = Column(String, nullable=True)
+    language = Column(String, default="english")
+
+    # Notification preferences
+    notification_push = Column(Boolean, default=True)
+    notification_sms = Column(Boolean, default=True)
+    notification_whatsapp = Column(Boolean, default=False)
+    notification_email = Column(Boolean, default=True)
+    alert_preferences = Column(String, default='{"watch":true,"advisory":true,"warning":true,"emergency":true}') # JSON string
 
 class Sensor(Base):
     __tablename__ = "sensors"
@@ -108,3 +120,32 @@ class FloodZone(Base):
     name = Column(String)
     risk_level = Column(String)
     geometry = Column(Geometry('POLYGON', srid=4326))
+
+class WatchArea(Base):
+    __tablename__ = "watch_areas"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    name = Column(String)
+    location = Column(Geometry('POINT', srid=4326))
+    radius = Column(Float, default=1000.0) # meters
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    @hybrid_property
+    def latitude(self):
+        """Extract latitude from PostGIS POINT geometry"""
+        if self.location is not None:
+            session = object_session(self)
+            if session:
+                result = session.scalar(ST_Y(self.location))
+                return float(result) if result is not None else None
+        return None
+
+    @hybrid_property
+    def longitude(self):
+        """Extract longitude from PostGIS POINT geometry"""
+        if self.location is not None:
+            session = object_session(self)
+            if session:
+                result = session.scalar(ST_X(self.location))
+                return float(result) if result is not None else None
+        return None

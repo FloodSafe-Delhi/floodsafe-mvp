@@ -22,6 +22,16 @@ class User(BaseModel):
     verified_reports_count: int = 0
     badges: str = "[]"  # JSON string array
 
+    # Reputation system
+    reputation_score: int = 0
+    streak_days: int = 0
+    last_activity_date: Optional[datetime] = None
+
+    # Privacy controls
+    leaderboard_visible: bool = True
+    profile_public: bool = True
+    display_name: Optional[str] = None
+
     # Profile fields
     phone: Optional[str] = None
     profile_photo_url: Optional[str] = None
@@ -72,6 +82,9 @@ class Report(BaseModel):
     verified: bool = False
     verification_score: int = 0  # Computed from upvotes/user reputation
     upvotes: int = 0
+    downvotes: int = 0
+    quality_score: float = 0.0
+    verified_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -124,6 +137,11 @@ class UserUpdate(BaseModel):
     notification_whatsapp: Optional[bool] = None
     notification_email: Optional[bool] = None
     alert_preferences: Optional[str] = None  # JSON string
+
+    # Privacy controls
+    leaderboard_visible: Optional[bool] = None
+    profile_public: Optional[bool] = None
+    display_name: Optional[str] = Field(None, min_length=3, max_length=50)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -184,6 +202,16 @@ class UserResponse(BaseModel):
     reports_count: int
     verified_reports_count: int
     badges: List[str]  # Parsed JSON array
+
+    # Reputation system
+    reputation_score: int = 0
+    streak_days: int = 0
+    last_activity_date: Optional[datetime] = None
+
+    # Privacy controls
+    leaderboard_visible: bool = True
+    profile_public: bool = True
+    display_name: Optional[str] = None
 
     # Profile fields
     phone: Optional[str] = None

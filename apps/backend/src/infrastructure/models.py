@@ -23,6 +23,16 @@ class User(Base):
     verified_reports_count = Column(Integer, default=0)
     badges = Column(String, default="[]") # JSON string
 
+    # Reputation system
+    reputation_score = Column(Integer, default=0)
+    streak_days = Column(Integer, default=0)
+    last_activity_date = Column(DateTime, nullable=True)
+
+    # Privacy controls
+    leaderboard_visible = Column(Boolean, default=True)
+    profile_public = Column(Boolean, default=True)
+    display_name = Column(String, nullable=True)
+
     # Profile fields
     phone = Column(String, nullable=True)
     profile_photo_url = Column(String, nullable=True)
@@ -84,6 +94,9 @@ class Report(Base):
     verified = Column(Boolean, default=False)
     verification_score = Column(Integer, default=0)
     upvotes = Column(Integer, default=0)
+    downvotes = Column(Integer, default=0)
+    quality_score = Column(Float, default=0.0)
+    verified_at = Column(DateTime, nullable=True)
 
     @hybrid_property
     def latitude(self):
@@ -140,3 +153,36 @@ class WatchArea(Base):
                 result = session.scalar(ST_X(self.location))
                 return float(result) if result is not None else None
         return None
+
+class ReputationHistory(Base):
+    __tablename__ = "reputation_history"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    action = Column(String, nullable=False)
+    points_change = Column(Integer, default=0)
+    new_total = Column(Integer, nullable=False)
+    reason = Column(String, nullable=True)
+    metadata = Column(String, default="{}") # JSON string
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Badge(Base):
+    __tablename__ = "badges"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    icon = Column(String, default="🏆")
+    category = Column(String, default="achievement")
+    requirement_type = Column(String, nullable=False)
+    requirement_value = Column(Integer, nullable=False)
+    points_reward = Column(Integer, default=0)
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class UserBadge(Base):
+    __tablename__ = "user_badges"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    badge_id = Column(UUID(as_uuid=True), ForeignKey("badges.id", ondelete="CASCADE"), nullable=False)
+    earned_at = Column(DateTime, default=datetime.utcnow)

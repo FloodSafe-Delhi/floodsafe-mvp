@@ -33,7 +33,7 @@ interface User {
   level: number;
   reports_count: number;
   verified_reports_count: number;
-  badges: string[];
+  badges?: string[];
   language: string;
   notification_push: boolean;
   notification_sms: boolean;
@@ -65,7 +65,7 @@ export function ProfileScreen() {
     queryKey: ['user', DEMO_USER_ID],
     queryFn: async () => {
       // Try to get admin user first
-      const usersResponse = await fetch(`${API_URL}/api/leaderboards/top?limit=100`);
+      const usersResponse = await fetch(`${API_URL}/api/leaderboards/top?limit=50`);
       const users = await usersResponse.json();
       const adminUser = users.find((u: User) => u.username === 'admin');
 
@@ -151,7 +151,8 @@ export function ProfileScreen() {
     );
   }
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | undefined) => {
+    if (!name) return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
@@ -237,7 +238,7 @@ export function ProfileScreen() {
             </div>
           </div>
 
-          {user.badges.length > 0 && (
+          {user.badges && user.badges.length > 0 && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="text-sm font-medium text-blue-900 mb-2">Badges Earned</div>
               <div className="flex flex-wrap gap-2">

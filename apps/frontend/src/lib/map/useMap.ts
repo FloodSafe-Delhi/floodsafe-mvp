@@ -137,12 +137,31 @@ export function useMap(
 
             // Debug: Try to query features from transportation layer at current view
             setTimeout(() => {
-                const features = map.querySourceFeatures('openmaptiles', {
-                    sourceLayer: 'transportation'
-                });
-                console.log('🚗 Transportation features sample:', features.slice(0, 5));
-                const transitFeatures = features.filter(f => f.properties?.class === 'transit');
-                console.log('🚇 Transit features:', transitFeatures.length, transitFeatures.slice(0, 3));
+                try {
+                    const style = map.getStyle();
+                    if (!style || !style.sources) {
+                        console.log('ℹ️ Map style not ready yet');
+                        return;
+                    }
+
+                    const sources = style.sources;
+                    const sourceKey = Object.keys(sources).find(key =>
+                        key.includes('basemap') || key.includes('openmaptiles')
+                    );
+
+                    if (sourceKey && map.getSource(sourceKey)) {
+                        const features = map.querySourceFeatures(sourceKey, {
+                            sourceLayer: 'transportation'
+                        });
+                        console.log('🚗 Transportation features sample:', features.slice(0, 5));
+                        const transitFeatures = features.filter(f => f.properties?.class === 'transit');
+                        console.log('🚇 Transit features:', transitFeatures.length, transitFeatures.slice(0, 3));
+                    } else {
+                        console.log('ℹ️ No basemap source found for querying transportation features');
+                    }
+                } catch (error) {
+                    console.log('ℹ️ Could not query transportation features:', error);
+                }
             }, 2000);
 
             setIsLoaded(true);

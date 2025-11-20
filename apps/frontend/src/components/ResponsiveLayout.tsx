@@ -1,5 +1,4 @@
 import { ReactNode } from 'react';
-import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
 import { TopNav } from './TopNav';
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { CityKey } from '../lib/map/cityConfigs';
 import { MAP_CONSTANTS } from '../lib/map/config';
 

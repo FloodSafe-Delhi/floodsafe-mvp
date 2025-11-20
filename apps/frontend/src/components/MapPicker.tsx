@@ -63,6 +63,18 @@ export default function MapPicker({ isOpen, onClose, initialLocation, onLocation
         return () => clearTimeout(timeout);
     }, [isLoaded, isOpen]);
 
+    // Resize map when sheet opens to ensure proper rendering
+    useEffect(() => {
+        if (!map || !isOpen || !isLoaded) return;
+
+        // Small delay to ensure sheet animation completes
+        const resizeTimer = setTimeout(() => {
+            map.resize();
+        }, 100);
+
+        return () => clearTimeout(resizeTimer);
+    }, [map, isOpen, isLoaded]);
+
     // Initialize map with initial location or city center
     useEffect(() => {
         if (!map || !isLoaded) return;
@@ -77,7 +89,7 @@ export default function MapPicker({ isOpen, onClose, initialLocation, onLocation
             duration: 1000
         });
 
-        // Create initial marker
+        // Create initial marker if it doesn't exist
         if (!markerRef.current) {
             const marker = new maplibregl.Marker({
                 color: '#ef4444', // Red marker
@@ -93,6 +105,10 @@ export default function MapPicker({ isOpen, onClose, initialLocation, onLocation
             });
 
             markerRef.current = marker;
+            setSelectedCoords(targetCoords);
+        } else {
+            // Update existing marker position if initialLocation changed
+            markerRef.current.setLngLat(targetCoords);
             setSelectedCoords(targetCoords);
         }
     }, [map, isLoaded, initialLocation]);

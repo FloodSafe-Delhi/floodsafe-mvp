@@ -72,6 +72,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
     // Map picker state
     const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+    const locationManuallySetRef = useRef(false); // Track if user manually selected location from map
 
     const recognitionRef = useRef<any>(null);
     const isRecordingRef = useRef(false);
@@ -243,6 +244,12 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
+                // Don't override location if user manually selected from map
+                if (locationManuallySetRef.current) {
+                    setLocationLoading(false);
+                    return;
+                }
+
                 const { latitude, longitude, accuracy } = position.coords;
                 setLocation({ latitude, longitude, accuracy });
                 setLocationLoading(false);
@@ -424,6 +431,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
         setLocationName(selectedLocation.locationName);
         setLocationError('');
         setLocationLoading(false);
+        locationManuallySetRef.current = true; // Mark as manually set to prevent GPS override
         toast.success('Location selected from map');
     };
 

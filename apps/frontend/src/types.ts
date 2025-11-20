@@ -43,3 +43,38 @@ export interface User {
         emergency: boolean;
     };
 }
+
+// Location-related types for MapPicker
+export interface LocationCoordinates {
+    latitude: number;
+    longitude: number;
+}
+
+export interface LocationData extends LocationCoordinates {
+    accuracy: number;
+}
+
+export interface LocationWithAddress extends LocationData {
+    locationName: string;
+}
+
+// Map Picker types
+export interface MapPickerProps {
+    isOpen: boolean;
+    onClose: () => void;
+    initialLocation: LocationData | null;
+    onLocationSelect: (location: LocationWithAddress) => void;
+}
+
+export interface GeocodingResult {
+    display_name: string;
+    lat: string;
+    lon: string;
+    address?: {
+        road?: string;
+        suburb?: string;
+        city?: string;
+        state?: string;
+        country?: string;
+    };
+}

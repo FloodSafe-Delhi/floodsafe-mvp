@@ -478,7 +478,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     };
 
     return (
-        <div className="pb-16 min-h-screen bg-gray-50">
+        <div className="pb-32 min-h-screen bg-gray-50">
             {/* Header */}
             <div className="bg-white shadow-sm sticky top-14 z-40">
                 <div className="flex items-center justify-between px-4 h-14">
@@ -517,7 +517,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
             </div>
 
             {/* Form Content */}
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 mb-24">
                 {/* Step 1: Location */}
                 {step === 1 && (
                     <div className="space-y-4">
@@ -629,17 +629,18 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                         <Textarea
                                             id="desc"
                                             placeholder="e.g., 'Road flooded near Bus Stop 123' or 'Heavy waterlogging at Main Street intersection'"
-                                            className="min-h-28 pr-14"
+                                            className="min-h-32 pr-14 resize-none"
                                             value={description}
                                             onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
                                             maxLength={MAX_DESCRIPTION_LENGTH}
+                                            rows={5}
                                         />
 
                                         {voiceSupported && (
                                             <button
                                                 type="button"
                                                 onClick={toggleVoiceRecording}
-                                                className={`absolute right-2 top-2 min-w-[44px] min-h-[44px] p-2 rounded-lg transition-all active:scale-95 ${
+                                                className={`absolute right-2 top-2 min-w-[44px] min-h-[44px] p-2 rounded-lg transition-all active:scale-95 z-10 ${
                                                     isRecording
                                                         ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-200 ring-2 ring-red-300 ring-offset-2'
                                                         : 'bg-blue-500 text-white hover:bg-blue-600 shadow-md hover:shadow-lg'

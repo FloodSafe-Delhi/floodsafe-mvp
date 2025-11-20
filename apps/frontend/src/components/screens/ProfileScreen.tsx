@@ -151,8 +151,14 @@ export function ProfileScreen() {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const progressToNextLevel = ((user.points % 100) / 100) * 100;
-  const pointsNeeded = 100 - (user.points % 100);
+  // Safe calculations with proper null checks
+  const safePoints = user.points || 0;
+  const safeLevel = user.level || 1;
+  const safeReportsCount = user.reports_count || 0;
+  const safeVerifiedCount = user.verified_reports_count || 0;
+
+  const progressToNextLevel = ((safePoints % 100) / 100) * 100;
+  const pointsNeeded = 100 - (safePoints % 100);
   const memberSince = new Date(user.created_at).toLocaleDateString('en-US', {
     month: 'short',
     year: 'numeric'
@@ -203,14 +209,14 @@ export function ProfileScreen() {
               Reputation Score
             </h3>
             <div className="text-right">
-              <div className="text-2xl font-bold text-blue-600">Level {user.level}</div>
-              <div className="text-sm text-gray-600">{user.points} points</div>
+              <div className="text-2xl font-bold text-blue-600">Level {safeLevel}</div>
+              <div className="text-sm text-gray-600">{safePoints} points</div>
             </div>
           </div>
 
           <div className="space-y-2 mb-4">
             <div className="flex justify-between text-sm">
-              <span>Progress to Level {user.level + 1}</span>
+              <span>Progress to Level {safeLevel + 1}</span>
               <span className="text-gray-600">{pointsNeeded} more points</span>
             </div>
             <Progress value={progressToNextLevel} className="h-2" />
@@ -218,16 +224,16 @@ export function ProfileScreen() {
 
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold">{user.reports_count}</div>
+              <div className="text-2xl font-bold">{safeReportsCount}</div>
               <div className="text-xs text-gray-600">Submitted</div>
             </div>
             <div className="p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{user.verified_reports_count}</div>
+              <div className="text-2xl font-bold text-green-600">{safeVerifiedCount}</div>
               <div className="text-xs text-gray-600">Verified</div>
             </div>
             <div className="p-3 bg-yellow-50 rounded-lg">
               <div className="text-2xl font-bold text-yellow-600">
-                {user.reports_count - user.verified_reports_count}
+                {safeReportsCount - safeVerifiedCount}
               </div>
               <div className="text-xs text-gray-600">Pending</div>
             </div>

@@ -1,6 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from PIL import Image
 import io
@@ -8,13 +8,12 @@ import logging
 
 from ..infrastructure.database import get_db
 from ..infrastructure import models
-from ..domain.models import ReportResponse
+from ..domain.models import ReportResponse, UserResponse
 from ..core.utils import get_exif_data, get_lat_lon
+from geoalchemy2.functions import ST_DWithin, ST_MakePoint
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-from typing import List
 
 @router.get("/", response_model=List[ReportResponse])
 def list_reports(db: Session = Depends(get_db)):
@@ -27,6 +26,81 @@ def list_reports(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error listing reports: {e}")
         raise HTTPException(status_code=500, detail="Failed to list reports")
+
+@router.get("/location/details", response_model=dict)
+def get_location_details(
+    latitude: float = Query(..., ge=-90, le=90),
+    longitude: float = Query(..., ge=-180, le=180),
+    radius_meters: float = Query(500, gt=0, le=5000),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all reports and user information at a specific location.
+    This is used when user clicks "Locate" on an alert to see details.
+
+    Returns:
+    - List of reports at this location
+    - Users who reported (with their report counts)
+    - Count of total reports
+    """
+    try:
+        # Create a point for the query location
+        query_point = ST_MakePoint(longitude, latitude)
+
+        # Find all reports within radius
+        nearby_reports = db.query(models.Report).filter(
+            ST_DWithin(
+                models.Report.location,
+                query_point,
+                radius_meters,
+                True  # Use spheroid for accurate distance
+            )
+        ).order_by(models.Report.timestamp.desc()).all()
+
+        # Get unique user IDs from these reports
+        user_ids = list(set([r.user_id for r in nearby_reports]))
+
+        # Get user details
+        users = db.query(models.User).filter(models.User.id.in_(user_ids)).all() if user_ids else []
+
+        # Build response
+        report_details = []
+        for report in nearby_reports:
+            report_details.append({
+                "id": str(report.id),
+                "description": report.description,
+                "latitude": report.latitude,
+                "longitude": report.longitude,
+                "verified": report.verified,
+                "upvotes": report.upvotes,
+                "timestamp": report.timestamp.isoformat(),
+                "user_id": str(report.user_id)
+            })
+
+        user_details = []
+        for user in users:
+            user_details.append({
+                "id": str(user.id),
+                "username": user.username,
+                "reports_count": user.reports_count,
+                "verified_reports_count": user.verified_reports_count,
+                "level": user.level
+            })
+
+        return {
+            "location": {
+                "latitude": latitude,
+                "longitude": longitude,
+                "radius_meters": radius_meters
+            },
+            "total_reports": len(nearby_reports),
+            "reports": report_details,
+            "reporters": user_details
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting location details: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get location details")
 
 @router.post("/", response_model=ReportResponse)
 async def create_report(

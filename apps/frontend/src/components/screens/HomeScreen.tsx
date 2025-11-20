@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
+import { Badge } from '../ui/badge';
 import {
     MapPin, Users, AlertTriangle, Bell, Shield, Phone, Camera,
     Navigation, ChevronRight, AlertCircle, Droplets,
-    Maximize2, Target, RefreshCw, Info, Share2, ThumbsUp, TrendingUp, Settings
+    Maximize2, Target, RefreshCw, Info, Share2, ThumbsUp, TrendingUp, Settings, MapPinned
 } from 'lucide-react';
 import { FloodAlert } from '../../types';
 import MapComponent from '../MapComponent';
-import { useSensors, useReports, useUsers } from '../../lib/api/hooks';
+import { useSensors, useReports, useUsers, useActiveReporters, useNearbyReporters, useLocationDetails } from '../../lib/api/hooks';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import {
@@ -17,6 +18,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '../ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '../ui/dialog';
 
 interface HomeScreenProps {
     onAlertClick: (alert: FloodAlert) => void;
@@ -26,14 +34,11 @@ interface HomeScreenProps {
     onNavigateToProfile?: () => void;
 }
 
-// Refresh interval options in milliseconds
+// Refresh interval options - Updated as per requirement: 15s, 2m, 10m (default)
 const REFRESH_INTERVALS = {
     '15s': 15000,
-    '30s': 30000,
-    '1m': 60000,
     '2m': 120000,
-    '5m': 300000,
-    'off': 0,
+    '10m': 600000,
 } as const;
 
 type RefreshInterval = keyof typeof REFRESH_INTERVALS;
@@ -46,13 +51,25 @@ export function HomeScreen({
     onNavigateToProfile
 }: HomeScreenProps) {
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>('15s');
+    const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>('10m'); // Default 10 minutes
+    const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+    // User's current location (for demonstration, using Delhi coordinates)
+    // In production, this would come from geolocation API
+    const userLocation = { latitude: 28.6139, longitude: 77.2090 };
 
     const { data: sensors, refetch: refetchSensors } = useSensors();
     const { data: reports, refetch: refetchReports } = useReports();
     const { data: users } = useUsers();
+    const { data: activeReportersData } = useActiveReporters();
+    const { data: nearbyReportersData } = useNearbyReporters(userLocation.latitude, userLocation.longitude, 5.0);
+    const { data: locationDetails } = useLocationDetails(
+        selectedLocation?.lat || null,
+        selectedLocation?.lng || null,
+        500 // 500 meter radius
+    );
 
-    // Transform sensors into alerts
+    // Transform sensors into alerts with location info
     const activeAlerts: FloodAlert[] = sensors?.filter(s => s.status !== 'active').map(s => ({
         id: s.id,
         level: s.status === 'critical' ? 'critical' : 'warning',
@@ -65,16 +82,13 @@ export function HomeScreen({
         coordinates: [s.longitude, s.latitude]
     })) || [];
 
-    const safeSensors = sensors?.filter(s => s.status === 'active').length || 0;
-    const totalSensors = sensors?.length || 0;
-
-    // Community stats
-    const activeReporters = users?.length || 247;
-    const nearbyReporters = users?.filter(u => u.reports_count > 0).length || 12;
+    // Community stats with proper logic
+    const activeReporters = activeReportersData?.count || 0; // Users with reports in past 7 days
+    const nearbyReporters = nearbyReportersData?.count || 0; // Users who reported within 5km
     const currentUser = users?.[0]; // Mock current user - in real app would come from auth
     const userImpact = {
-        reports: currentUser?.reports_count || 3,
-        helped: (currentUser?.reports_count || 3) * 15, // Rough estimate
+        reports: currentUser?.reports_count || 0,
+        helped: (currentUser?.reports_count || 0) * 15, // Rough estimate
     };
 
     // Determine risk level
@@ -99,8 +113,6 @@ export function HomeScreen({
     // Auto-refresh with configurable interval
     useEffect(() => {
         const intervalMs = REFRESH_INTERVALS[refreshInterval];
-
-        if (intervalMs === 0) return; // No auto-refresh
 
         const interval = setInterval(() => {
             setIsRefreshing(true);
@@ -179,6 +191,11 @@ export function HomeScreen({
 
     const handleCenterMap = () => {
         toast.info('Centering map on your location');
+    };
+
+    const handleLocateAlert = (lat: number, lng: number, locationName: string) => {
+        setSelectedLocation({ lat, lng });
+        toast.info(`Locating ${locationName} on map`);
     };
 
     const formatTimeAgo = (timestamp: string) => {
@@ -329,7 +346,7 @@ export function HomeScreen({
                             </div>
                         )}
 
-                        {/* Map controls */}
+                        {/* Map controls - Vertical stack on the right */}
                         <div className="absolute bottom-2 right-2 flex flex-col gap-2">
                             <button
                                 onClick={handleFullscreenMap}
@@ -368,11 +385,8 @@ export function HomeScreen({
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="15s">15 sec</SelectItem>
-                                    <SelectItem value="30s">30 sec</SelectItem>
-                                    <SelectItem value="1m">1 min</SelectItem>
                                     <SelectItem value="2m">2 min</SelectItem>
-                                    <SelectItem value="5m">5 min</SelectItem>
-                                    <SelectItem value="off">Manual</SelectItem>
+                                    <SelectItem value="10m">10 min</SelectItem>
                                 </SelectContent>
                             </Select>
                             <button
@@ -385,7 +399,7 @@ export function HomeScreen({
                     </div>
 
                     <div className="divide-y">
-                        {/* Sensor Alerts */}
+                        {/* Sensor Alerts with Location and Locate Button */}
                         {activeAlerts.length > 0 ? (
                             activeAlerts.slice(0, 2).map((alert, index) => (
                                 <div key={alert.id} className="p-3">
@@ -404,12 +418,26 @@ export function HomeScreen({
                                             <div className="text-sm text-gray-600">
                                                 {alert.description}
                                             </div>
+                                            {/* Location Display */}
+                                            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                                                <MapPin className="w-3 h-3" />
+                                                <span>
+                                                    {alert.coordinates[1].toFixed(4)}, {alert.coordinates[0].toFixed(4)}
+                                                </span>
+                                            </div>
                                             <div className="flex gap-2 mt-2 flex-wrap">
                                                 <button
                                                     onClick={() => onAlertClick(alert)}
                                                     className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors min-h-[32px]"
                                                 >
                                                     View
+                                                </button>
+                                                <button
+                                                    onClick={() => handleLocateAlert(alert.coordinates[1], alert.coordinates[0], alert.location)}
+                                                    className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded hover:bg-purple-100 transition-colors min-h-[32px] flex items-center gap-1"
+                                                >
+                                                    <MapPinned className="w-3 h-3" />
+                                                    Locate
                                                 </button>
                                                 <button
                                                     onClick={() => handleShare(alert.id)}
@@ -431,7 +459,7 @@ export function HomeScreen({
                             ))
                         ) : null}
 
-                        {/* Community Reports */}
+                        {/* Community Reports with Location and Locate Button */}
                         {reports && reports.length > 0 ? (
                             reports.slice(0, 2).map((report) => (
                                 <div key={report.id} className="p-3">
@@ -450,6 +478,13 @@ export function HomeScreen({
                                             <div className="text-sm text-gray-600 line-clamp-2">
                                                 {report.description}
                                             </div>
+                                            {/* Location Display */}
+                                            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                                                <MapPin className="w-3 h-3" />
+                                                <span>
+                                                    {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
+                                                </span>
+                                            </div>
                                             <div className="flex gap-2 mt-2 flex-wrap">
                                                 <button
                                                     onClick={() => toast.info('Viewing report details')}
@@ -457,10 +492,17 @@ export function HomeScreen({
                                                 >
                                                     View
                                                 </button>
+                                                <button
+                                                    onClick={() => handleLocateAlert(report.latitude, report.longitude, 'Report Location')}
+                                                    className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded hover:bg-purple-100 transition-colors min-h-[32px] flex items-center gap-1"
+                                                >
+                                                    <MapPinned className="w-3 h-3" />
+                                                    Locate
+                                                </button>
                                                 {!report.verified && (
                                                     <button
                                                         onClick={handleThankReporter}
-                                                        className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded hover:bg-purple-100 transition-colors min-h-[32px]"
+                                                        className="text-xs bg-amber-50 text-amber-600 px-2 py-1 rounded hover:bg-amber-100 transition-colors min-h-[32px]"
                                                     >
                                                         <ThumbsUp className="w-3 h-3 inline mr-1" />
                                                         Thank
@@ -496,7 +538,7 @@ export function HomeScreen({
                 </Card>
             </div>
 
-            {/* Community Engagement Widget - Moved under Recent Updates */}
+            {/* Community Engagement Widget - Under Recent Updates with Proper Logic */}
             <div className="px-4 pb-4">
                 <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg shadow-md p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -511,10 +553,12 @@ export function HomeScreen({
                         <div>
                             <div className="text-2xl font-bold">{activeReporters}</div>
                             <div className="text-xs opacity-90">Active Reporters</div>
+                            <div className="text-[10px] opacity-75">Past 7 days</div>
                         </div>
                         <div>
                             <div className="text-2xl font-bold">{nearbyReporters}</div>
                             <div className="text-xs opacity-90">Near You</div>
+                            <div className="text-[10px] opacity-75">Within 5km</div>
                         </div>
                     </div>
 
@@ -541,6 +585,107 @@ export function HomeScreen({
                     </div>
                 </div>
             </div>
+
+            {/* Location Details Dialog */}
+            <Dialog open={selectedLocation !== null} onOpenChange={(open) => !open && setSelectedLocation(null)}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Location Details</DialogTitle>
+                        <DialogDescription>
+                            Reports and sensor data at this location
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {locationDetails && (
+                        <div className="space-y-4">
+                            <div className="text-sm text-gray-600">
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="w-4 h-4" />
+                                    <span>
+                                        {locationDetails.location.latitude.toFixed(4)}, {locationDetails.location.longitude.toFixed(4)}
+                                    </span>
+                                </div>
+                                <div className="mt-1">
+                                    Search Radius: {locationDetails.location.radius_meters}m
+                                </div>
+                            </div>
+
+                            <div>
+                                <h4 className="font-semibold mb-2">
+                                    Total Reports: {locationDetails.total_reports}
+                                </h4>
+
+                                {locationDetails.reports.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {locationDetails.reports.map((report) => (
+                                            <Card key={report.id} className="p-3">
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex-1">
+                                                        <div className="text-sm font-medium">{report.description}</div>
+                                                        <div className="text-xs text-gray-500 mt-1">
+                                                            {formatTimeAgo(report.timestamp)}
+                                                        </div>
+                                                        {report.verified && (
+                                                            <Badge className="mt-1 bg-green-500 text-white text-xs">Verified</Badge>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {report.upvotes} upvotes
+                                                    </div>
+                                                </div>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-gray-500">No reports at this location</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <h4 className="font-semibold mb-2">
+                                    Reporters ({locationDetails.reporters.length})
+                                </h4>
+
+                                {locationDetails.reporters.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {locationDetails.reporters.map((reporter) => (
+                                            <Card key={reporter.id} className="p-3">
+                                                <div className="flex items-center justify-between">
+                                                    <div>
+                                                        <div className="font-medium text-sm">{reporter.username}</div>
+                                                        <div className="text-xs text-gray-500">
+                                                            Level {reporter.level} • {reporter.reports_count} total reports • {reporter.verified_reports_count} verified
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-gray-500">No reporter information available</p>
+                                )}
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    onNavigateToMap?.();
+                                    setSelectedLocation(null);
+                                }}
+                                className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors min-h-[44px]"
+                            >
+                                View on Full Map
+                            </button>
+                        </div>
+                    )}
+
+                    {!locationDetails && selectedLocation && (
+                        <div className="text-center py-8">
+                            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-gray-400" />
+                            <p className="text-sm text-gray-500">Loading location details...</p>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

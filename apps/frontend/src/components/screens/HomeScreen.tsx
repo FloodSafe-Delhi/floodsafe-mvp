@@ -223,37 +223,37 @@ export function HomeScreen({
 
             {/* Quick Action Buttons */}
             <div className="px-4 pb-3">
-                <Card className="p-3 flex justify-around">
+                <div className="grid grid-cols-3 gap-3">
                     <button
                         onClick={handleSOS}
-                        className="flex flex-col items-center gap-1 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors min-h-[44px] min-w-[44px]"
+                        className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-all border-2 border-red-100 hover:border-red-300 min-h-[100px]"
                     >
                         <div className="bg-red-500 text-white p-3 rounded-full">
-                            <Phone className="w-5 h-5" />
+                            <Phone className="w-6 h-6" />
                         </div>
-                        <span className="text-xs font-medium">SOS</span>
+                        <span className="text-sm font-semibold text-gray-700">SOS</span>
                     </button>
 
                     <button
                         onClick={onNavigateToReport}
-                        className="flex flex-col items-center gap-1 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors min-h-[44px] min-w-[44px]"
+                        className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-all border-2 border-blue-100 hover:border-blue-300 min-h-[100px]"
                     >
                         <div className="bg-blue-500 text-white p-3 rounded-full">
-                            <Camera className="w-5 h-5" />
+                            <Camera className="w-6 h-6" />
                         </div>
-                        <span className="text-xs font-medium">Report</span>
+                        <span className="text-sm font-semibold text-gray-700">Report</span>
                     </button>
 
                     <button
                         onClick={handleNavigateRoutes}
-                        className="flex flex-col items-center gap-1 px-4 py-2 rounded-lg hover:bg-green-50 transition-colors min-h-[44px] min-w-[44px]"
+                        className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-all border-2 border-green-100 hover:border-green-300 min-h-[100px]"
                     >
                         <div className="bg-green-500 text-white p-3 rounded-full">
-                            <Navigation className="w-5 h-5" />
+                            <Navigation className="w-6 h-6" />
                         </div>
-                        <span className="text-xs font-medium">Routes</span>
+                        <span className="text-sm font-semibold text-gray-700">Routes</span>
                     </button>
-                </Card>
+                </div>
             </div>
 
             {/* Enhanced Map View */}

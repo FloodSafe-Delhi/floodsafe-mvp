@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useMap } from '../lib/map/useMap';
-import { useSensors, useReports } from '../lib/api/hooks';
+import { useSensors, useReports, Sensor, Report } from '../lib/api/hooks';
 import maplibregl from 'maplibre-gl';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -23,6 +23,14 @@ interface MapComponentProps {
     showCitySelector?: boolean;
 }
 
+interface LayersVisibility {
+    flood: boolean;
+    sensors: boolean;
+    reports: boolean;
+    routes: boolean;
+    metro: boolean;
+}
+
 export default function MapComponent({ className, title, showControls, showCitySelector }: MapComponentProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const city = useCurrentCity();
@@ -30,7 +38,7 @@ export default function MapComponent({ className, title, showControls, showCityS
     const { map, isLoaded } = useMap(mapContainer, city);
     const { data: sensors } = useSensors();
     const { data: reports } = useReports();
-    const [layersVisible, setLayersVisible] = useState({
+    const [layersVisible, setLayersVisible] = useState<LayersVisibility>({
         flood: true,
         sensors: true,
         reports: true,
@@ -64,7 +72,7 @@ export default function MapComponent({ className, title, showControls, showCityS
                 type: 'geojson',
                 data: {
                     type: 'FeatureCollection',
-                    features: sensors.map(sensor => ({
+                    features: sensors.map((sensor: Sensor) => ({
                         type: 'Feature',
                         geometry: {
                             type: 'Point',
@@ -105,7 +113,7 @@ export default function MapComponent({ className, title, showControls, showCityS
                 type: 'geojson',
                 data: {
                     type: 'FeatureCollection',
-                    features: reports.map(report => ({
+                    features: reports.map((report: Report) => ({
                         type: 'Feature',
                         geometry: {
                             type: 'Point',
@@ -169,7 +177,7 @@ export default function MapComponent({ className, title, showControls, showCityS
             });
 
             // Add click handler to show popup with report details
-            map.on('click', 'reports-layer', (e) => {
+            map.on('click', 'reports-layer', (e: maplibregl.MapMouseEvent) => {
                 if (!e.features || e.features.length === 0) return;
 
                 const feature = e.features[0];

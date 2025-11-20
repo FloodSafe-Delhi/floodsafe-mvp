@@ -1,3 +1,6 @@
+export type AlertLevel = 'safe' | 'watch' | 'advisory' | 'warning' | 'emergency';
+export type AlertColor = 'green' | 'yellow' | 'orange' | 'red' | 'black';
+
 export interface FloodAlert {
     id: string;
     level: 'critical' | 'warning' | 'watch' | 'safe';

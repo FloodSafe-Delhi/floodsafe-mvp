@@ -15,12 +15,14 @@ import {
 } from "./ui/select";
 import { useCurrentCity, useCityContext } from '../contexts/CityContext';
 import { isWithinCityBounds, getAvailableCities, getCityConfig, type CityKey } from '../lib/map/cityConfigs';
+import type { RouteOption } from '../types';
 
 interface MapComponentProps {
     className?: string;
     title?: string;
     showControls?: boolean;
     showCitySelector?: boolean;
+    activeRoute?: RouteOption | null;
 }
 
 interface LayersVisibility {
@@ -31,7 +33,7 @@ interface LayersVisibility {
     metro: boolean;
 }
 
-export default function MapComponent({ className, title, showControls, showCitySelector }: MapComponentProps) {
+export default function MapComponent({ className, title, showControls, showCitySelector, activeRoute }: MapComponentProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const city = useCurrentCity();
     const { setCity } = useCityContext();
@@ -324,6 +326,58 @@ export default function MapComponent({ className, title, showControls, showCityS
             map.setLayoutProperty('metro-station-names-layer', 'visibility', layersVisible.metro ? 'visible' : 'none');
         }
     }, [map, isLoaded, layersVisible]);
+
+    // Update active route visualization
+    useEffect(() => {
+        if (!map || !isLoaded) return;
+
+        const source = map.getSource('safe-routes');
+        if (!source || source.type !== 'geojson') return;
+
+        if (activeRoute && activeRoute.geometry) {
+            // Update route source with active route
+            (source as maplibregl.GeoJSONSource).setData({
+                type: 'FeatureCollection',
+                features: [{
+                    type: 'Feature',
+                    properties: {
+                        type: activeRoute.type,
+                        safety_score: activeRoute.safety_score,
+                        risk_level: activeRoute.risk_level
+                    },
+                    geometry: activeRoute.geometry
+                }]
+            });
+
+            // Fit map to route bounds
+            const coordinates = activeRoute.geometry.coordinates;
+            if (coordinates && coordinates.length > 0) {
+                const bounds = coordinates.reduce((bounds, coord) => {
+                    return bounds.extend(coord as [number, number]);
+                }, new maplibregl.LngLatBounds(
+                    coordinates[0] as [number, number],
+                    coordinates[0] as [number, number]
+                ));
+
+                map.fitBounds(bounds, {
+                    padding: { top: 50, bottom: 50, left: 50, right: 50 },
+                    maxZoom: 15,
+                    duration: 1000
+                });
+            }
+
+            // Ensure routes layer is visible
+            if (map.getLayer('routes-layer')) {
+                map.setLayoutProperty('routes-layer', 'visibility', 'visible');
+            }
+        } else {
+            // Clear route when no active route
+            (source as maplibregl.GeoJSONSource).setData({
+                type: 'FeatureCollection',
+                features: []
+            });
+        }
+    }, [map, isLoaded, activeRoute]);
 
     const handleZoomIn = () => {
         if (map) map.zoomIn();

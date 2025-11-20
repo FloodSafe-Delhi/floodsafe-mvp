@@ -13,6 +13,7 @@ import { Skeleton } from '../ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { WaterDepth, VehiclePassability } from '../../types';
 import { useReportMutation } from '../../lib/api/hooks';
+import { useUserId } from '../../contexts/UserContext';
 import { toast } from 'sonner';
 
 interface ReportScreenProps {
@@ -72,6 +73,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     const recognitionRef = useRef<any>(null);
     const isRecordingRef = useRef(false);
     const reportMutation = useReportMutation();
+    const userId = useUserId();
 
     const totalSteps = 4;
     const progressValue = (step / totalSteps) * 100;
@@ -84,12 +86,12 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                       window.matchMedia('(max-width: 768px)').matches;
         setIsMobile(mobile);
 
-        // Check for Web Speech API
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        // Check for Web Speech API with proper typing
+        const SpeechRecognitionConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-        if (SpeechRecognition) {
+        if (SpeechRecognitionConstructor) {
             try {
-                const recognition = new SpeechRecognition();
+                const recognition = new SpeechRecognitionConstructor();
 
                 // Configure recognition based on platform
                 if (isIOSDevice()) {
@@ -105,16 +107,25 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                 recognition.lang = 'en-US';
                 recognition.maxAlternatives = 1;
 
-                recognition.onresult = (event: any) => {
+                recognition.onresult = (event: SpeechRecognitionEvent) => {
                     let transcript = '';
 
-                    // Collect final results
-                    for (let i = event.resultIndex; i < event.results.length; i++) {
-                        if (event.results[i].isFinal) {
-                            transcript += event.results[i][0].transcript + ' ';
+                    // Collect final results with proper bounds checking
+                    const startIndex = event.resultIndex || 0;
+                    const endIndex = Math.min(event.results.length, startIndex + 10); // Reasonable limit
+
+                    for (let i = startIndex; i < endIndex; i++) {
+                        const result = event.results[i];
+                        if (!result || result.length === 0) continue;
+
+                        const alternative = result[0];
+                        if (!alternative?.transcript) continue;
+
+                        if (result.isFinal) {
+                            transcript += alternative.transcript + ' ';
                         } else if (!isIOSDevice()) {
                             // Only use interim results on non-iOS devices
-                            transcript += event.results[i][0].transcript + ' ';
+                            transcript += alternative.transcript + ' ';
                         }
                     }
 
@@ -135,11 +146,11 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                     }
                 };
 
-                recognition.onerror = (event: any) => {
-                    console.error('Speech recognition error:', event.error);
+                recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+                    console.error('Speech recognition error:', event.error, event.message);
 
                     // Handle specific mobile errors
-                    if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+                    if (event.error === 'not-allowed') {
                         setIsRecording(false);
                         isRecordingRef.current = false;
                         if (mobile) {
@@ -441,10 +452,11 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
             // Use real GPS coordinates
             await reportMutation.mutateAsync({
+                user_id: userId,
                 latitude: location.latitude,
                 longitude: location.longitude,
                 description: fullDescription,
-                image: null // Image upload not implemented in UI yet
+                image: undefined // Image upload not implemented in UI yet
             });
             toast.success('Report submitted successfully!');
             onSubmit();

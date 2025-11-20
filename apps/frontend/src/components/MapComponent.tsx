@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useMap } from '../lib/map/useMap';
-import { useSensors, useReports } from '../lib/api/hooks';
+import { useSensors, useReports, Sensor, Report } from '../lib/api/hooks';
 import maplibregl from 'maplibre-gl';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -14,13 +14,21 @@ import {
     SelectValue,
 } from "./ui/select";
 import { useCurrentCity, useCityContext } from '../contexts/CityContext';
-import { isWithinCityBounds, getAvailableCities, getCityConfig } from '../lib/map/cityConfigs';
+import { isWithinCityBounds, getAvailableCities, getCityConfig, type CityKey } from '../lib/map/cityConfigs';
 
 interface MapComponentProps {
     className?: string;
     title?: string;
     showControls?: boolean;
     showCitySelector?: boolean;
+}
+
+interface LayersVisibility {
+    flood: boolean;
+    sensors: boolean;
+    reports: boolean;
+    routes: boolean;
+    metro: boolean;
 }
 
 export default function MapComponent({ className, title, showControls, showCitySelector }: MapComponentProps) {
@@ -30,7 +38,7 @@ export default function MapComponent({ className, title, showControls, showCityS
     const { map, isLoaded } = useMap(mapContainer, city);
     const { data: sensors } = useSensors();
     const { data: reports } = useReports();
-    const [layersVisible, setLayersVisible] = useState({
+    const [layersVisible, setLayersVisible] = useState<LayersVisibility>({
         flood: true,
         sensors: true,
         reports: true,
@@ -43,7 +51,8 @@ export default function MapComponent({ className, title, showControls, showCityS
 
     const handleCityChange = (newCity: string) => {
         setIsChangingCity(true);
-        setCity(newCity as any);
+        // Type-safe city change with validation
+        setCity(newCity as CityKey);
         // Give the map time to reinitialize
         setTimeout(() => setIsChangingCity(false), 500);
     };
@@ -64,7 +73,7 @@ export default function MapComponent({ className, title, showControls, showCityS
                 type: 'geojson',
                 data: {
                     type: 'FeatureCollection',
-                    features: sensors.map(sensor => ({
+                    features: sensors.map((sensor: Sensor) => ({
                         type: 'Feature',
                         geometry: {
                             type: 'Point',
@@ -105,7 +114,7 @@ export default function MapComponent({ className, title, showControls, showCityS
                 type: 'geojson',
                 data: {
                     type: 'FeatureCollection',
-                    features: reports.map(report => ({
+                    features: reports.map((report: Report) => ({
                         type: 'Feature',
                         geometry: {
                             type: 'Point',
@@ -169,14 +178,20 @@ export default function MapComponent({ className, title, showControls, showCityS
             });
 
             // Add click handler to show popup with report details
-            map.on('click', 'reports-layer', (e) => {
+            map.on('click', 'reports-layer', (e: maplibregl.MapMouseEvent) => {
                 if (!e.features || e.features.length === 0) return;
 
                 const feature = e.features[0];
-                const coordinates = (feature.geometry as any).coordinates.slice();
+                // Type-safe geometry access with guard
+                if (!feature.geometry || feature.geometry.type !== 'Point') return;
+                const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
                 const props = feature.properties;
 
-                // Create popup HTML
+                // Create popup HTML with safe property access
+                const waterDepth = props.water_depth || 'unknown';
+                const vehiclePassability = (props.vehicle_passability || 'unknown').replace('-', ' ');
+                const iotScore = props.iot_validation_score ?? 0;
+
                 const popupHTML = `
                     <div class="p-2 min-w-[200px]">
                         <div class="flex items-center gap-2 mb-2">
@@ -184,9 +199,9 @@ export default function MapComponent({ className, title, showControls, showCityS
                             ${props.verified ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded">✓ Verified</span>' : '<span class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded">Pending</span>'}
                         </div>
                         <div class="text-xs space-y-1 text-gray-700">
-                            <p><strong>Water Depth:</strong> <span class="capitalize">${props.water_depth}</span></p>
-                            <p><strong>Vehicle:</strong> <span class="capitalize">${props.vehicle_passability.replace('-', ' ')}</span></p>
-                            <p><strong>IoT Score:</strong> ${props.iot_validation_score}/100</p>
+                            <p><strong>Water Depth:</strong> <span class="capitalize">${waterDepth}</span></p>
+                            <p><strong>Vehicle:</strong> <span class="capitalize">${vehiclePassability}</span></p>
+                            <p><strong>IoT Score:</strong> ${iotScore}/100</p>
                             ${props.phone_verified ? '<p class="text-green-600">📱 Phone verified</p>' : ''}
                             <p class="text-gray-500 text-[10px] mt-2">${new Date(props.timestamp).toLocaleString()}</p>
                         </div>

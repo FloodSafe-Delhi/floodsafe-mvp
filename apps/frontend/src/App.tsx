@@ -10,6 +10,7 @@ import { FloodAlert } from './types';
 import { Toaster } from './components/ui/sonner';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CityProvider } from './contexts/CityContext';
+import { UserProvider } from './contexts/UserContext';
 
 const queryClient = new QueryClient();
 
@@ -87,7 +88,7 @@ function FloodSafeApp() {
             case 'map':
                 return <FloodAtlasScreen />;
             case 'report':
-                return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} onSelectLocation={() => setActiveTab('map')} />;
+                return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} />;
             case 'alerts':
                 return <AlertsListScreen onAlertClick={handleAlertClick} />;
             case 'profile':
@@ -126,9 +127,11 @@ function FloodSafeApp() {
 export default function App() {
     return (
         <QueryClientProvider client={queryClient}>
-            <CityProvider>
-                <FloodSafeApp />
-            </CityProvider>
+            <UserProvider>
+                <CityProvider>
+                    <FloodSafeApp />
+                </CityProvider>
+            </UserProvider>
         </QueryClientProvider>
     );
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMap } from '../lib/map/useMap';
 import { useSensors, useReports, Sensor, Report } from '../lib/api/hooks';
 import maplibregl from 'maplibre-gl';
@@ -179,9 +179,10 @@ export default function MapComponent({ className, title, showControls, showCityS
 
             // Add click handler to show popup with report details
             map.on('click', 'reports-layer', (e: maplibregl.MapMouseEvent) => {
-                if (!e.features || e.features.length === 0) return;
+                const features = map.queryRenderedFeatures(e.point, { layers: ['reports-layer'] });
+                if (!features || features.length === 0) return;
 
-                const feature = e.features[0];
+                const feature = features[0];
                 // Type-safe geometry access with guard
                 if (!feature.geometry || feature.geometry.type !== 'Point') return;
                 const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];

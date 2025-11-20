@@ -1,0 +1,31 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rajiv Chowk",
+        "color": "#e41e26",
+        "network": "Delhi Metro",
+        "note": "PLACEHOLDER - Real data needs to be added"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.2090, 28.6328]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kashmere Gate",
+        "color": "#0047ba",
+        "network": "Delhi Metro",
+        "note": "PLACEHOLDER - Real data needs to be added"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [77.2272, 28.6672]
+      }
+    }
+  ]
+}

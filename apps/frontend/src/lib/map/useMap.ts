@@ -2,27 +2,45 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import { Protocol, PMTiles } from 'pmtiles';
 import { MAP_CONSTANTS } from './config';
+import { CITY_CONFIGS, getCurrentCity, type CityConfig } from './cityConfigs';
 import mapStyle from './styles.json';
 
-export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
+interface UseMapOptions {
+    cityCode?: 'BLR' | 'DEL';
+}
+
+export function useMap(containerRef: React.RefObject<HTMLDivElement>, options?: UseMapOptions) {
     const mapRef = useRef<maplibregl.Map | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
+    const [currentCity, setCurrentCity] = useState<CityConfig>(
+        options?.cityCode ? CITY_CONFIGS[options.cityCode] : getCurrentCity()
+    );
 
     useEffect(() => {
-        if (!containerRef.current || mapRef.current) return;
+        if (!containerRef.current) return;
+
+        // Remove existing map if city changed
+        if (mapRef.current) {
+            mapRef.current.remove();
+            mapRef.current = null;
+            setIsLoaded(false);
+        }
 
         const protocol = new Protocol();
         maplibregl.addProtocol('pmtiles', protocol.tile);
+
+        // Use city-specific configuration
+        const cityConfig = options?.cityCode ? CITY_CONFIGS[options.cityCode] : currentCity;
 
         // Use the comprehensive OpenMapTiles style with flood data overlay
         const style = {
             ...mapStyle,
             sources: {
                 ...mapStyle.sources,
-                // Add flood visualization data
+                // Add flood visualization data with city-specific PMTiles
                 'flood-tiles': {
                     type: 'vector',
-                    url: `pmtiles://${MAP_CONSTANTS.PMTILES_URL}`,
+                    url: `pmtiles://${cityConfig.pmtiles.flood}`,
                     attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>'
                 }
             },
@@ -45,7 +63,14 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
         const map = new maplibregl.Map({
             container: containerRef.current,
             style: style as any,
-            ...MAP_CONSTANTS.CONFIG
+            center: cityConfig.center,
+            zoom: cityConfig.zoom,
+            minZoom: cityConfig.minZoom,
+            maxZoom: cityConfig.maxZoom,
+            pitch: cityConfig.pitch,
+            maxBounds: cityConfig.maxBounds,
+            hash: true,
+            antialias: true
         });
 
         map.on('load', () => {
@@ -55,10 +80,22 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
         mapRef.current = map;
 
         return () => {
-            map.remove();
-            mapRef.current = null;
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
         };
-    }, []);
+    }, [options?.cityCode]);
 
-    return { map: mapRef.current, isLoaded };
+    // Method to change city programmatically
+    const changeCity = (newCityCode: 'BLR' | 'DEL') => {
+        setCurrentCity(CITY_CONFIGS[newCityCode]);
+    };
+
+    return {
+        map: mapRef.current,
+        isLoaded,
+        currentCity,
+        changeCity
+    };
 }

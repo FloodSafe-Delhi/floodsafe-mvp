@@ -1,11 +1,15 @@
 import MapComponent from '../MapComponent';
 import { Badge } from '../ui/badge';
 
-export function FloodAtlasScreen() {
+interface FloodAtlasScreenProps {
+    cityCode?: 'BLR' | 'DEL';
+}
+
+export function FloodAtlasScreen({ cityCode }: FloodAtlasScreenProps) {
     return (
         <div className="w-full h-screen relative">
             {/* Full Screen Map */}
-            <MapComponent className="w-full h-full" />
+            <MapComponent className="w-full h-full" cityCode={cityCode} />
 
             {/* Offline Indicator */}
             <div className="absolute top-4 right-4 pointer-events-none z-10">

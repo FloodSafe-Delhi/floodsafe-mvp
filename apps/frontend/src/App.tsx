@@ -6,9 +6,11 @@ import { ReportScreen } from './components/screens/ReportScreen';
 import { ProfileScreen } from './components/screens/ProfileScreen';
 import { AlertDetailScreen, AlertsListScreen } from './components/screens/Placeholders';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { CitySelector } from './components/CitySelector';
 import { FloodAlert } from './types';
 import { Toaster } from './components/ui/sonner';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { getCurrentCity } from './lib/map/cityConfigs';
 
 const queryClient = new QueryClient();
 
@@ -18,6 +20,7 @@ function FloodSafeApp() {
     const [activeTab, setActiveTab] = useState<Screen>('home');
     const [selectedAlert, setSelectedAlert] = useState<FloodAlert | null>(null);
     const [isOffline, setIsOffline] = useState(false);
+    const [currentCityCode, setCurrentCityCode] = useState<'BLR' | 'DEL'>(getCurrentCity().code);
 
     const handleAlertClick = (alert: FloodAlert) => {
         setSelectedAlert(alert);
@@ -61,6 +64,14 @@ function FloodSafeApp() {
         setActiveTab('profile');
     };
 
+    const handleCityChange = (cityCode: 'BLR' | 'DEL') => {
+        setCurrentCityCode(cityCode);
+        // Optionally navigate to map to show the new city
+        if (activeTab === 'map') {
+            // Map will auto-reload due to cityCode prop change
+        }
+    };
+
     const renderScreen = () => {
         switch (activeTab) {
             case 'home':
@@ -84,7 +95,7 @@ function FloodSafeApp() {
                     />
                 );
             case 'map':
-                return <FloodAtlasScreen />;
+                return <FloodAtlasScreen cityCode={currentCityCode} />;
             case 'report':
                 return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} />;
             case 'alerts':
@@ -108,6 +119,9 @@ function FloodSafeApp() {
             onTabChange={(tab) => setActiveTab(tab as Screen)}
             onNotificationClick={handleNotificationClick}
             onProfileClick={handleProfileClick}
+            citySelector={
+                <CitySelector onCityChange={handleCityChange} />
+            }
         >
             {renderScreen()}
 

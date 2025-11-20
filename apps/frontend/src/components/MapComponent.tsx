@@ -8,11 +8,12 @@ import MapLegend from './MapLegend';
 
 interface MapComponentProps {
     className?: string;
+    cityCode?: 'BLR' | 'DEL';
 }
 
-export default function MapComponent({ className }: MapComponentProps) {
+export default function MapComponent({ className, cityCode }: MapComponentProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
-    const { map, isLoaded } = useMap(mapContainer);
+    const { map, isLoaded, currentCity } = useMap(mapContainer, { cityCode });
     const { data: sensors } = useSensors();
     const [layersVisible, setLayersVisible] = useState({
         flood: true,

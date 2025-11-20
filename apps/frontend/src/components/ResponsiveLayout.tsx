@@ -9,6 +9,7 @@ interface ResponsiveLayoutProps {
     onTabChange: (tab: string) => void;
     onNotificationClick: () => void;
     onProfileClick: () => void;
+    citySelector?: ReactNode;
 }
 
 export function ResponsiveLayout({
@@ -16,7 +17,8 @@ export function ResponsiveLayout({
     activeTab,
     onTabChange,
     onNotificationClick,
-    onProfileClick
+    onProfileClick,
+    citySelector
 }: ResponsiveLayoutProps) {
     return (
         <div className="min-h-screen bg-gray-50 flex">
@@ -36,9 +38,12 @@ export function ResponsiveLayout({
 
                 {/* Desktop Header (Optional, maybe breadcrumbs later) */}
                 <header className="hidden md:flex h-16 bg-white border-b items-center justify-between px-8 sticky top-0 z-40">
-                    <h1 className="text-xl font-semibold text-gray-800">
-                        {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-                    </h1>
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-xl font-semibold text-gray-800">
+                            {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+                        </h1>
+                        {citySelector && <div className="ml-4">{citySelector}</div>}
+                    </div>
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-gray-500">Welcome, Anirudh</span>
                         <div className="w-8 h-8 bg-gray-200 rounded-full"></div>

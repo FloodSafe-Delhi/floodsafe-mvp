@@ -1,3 +1,5 @@
+import type { LineString } from 'geojson';
+
 export type AlertLevel = 'safe' | 'watch' | 'advisory' | 'warning' | 'emergency';
 export type AlertColor = 'green' | 'yellow' | 'orange' | 'red' | 'black';
 
@@ -49,7 +51,7 @@ export interface RouteOption {
     id: string;
     type: RouteType;
     city_code: string;
-    geometry: GeoJSON.LineString;
+    geometry: LineString;
     distance_meters: number;
     duration_seconds?: number;
     safety_score: number; // 0-100

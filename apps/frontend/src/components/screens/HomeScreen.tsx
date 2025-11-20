@@ -70,17 +70,19 @@ export function HomeScreen({
     );
 
     // Transform sensors into alerts with location info
-    const activeAlerts: FloodAlert[] = sensors?.filter(s => s.status !== 'active').map(s => ({
-        id: s.id,
-        level: s.status === 'critical' ? 'critical' : 'warning',
-        location: `Sensor ${s.id.substring(0, 8)}`,
-        description: `Water level is ${s.status}.`,
-        timeUntil: 'Now',
-        confidence: 90,
-        isActive: true,
-        color: s.status === 'critical' ? 'red' : 'orange',
-        coordinates: [s.longitude, s.latitude]
-    })) || [];
+    const activeAlerts: FloodAlert[] = (sensors ?? [])
+        .filter(s => s.status !== 'active')
+        .map(s => ({
+            id: s.id,
+            level: s.status === 'critical' ? 'critical' : 'warning',
+            location: `Sensor ${s.id.substring(0, 8)}`,
+            description: `Water level is ${s.status}.`,
+            timeUntil: 'Now',
+            confidence: 90,
+            isActive: true,
+            color: s.status === 'critical' ? 'red' : 'orange',
+            coordinates: [s.longitude, s.latitude]
+        }));
 
     // Community stats with proper logic
     const activeReporters = activeReportersData?.count || 0; // Users with reports in past 7 days

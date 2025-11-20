@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, uploadFile } from './client';
+import { User } from '../../types';
 
 // Types
 export interface Sensor {
@@ -41,17 +42,8 @@ export interface ReportCreate {
     image?: File;
 }
 
-export interface User {
-    id: string;
-    username: string;
-    email: string;
-    role: string;
-    points: number;
-    level: number;
-    reports_count: number;
-    verified_reports_count: number;
-    badges: string[];
-}
+// Re-export User from types for backwards compatibility
+export type { User };
 
 // Hooks
 

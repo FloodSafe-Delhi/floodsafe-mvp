@@ -14,38 +14,13 @@ import { Input } from '../ui/input';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
+import { User } from '../../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // For demo purposes, using a hardcoded user ID
 // In production, this would come from auth context
 const DEMO_USER_ID = 'admin'; // Will be created by seed script
-
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  phone?: string;
-  profile_photo_url?: string;
-  role: string;
-  created_at: string;
-  points: number;
-  level: number;
-  reports_count: number;
-  verified_reports_count: number;
-  badges?: string[];
-  language?: string;
-  notification_push?: boolean;
-  notification_sms?: boolean;
-  notification_whatsapp?: boolean;
-  notification_email?: boolean;
-  alert_preferences?: {
-    watch: boolean;
-    advisory: boolean;
-    warning: boolean;
-    emergency: boolean;
-  };
-}
 
 interface WatchArea {
   id: string;

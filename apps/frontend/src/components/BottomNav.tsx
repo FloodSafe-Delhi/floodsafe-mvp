@@ -1,4 +1,4 @@
-import { Home, Map as MapIcon, PlusCircle, Bell, User, Navigation } from 'lucide-react';
+import { Home, Map as MapIcon, PlusCircle, Bell, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface BottomNavProps {
@@ -9,9 +9,9 @@ interface BottomNavProps {
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
     const tabs = [
         { id: 'home', icon: Home, label: 'Home' },
-        { id: 'map', icon: MapIcon, label: 'Map' },
-        { id: 'routes', icon: Navigation, label: 'Routes', primary: true },
-        { id: 'report', icon: PlusCircle, label: 'Report' },
+        { id: 'map', icon: MapIcon, label: 'Flood Atlas' },
+        { id: 'report', icon: PlusCircle, label: 'Report', primary: true },
+        { id: 'alerts', icon: Bell, label: 'Alerts' },
         { id: 'profile', icon: User, label: 'Profile' },
     ];
 

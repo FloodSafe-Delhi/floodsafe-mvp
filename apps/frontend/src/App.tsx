@@ -4,10 +4,9 @@ import { HomeScreen } from './components/screens/HomeScreen';
 import { FloodAtlasScreen } from './components/screens/FloodAtlasScreen';
 import { ReportScreen } from './components/screens/ReportScreen';
 import { ProfileScreen } from './components/screens/ProfileScreen';
-import { RouteScreen } from './components/screens/RouteScreen';
 import { AlertDetailScreen, AlertsListScreen } from './components/screens/Placeholders';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { FloodAlert, RouteOption } from './types';
+import { FloodAlert } from './types';
 import { Toaster } from './components/ui/sonner';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CityProvider } from './contexts/CityContext';
@@ -15,12 +14,11 @@ import { UserProvider } from './contexts/UserContext';
 
 const queryClient = new QueryClient();
 
-type Screen = 'home' | 'map' | 'report' | 'alerts' | 'profile' | 'alert-detail' | 'routes';
+type Screen = 'home' | 'map' | 'report' | 'alerts' | 'profile' | 'alert-detail';
 
 function FloodSafeApp() {
     const [activeTab, setActiveTab] = useState<Screen>('home');
     const [selectedAlert, setSelectedAlert] = useState<FloodAlert | null>(null);
-    const [activeRoute, setActiveRoute] = useState<RouteOption | null>(null);
     const [isOffline, setIsOffline] = useState(false);
 
     const handleAlertClick = (alert: FloodAlert) => {
@@ -34,10 +32,6 @@ function FloodSafeApp() {
     };
 
     const handleBackFromReport = () => {
-        setActiveTab('home');
-    };
-
-    const handleBackFromRoutes = () => {
         setActiveTab('home');
     };
 
@@ -69,11 +63,6 @@ function FloodSafeApp() {
         setActiveTab('profile');
     };
 
-    const handleRouteSelected = (route: RouteOption) => {
-        setActiveRoute(route);
-        setActiveTab('map');
-    };
-
     const renderScreen = () => {
         switch (activeTab) {
             case 'home':
@@ -100,8 +89,6 @@ function FloodSafeApp() {
                 return <FloodAtlasScreen />;
             case 'report':
                 return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} />;
-            case 'routes':
-                return <RouteScreen onBack={handleBackFromRoutes} onRouteSelected={handleRouteSelected} />;
             case 'alerts':
                 return <AlertsListScreen onAlertClick={handleAlertClick} />;
             case 'profile':

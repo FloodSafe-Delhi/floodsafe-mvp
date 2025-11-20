@@ -8,7 +8,7 @@ import logging
 
 from ..infrastructure.database import get_db
 from ..infrastructure import models
-from ..domain.models import UserCreate, UserResponse
+from ..domain.models import UserCreate, UserUpdate, UserResponse
 from geoalchemy2.functions import ST_DWithin, ST_MakePoint
 
 router = APIRouter()
@@ -156,3 +156,50 @@ def get_leaderboard(limit: int = 10, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error fetching leaderboard: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch leaderboard")
+
+@router.patch("/{user_id}", response_model=UserResponse)
+def update_user(user_id: UUID, user_update: UserUpdate, db: Session = Depends(get_db)):
+    """
+    Update user profile and preferences.
+    Allows updating: username, email, phone, profile photo, language, notification preferences.
+    """
+    try:
+        # Find the user
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Update only the fields that are provided (not None)
+        update_data = user_update.model_dump(exclude_unset=True)
+
+        # Check for unique constraints if username or email is being updated
+        if "username" in update_data:
+            existing = db.query(models.User).filter(
+                models.User.username == update_data["username"],
+                models.User.id != user_id
+            ).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="Username already taken")
+
+        if "email" in update_data:
+            existing = db.query(models.User).filter(
+                models.User.email == update_data["email"],
+                models.User.id != user_id
+            ).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Apply updates
+        for field, value in update_data.items():
+            setattr(user, field, value)
+
+        db.commit()
+        db.refresh(user)
+
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user {user_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update user")

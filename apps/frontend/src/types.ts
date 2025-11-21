@@ -66,19 +66,6 @@ export interface RouteResponse {
     warnings: string[];
 }
 
-export interface GeocodingResult {
-    display_name: string;
-    lat: string;
-    lon: string;
-    address: {
-        road?: string;
-        suburb?: string;
-        city?: string;
-        state?: string;
-        country?: string;
-    };
-}
-
 // User type - used across the application
 export interface User {
     id: string;

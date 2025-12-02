@@ -14,7 +14,10 @@
       "Bash(docker-compose down:*)",
       "Bash(docker-compose up:*)",
       "Bash(docker-compose ps:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(python check_dem_quality.py:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

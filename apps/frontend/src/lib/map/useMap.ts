@@ -28,14 +28,27 @@ export function useMap(
         const floodPMTiles = new PMTiles(cityConfig.pmtiles.flood);
         protocol.add(floodPMTiles);
 
-        // Register protocol with MapLibre
-        maplibregl.addProtocol('pmtiles', protocol.tile);
+        // Register protocol with MapLibre - only if not already registered
+        // This prevents errors in React Strict Mode or multiple map instances
+        let protocolAdded = false;
+        try {
+            maplibregl.addProtocol('pmtiles', protocol.tile);
+            protocolAdded = true;
+        } catch (error) {
+            // Protocol already registered - this is fine, reuse existing
+            console.log('PMTiles protocol already registered, reusing existing');
+        }
 
         // Use the comprehensive OpenMapTiles style with flood data overlay
         const style = {
             ...mapStyle,
             sources: {
                 ...mapStyle.sources,
+                // Override the basemap source with city-specific PMTiles
+                'openmaptiles': {
+                    type: 'vector',
+                    url: `pmtiles://${cityConfig.pmtiles.basemap}`
+                },
                 // Add flood visualization data for selected city
                 'flood-tiles': {
                     type: 'vector',
@@ -106,15 +119,24 @@ export function useMap(
                         'text-halo-width': 2
                     }
                 },
-                // Overlay flood data on top of basemap
+                // Overlay flood data on top of basemap - graduated color scheme for flood risk
                 {
                     id: 'flood-layer',
                     type: 'fill',
                     source: 'flood-tiles',
                     'source-layer': 'stream_influence_water_difference',
                     paint: {
-                        'fill-color': MAP_CONSTANTS.DARKEST_FLOOD_COLOR,
-                        'fill-opacity': 0.5
+                        // Use data-driven styling based on VALUE property (1-4 scale from DEM processing)
+                        'fill-color': [
+                            'interpolate',
+                            ['linear'],
+                            ['get', 'VALUE'],
+                            1, '#FFFFCC',  // Light yellow - lowest flood risk
+                            2, '#A1DAB4',  // Light green
+                            3, '#41B6C4',  // Teal
+                            4, '#225EA8'   // Dark blue - highest flood risk
+                        ],
+                        'fill-opacity': 0.6
                     }
                 }
             ]
@@ -203,7 +225,15 @@ export function useMap(
         return () => {
             map.remove();
             mapRef.current = null;
-            maplibregl.removeProtocol('pmtiles');
+            // Only remove protocol if we added it
+            if (protocolAdded) {
+                try {
+                    maplibregl.removeProtocol('pmtiles');
+                } catch (error) {
+                    // Protocol might have been removed already - this is fine
+                    console.log('PMTiles protocol already removed or never added');
+                }
+            }
         };
     }, [cityKey]); // Re-initialize map when city changes
 

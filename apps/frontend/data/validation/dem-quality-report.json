@@ -1,0 +1,25 @@
+{
+  "delhi": {
+    "city": "Delhi",
+    "resolution_meters": 0.0002777777777777778,
+    "total_pixels": 3103561,
+    "nodata_pixels": 0,
+    "nodata_percentage": 0.0,
+    "elevation_range": {
+      "min": 191.58255004882812,
+      "max": 306.2069091796875,
+      "mean": 218.52884347638275,
+      "std": 16.740198917798725
+    },
+    "crs": "EPSG:4326",
+    "bounds": {
+      "left": 76.93986111111111,
+      "bottom": 28.41986111111111,
+      "right": 77.46013888888889,
+      "top": 28.880138888888887
+    },
+    "quality_score": 100,
+    "quality_issues": [],
+    "quality_grade": "A"
+  }
+}

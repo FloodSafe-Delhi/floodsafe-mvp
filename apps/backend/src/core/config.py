@@ -16,6 +16,8 @@ class Settings(BaseSettings):
         "http://localhost:5176",  # Vite Frontend (current)
         "http://localhost:3000",  # Alternative Frontend
         "http://localhost:8000",  # Swagger UI
+        "http://192.168.210.102:5173",  # Network access
+        "http://172.18.144.1:5173",  # Docker network access
     ]
 
     class Config:

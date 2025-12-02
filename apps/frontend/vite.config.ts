@@ -5,10 +5,42 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true,
+    host: '0.0.0.0',
     port: 5173,
+    strictPort: true,
     watch: {
       usePolling: true,
+    },
+    headers: {
+      // Required for PMTiles range requests
+      'Accept-Ranges': 'bytes',
+      // Allow cross-origin requests (needed for PMTiles)
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Range',
+      // Enable caching for static assets
+      'Cache-Control': 'public, max-age=31536000',
+    },
+    // Configure HMR for WebSocket connections
+    hmr: {
+      host: 'localhost',
+      port: 5173,
+      clientPort: 5173,
+    },
+  },
+  // Optimize asset handling
+  build: {
+    assetsInlineLimit: 0, // Don't inline any assets
+    rollupOptions: {
+      output: {
+        // Ensure PMTiles files are handled correctly
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name && assetInfo.name.endsWith('.pmtiles')) {
+            return 'assets/[name]-[hash][extname]';
+          }
+          return 'assets/[name]-[hash][extname]';
+        },
+      },
     },
   },
 })

@@ -50,13 +50,15 @@ FloodSafe/
     *   `src/scripts/seed_db.py`: Database seeding script with Bangalore flood zones.
 
 ### 🎨 The Frontend (`apps/frontend`)
-**Tech**: React, TypeScript, Vite, TanStack Query, MapLibre GL.
-**Key Feature**: **Vector Maps**.
-*   **Why?** Instead of loading heavy images for the map, we use "Vector Tiles" (`.pmtiles`). This makes the map fast and zoomable without needing a Google Maps API key.
+**Tech**: React, TypeScript, Vite, TanStack Query, MapLibre GL, PMTiles.
+**Key Feature**: **DEM-based Vector Flood Maps**.
+*   **Why?** Instead of loading heavy images for the map, we use "Vector Tiles" (`.pmtiles`) generated from scientifically-processed DEM data. This makes the map fast, zoomable, and scientifically accurate without needing a Google Maps API key.
 *   **Key Files**:
-    *   `src/lib/map/useMap.ts`: The hook that loads the map and handles the layers.
-    *   `src/lib/map/config.ts`: Map configuration (center, zoom, bounds).
-    *   `src/components/MapComponent.tsx`: Main map display component.
+    *   `src/lib/map/useMap.ts`: The hook that loads the map, handles layers, and renders graduated flood risk visualization
+    *   `src/lib/map/cityConfigs.ts`: Multi-city configuration with bounds, PMTiles sources, and display settings
+    *   `src/components/MapComponent.tsx`: Main map display component with city selector
+    *   `data/delhi/dem/`: DEM processing pipeline (WhiteboxTools + Docker GDAL)
+    *   `data/validation/`: Quality assurance tools for flood data accuracy
 
 ### 📡 IoT Ingestion (`apps/iot-ingestion`)
 **Tech**: Python (FastAPI).
@@ -67,12 +69,23 @@ FloodSafe/
 
 ## 🚀 2. Current Features (Implemented)
 
-### Core Functionality
-1.  **Interactive Flood Map**:
-    *   Detailed vector map of cities (Bangalore/Delhi) with flood zones.
-    *   PMTiles for serverless, efficient tile hosting.
-    
-2.  **Geotagged Photo Reporting**:
+### Advanced Flood Visualization
+1.  **DEM-based Flood Risk Mapping**:
+    *   **Hydrological Analysis**: Uses Digital Elevation Model (DEM) processing with WhiteboxTools for scientific flood prediction
+    *   **Stream Influence Zones**: Calculates flow direction, flow accumulation, and stream networks
+    *   **4-Level Risk Classification**: Graduated color scheme showing flood risk from low (yellow) to critical (dark blue)
+    *   **Validated Against Official Data**: Includes validation tools to compare with government flood hazard maps
+
+2.  **High-Performance Map Infrastructure**:
+    *   **Multi-City Support**: Delhi and Bangalore with city selector
+    *   **Enhanced Basemaps**: Zoom level 15 support with detailed buildings, POIs, and landuse data
+    *   **Comprehensive PMTiles**:
+        - Basemap: 33MB with high-detail OpenMapTiles
+        - Flood zones: 21MB with complete DEM-processed risk data
+    *   **Efficient Range Requests**: Vite configured for HTTP range requests and caching
+    *   **City-Specific Configuration**: Each city has custom bounds, center, and zoom levels
+
+3.  **Geotagged Photo Reporting**:
     *   Users can upload photos with flood reports.
     *   **Smart EXIF Verification**: Backend extracts GPS coordinates from photo metadata and verifies location accuracy.
     *   Location mismatch flagging for suspicious reports.
@@ -95,15 +108,41 @@ FloodSafe/
         - Verified reports count
         - User reputation score
 
+### Data Processing & Validation
+6.  **DEM Processing Pipeline**:
+    *   **Automated Workflow**: Python scripts for DEM-to-flood-zones processing
+    *   **Hydrological Processing**:
+        - Depression filling for accurate flow modeling
+        - D8 flow direction and accumulation calculation
+        - Stream network extraction with configurable thresholds
+        - Gaussian filtering for stream influence zones
+    *   **PMTiles Generation**: Docker-based workflow for cross-platform tile generation
+    *   **Quality Assurance**:
+        - DEM quality validation (completeness, anomalies, statistics)
+        - Flood zone geometry validation
+        - Cross-validation with official flood maps
+        - Automated quality reports in JSON format
+
 ### Analytics Foundation
-6.  **Area-Based Analytics**:
-    *   Flood zone risk levels (Low, Medium, High, Critical).
+7.  **Area-Based Analytics**:
+    *   Flood zone risk levels (1-4 graduated scale based on DEM analysis).
     *   Report aggregation by location.
     *   Upvote/verification score tracking.
     *   Foundation for dashboards showing:
         - Most flooded areas
         - Report trends over time
         - Sensor coverage maps
+        - Stream influence and flow patterns
+
+### Technical Infrastructure
+8.  **Production-Ready Configuration**:
+    *   **Environment Variables**: VITE_API_URL for flexible API endpoint configuration
+    *   **CORS Support**: Network IP addresses allowed for local network testing
+    *   **PMTiles Optimization**:
+        - Vite configured with Accept-Ranges headers for efficient tile streaming
+        - Asset handling optimized for large binary files
+        - HMR (Hot Module Reload) configured for development efficiency
+    *   **React Strict Mode Compatible**: Protocol registration handles double-mounting correctly
 
 ---
 
@@ -158,6 +197,7 @@ These features have complete interface definitions and database schema support b
 - Git
 - Node.js 18+ (for frontend development outside Docker)
 - Python 3.11+ (for backend development outside Docker)
+- Python packages for DEM processing: `whitebox`, `gdal` (via Docker)
 
 ### Quick Start
 ```powershell
@@ -174,17 +214,44 @@ python apps/backend/src/scripts/seed_db.py
 # Access the application
 # Backend API: http://localhost:8000
 # API Docs: http://localhost:8000/docs
-# Frontend: http://localhost:5173
+# Frontend: http://localhost:5173 or http://192.168.210.102:5173 (network access)
+```
+
+### DEM Data Processing (Optional)
+If you need to process new DEM data for additional cities:
+
+```powershell
+# Navigate to DEM processing directory
+cd apps/frontend/data/delhi/dem
+
+# Process DEM to flood zones (requires WhiteboxTools)
+python process_simple.py
+
+# Generate PMTiles from processed GeoJSON
+.\generate-pmtiles-docker.ps1
+
+# Validate DEM quality
+cd ../../validation
+python check_dem_quality.py
+
+# Compare with official flood maps (if available)
+python compare_official_maps.py
 ```
 
 ---
 
 ## 📚 Documentation
 
+### Core Documentation
 - **Engineering Handbook**: `engineering_handbook.md` - Development standards and best practices
 - **Architecture Guide**: `architecture.md` - System design and data flow
 - **Project Assessment**: `project_assessment.md` - Risk analysis and roadmap
 - **Roadmap**: `roadmap_and_status.md` - Development phases and timelines
+
+### Data Processing Documentation
+- **Validation Guide**: `apps/frontend/data/validation/README.md` - DEM quality assurance workflows
+- **DEM Processing**: Scripts in `apps/frontend/data/delhi/dem/` for hydrological analysis
+- **City Configurations**: `apps/frontend/src/lib/map/cityConfigs.ts` - Multi-city setup guide
 
 ---
 

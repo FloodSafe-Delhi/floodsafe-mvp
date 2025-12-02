@@ -107,6 +107,10 @@ class Report(Base):
     nearby_sensor_ids = Column(String, default="[]")  # JSON array
     prophet_prediction_match = Column(Boolean, nullable=True)  # Future: Prophet integration
 
+    # Safe routing fields (auto-populated by database trigger)
+    risk_polygon = Column(Geometry('POLYGON', srid=4326), nullable=True)
+    risk_radius_meters = Column(Integer, default=100)
+
     @hybrid_property
     def latitude(self):
         """Extract latitude from PostGIS POINT geometry"""

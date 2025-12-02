@@ -318,3 +318,62 @@ class WatchAreaResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# ROUTING MODELS (Safe route navigation)
+# ============================================================================
+
+class LocationPoint(BaseModel):
+    """Geographic coordinate point"""
+    lng: float = Field(..., ge=-180, le=180)
+    lat: float = Field(..., ge=-90, le=90)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RouteRequest(BaseModel):
+    """Request DTO for route calculation"""
+    origin: LocationPoint
+    destination: LocationPoint
+    city: str = "BLR"
+    mode: str = "driving"
+    avoid_risk_levels: Optional[List[str]] = ["critical", "warning"]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RouteInstruction(BaseModel):
+    """Turn-by-turn navigation instruction"""
+    text: str
+    distance_meters: float
+    duration_seconds: Optional[float] = None
+    maneuver: str
+    location: List[float]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RouteOption(BaseModel):
+    """Single route option with safety information"""
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    type: str
+    city_code: str
+    geometry: dict
+    distance_meters: float
+    duration_seconds: Optional[float] = None
+    safety_score: int
+    risk_level: str
+    flood_intersections: int
+    instructions: Optional[List[RouteInstruction]] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RouteResponse(BaseModel):
+    """Response containing multiple route options"""
+    routes: List[RouteOption]
+    city: str
+    warnings: List[str] = []
+
+    model_config = ConfigDict(from_attributes=True)

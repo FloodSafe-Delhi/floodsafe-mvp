@@ -11,10 +11,11 @@ import { Badge } from '../ui/badge';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 import { Skeleton } from '../ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { WaterDepth, VehiclePassability } from '../../types';
+import { WaterDepth, VehiclePassability, LocationData, LocationWithAddress } from '../../types';
 import { useReportMutation } from '../../lib/api/hooks';
 import { useUserId } from '../../contexts/UserContext';
 import { toast } from 'sonner';
+import MapPicker from '../MapPicker';
 
 interface ReportScreenProps {
     onBack: () => void;
@@ -69,6 +70,10 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
     // Validation state
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+    // Map picker state
+    const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+    const locationManuallySetRef = useRef(false); // Track if user manually selected location from map
 
     const recognitionRef = useRef<any>(null);
     const isRecordingRef = useRef(false);
@@ -250,6 +255,12 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
         navigator.geolocation.getCurrentPosition(
             (position) => {
+                // Don't override location if user manually selected from map
+                if (locationManuallySetRef.current) {
+                    setLocationLoading(false);
+                    return;
+                }
+
                 const { latitude, longitude, accuracy } = position.coords;
                 setLocation({ latitude, longitude, accuracy });
                 setLocationLoading(false);
@@ -418,6 +429,20 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
         }
         if (step === 4 && !confirmed) return 'Please confirm your report is accurate';
         return '';
+    };
+
+    // Handle location selection from map
+    const handleMapLocationSelect = (selectedLocation: LocationWithAddress) => {
+        setLocation({
+            latitude: selectedLocation.latitude,
+            longitude: selectedLocation.longitude,
+            accuracy: selectedLocation.accuracy
+        });
+        setLocationName(selectedLocation.locationName);
+        setLocationError('');
+        setLocationLoading(false);
+        locationManuallySetRef.current = true; // Mark as manually set to prevent GPS override
+        toast.success('Location selected from map');
     };
 
     const handleNext = () => {
@@ -619,9 +644,13 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
                                 <div className="text-center text-gray-500 text-sm">OR</div>
 
-                                <Button variant="outline" className="w-full" disabled>
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => setIsMapPickerOpen(true)}
+                                >
                                     <MapPin className="w-4 h-4 mr-2" />
-                                    Select from Map (Coming Soon)
+                                    Select from Map
                                 </Button>
                             </div>
                         </Card>
@@ -1032,6 +1061,14 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                     </Button>
                 )}
             </div>
+
+            {/* Map Picker Modal */}
+            <MapPicker
+                isOpen={isMapPickerOpen}
+                onClose={() => setIsMapPickerOpen(false)}
+                initialLocation={location}
+                onLocationSelect={handleMapLocationSelect}
+            />
         </div>
     );
 }

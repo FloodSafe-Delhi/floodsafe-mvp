@@ -1,3 +1,5 @@
+import type { LineString } from 'geojson';
+
 export type AlertLevel = 'safe' | 'watch' | 'advisory' | 'warning' | 'emergency';
 export type AlertColor = 'green' | 'yellow' | 'orange' | 'red' | 'black';
 
@@ -15,6 +17,54 @@ export interface FloodAlert {
 
 export type WaterDepth = 'ankle' | 'knee' | 'waist' | 'impassable';
 export type VehiclePassability = 'all' | 'high-clearance' | 'none';
+
+// ============================================================================
+// ROUTING TYPES (Safe route navigation)
+// ============================================================================
+
+export interface LocationPoint {
+    lng: number;
+    lat: number;
+}
+
+export type TransportMode = 'driving' | 'walking' | 'metro' | 'combined';
+export type RouteType = 'safe' | 'fast' | 'balanced' | 'metro';
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface RouteRequest {
+    origin: LocationPoint;
+    destination: LocationPoint;
+    city: 'BLR' | 'DEL';
+    mode: TransportMode;
+    avoid_risk_levels?: string[];
+}
+
+export interface RouteInstruction {
+    text: string;
+    distance_meters: number;
+    duration_seconds?: number;
+    maneuver: string;
+    location: [number, number]; // [lng, lat]
+}
+
+export interface RouteOption {
+    id: string;
+    type: RouteType;
+    city_code: string;
+    geometry: LineString;
+    distance_meters: number;
+    duration_seconds?: number;
+    safety_score: number; // 0-100
+    risk_level: RiskLevel;
+    flood_intersections: number;
+    instructions?: RouteInstruction[];
+}
+
+export interface RouteResponse {
+    routes: RouteOption[];
+    city: string;
+    warnings: string[];
+}
 
 // User type - used across the application
 export interface User {
@@ -41,5 +91,40 @@ export interface User {
         advisory: boolean;
         warning: boolean;
         emergency: boolean;
+    };
+}
+
+// Location-related types for MapPicker
+export interface LocationCoordinates {
+    latitude: number;
+    longitude: number;
+}
+
+export interface LocationData extends LocationCoordinates {
+    accuracy: number;
+}
+
+export interface LocationWithAddress extends LocationData {
+    locationName: string;
+}
+
+// Map Picker types
+export interface MapPickerProps {
+    isOpen: boolean;
+    onClose: () => void;
+    initialLocation: LocationData | null;
+    onLocationSelect: (location: LocationWithAddress) => void;
+}
+
+export interface GeocodingResult {
+    display_name: string;
+    lat: string;
+    lon: string;
+    address?: {
+        road?: string;
+        suburb?: string;
+        city?: string;
+        state?: string;
+        country?: string;
     };
 }

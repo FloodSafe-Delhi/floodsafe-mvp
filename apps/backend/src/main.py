@@ -4,7 +4,7 @@ from .infrastructure.database import engine
 
 models.Base.metadata.create_all(bind=engine)
 
-from .api import webhook, reports, users, sensors, otp, watch_areas, reputation, leaderboards, badges
+from .api import webhook, reports, users, sensors, otp, watch_areas, reputation, leaderboards, badges, routes_api
 
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
@@ -30,6 +30,7 @@ app.include_router(watch_areas.router, prefix="/api/watch-areas", tags=["watch-a
 app.include_router(reputation.router, prefix="/api/reputation", tags=["reputation"])
 app.include_router(leaderboards.router, prefix="/api/leaderboards", tags=["leaderboards"])
 app.include_router(badges.router, prefix="/api/badges", tags=["badges"])
+app.include_router(routes_api.router, prefix="/api", tags=["routing"])
 
 @app.get("/health")
 def health_check():

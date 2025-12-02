@@ -6,13 +6,6 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Plus, Minus, Navigation, Layers, Train, AlertCircle, MapPin } from 'lucide-react';
 import MapLegend from './MapLegend';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "./ui/select";
 import { useCurrentCity, useCityContext } from '../contexts/CityContext';
 import { isWithinCityBounds, getAvailableCities, getCityConfig, type CityKey } from '../lib/map/cityConfigs';
 
@@ -382,49 +375,39 @@ export default function MapComponent({ className, title, showControls, showCityS
 
     return (
         <div className="relative w-full h-full">
+            {/* Title - Top Left */}
             {title && (
-                <div className="absolute top-4 left-4 right-4 z-[100] flex justify-between items-start pointer-events-none">
-                    <div className="bg-white/90 backdrop-blur-md shadow-lg rounded-lg px-4 py-2 pointer-events-auto">
+                <div className="absolute top-4 left-4 z-[100] pointer-events-auto">
+                    <div className="bg-white/90 backdrop-blur-md shadow-lg rounded-lg px-4 py-2">
                         <h1 className="text-lg font-bold text-gray-900">{title}</h1>
                         <p className="text-xs text-gray-500">Real-time flood monitoring</p>
                     </div>
+                </div>
+            )}
 
-                    {showCitySelector && (
-                        <div className="pointer-events-auto">
-                            <div className="bg-gradient-to-r from-blue-600 to-blue-700 shadow-2xl rounded-2xl border-4 border-white p-1">
-                                <div className="bg-white rounded-xl px-2 py-1 flex items-center gap-2 min-w-[180px]">
-                                    <MapPin className="w-5 h-5 text-blue-600 flex-shrink-0 ml-2" />
-                                    <Select
-                                        value={city}
-                                        onValueChange={(value) => handleCityChange(value)}
-                                        disabled={isChangingCity}
-                                    >
-                                        <SelectTrigger className="border-0 shadow-none focus:ring-0 text-lg font-extrabold text-gray-900 h-auto py-1 pl-1 pr-2 gap-2 bg-transparent w-full">
-                                            <SelectValue placeholder="Select city" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {availableCities.map((cityKey) => {
-                                                const config = getCityConfig(cityKey);
-                                                return (
-                                                    <SelectItem key={cityKey} value={cityKey} className="cursor-pointer">
-                                                        <span className="font-medium">{config.displayName}</span>
-                                                    </SelectItem>
-                                                );
-                                            })}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
+            {/* City Selector - Styled like control buttons */}
+            {showCitySelector && availableCities.length > 0 && (
+                <div className="absolute top-4 right-4 z-[60]">
+                    <div className="bg-white/90 backdrop-blur-sm shadow-xl rounded-lg px-3 py-2 border border-gray-200">
+                        <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                            <select
+                                value={city}
+                                onChange={(e) => handleCityChange(e.target.value)}
+                                disabled={isChangingCity}
+                                className="bg-transparent text-gray-900 font-semibold text-sm border-none focus:outline-none focus:ring-0 cursor-pointer pr-6 disabled:opacity-50"
+                            >
+                                {availableCities.map((cityKey) => {
+                                    const config = getCityConfig(cityKey);
+                                    return (
+                                        <option key={cityKey} value={cityKey}>
+                                            {config.displayName}
+                                        </option>
+                                    );
+                                })}
+                            </select>
                         </div>
-                    )}
-
-                    {!showCitySelector && (
-                        <div className="pointer-events-auto">
-                            <Badge variant="secondary" className="bg-white shadow">
-                                Online
-                            </Badge>
-                        </div>
-                    )}
+                    </div>
                 </div>
             )}
             {isChangingCity && (

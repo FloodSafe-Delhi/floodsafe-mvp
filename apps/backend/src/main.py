@@ -1,37 +1,20 @@
 from fastapi import FastAPI
-from .infrastructure import models
-from .infrastructure.database import engine
+from src.database import engine
+from src.models import user_report
+from src.api import auth, reports, webhook
 
-models.Base.metadata.create_all(bind=engine)
+app = FastAPI(title="FloodSafe Backend API")
 
-from .api import webhook, reports, users, sensors, otp, watch_areas, reputation, leaderboards, badges, routes_api
+# Create database tables on startup (for development)
+@app.on_event("startup")
+def startup():
+    user_report.Base.metadata.create_all(bind=engine)
 
-from fastapi.middleware.cors import CORSMiddleware
-from .core.config import settings
-
-app = FastAPI(title=settings.PROJECT_NAME)
-
-# Set all CORS enabled origins
-if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-app.include_router(webhook.router, prefix="/api/webhooks", tags=["webhooks"])
-app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
-app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(sensors.router, prefix="/api/sensors", tags=["sensors"])
-app.include_router(otp.router, prefix="/api", tags=["otp"])
-app.include_router(watch_areas.router, prefix="/api/watch-areas", tags=["watch-areas"])
-app.include_router(reputation.router, prefix="/api/reputation", tags=["reputation"])
-app.include_router(leaderboards.router, prefix="/api/leaderboards", tags=["leaderboards"])
-app.include_router(badges.router, prefix="/api/badges", tags=["badges"])
-app.include_router(routes_api.router, prefix="/api", tags=["routing"])
+# Include route modules
+app.include_router(auth.router)
+app.include_router(reports.router)
+app.include_router(webhook.router)
 
 @app.get("/health")
-def health_check():
-    return {"status": "healthy"}
+def health():
+    return {"status": "ok"}

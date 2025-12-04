@@ -6,7 +6,7 @@ geoalchemy2==0.13.3
 python-dotenv==1.0.0
 pydantic==1.10.11
 python-jose==3.3.0
-passlib[bcrypt]==1.7.5
+passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 Pillow==10.0.0
 shapely==2.1.1

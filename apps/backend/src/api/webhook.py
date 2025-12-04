@@ -1,25 +1,17 @@
-from fastapi import APIRouter, Request, Form
-from typing import Optional
-import logging
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
-router = APIRouter()
-logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/webhook", tags=["webhook"])
 
-@router.post("/whatsapp")
-async def handle_whatsapp_webhook(
-    From: str = Form(...),
-    Body: Optional[str] = Form(None),
-    Latitude: Optional[float] = Form(None),
-    Longitude: Optional[float] = Form(None)
-):
+@router.post("/whatsapp-sos")
+async def whatsapp_sos(req: Request):
     """
-    Receives WhatsApp Webhooks from Twilio.
-    If location is present, treats it as an SOS.
+    Minimal webhook endpoint for receiving WhatsApp SOS payloads.
+    In production you should verify signatures and authenticate the sender.
     """
-    if Latitude and Longitude:
-        logger.info(f"SOS RECEIVED from {From} at {Latitude}, {Longitude}")
-        # TODO: Create Report(type="SOS", verified=True)
-        # TODO: Trigger NotificationService
-        return "SOS Location Received. Emergency services alerted."
-
-    return "Please share your Location Pin for SOS."
+    try:
+        payload = await req.json()
+    except Exception:
+        payload = {"raw_body": (await req.body()).decode(errors="ignore")}
+    # Here you could enqueue the payload, notify a human, or create a report automatically.
+    return JSONResponse({"ok": True, "received": True, "payload_summary": {"keys": list(payload.keys())}})

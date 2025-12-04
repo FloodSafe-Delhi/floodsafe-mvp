@@ -16,7 +16,6 @@ class Report(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(256))
     description = Column(Text)
-    # Store as POINT(lon lat) with SRID 4326 (PostGIS)
     geom = Column(Geometry(geometry_type="POINT", srid=4326), nullable=False)
     image_path = Column(String(512))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

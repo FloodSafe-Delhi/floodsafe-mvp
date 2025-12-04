@@ -2,11 +2,12 @@ fastapi==0.95.0
 uvicorn[standard]==0.23.2
 SQLAlchemy==2.0.22
 psycopg2-binary==2.9.6
-geoalchemy2==0.13.3
+geoalchemy2==0.18.1
 python-dotenv==1.0.0
 pydantic==1.10.11
 python-jose==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 python-multipart==0.0.6
 Pillow==10.0.0
 shapely==2.1.1

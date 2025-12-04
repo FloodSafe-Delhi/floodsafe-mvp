@@ -2,8 +2,6 @@ from pydantic import BaseModel, EmailStr, condecimal
 from typing import Optional
 from datetime import datetime
 
-# ---------- USER SCHEMAS ----------
-
 class UserCreate(BaseModel):
     name: str
     email: EmailStr
@@ -21,8 +19,6 @@ class UserRead(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
-
-# ---------- REPORT SCHEMAS ----------
 
 class ReportCreate(BaseModel):
     title: Optional[str] = None

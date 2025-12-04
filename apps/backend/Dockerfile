@@ -2,25 +2,24 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install OS dependencies required for psycopg2 & Geo libraries
+# system deps for psycopg2/postgis and geospatial libs
 RUN apt-get update && \
     apt-get install -y build-essential gcc libpq-dev libgeos-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# install python deps
 COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy application code (build context is apps/backend)
+# copy app code
 COPY . /app
 
-# Ensure Python can import package `src` (parent /app must be on PYTHONPATH)
+# Ensure Python sees /app (so 'import src' works)
 ENV PYTHONPATH=/app
 
-# Create uploads folder
+# runtime uploads
 RUN mkdir -p /app/uploads
 
 EXPOSE 8000
 
-# Run FastAPI server
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

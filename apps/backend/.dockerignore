@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
-uploads/
+*.pyo
+*.pyd
 .env
 .vscode/
+uploads/
 *.sqlite
+.git
+.gitignore

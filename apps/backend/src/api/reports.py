@@ -17,18 +17,12 @@ async def create_report(
     image: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
-    """
-    Create a report with lat/lon and optional image upload.
-    """
     image_path = None
     if image:
-        # read contents and wrap in BytesIO so save_upload can read()
         contents = await image.read()
         image_obj = BytesIO(contents)
         filename = f"{int(time.time())}_{image.filename}"
         image_path = save_upload(image_obj, filename)
-
-    # create report record
     try:
         report = crud.create_report(db, title=title, description=description, lon=lon, lat=lat, image_path=image_path)
     except Exception as e:
@@ -37,7 +31,4 @@ async def create_report(
 
 @router.get("/", response_model=list[schemas.ReportRead])
 def list_reports(limit: int = 100, db: Session = Depends(get_db)):
-    """
-    List recent reports (most recent first).
-    """
     return crud.list_reports(db, limit=limit)

@@ -1,25 +1,10 @@
-from pydantic_settings import BaseSettings
-from typing import List
+import os
+from pydantic import BaseSettings
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "FloodSafe API"
-    API_V1_STR: str = "/api"
-    
-    # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/floodsafe"
-    
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:5173",  # Vite Frontend
-        "http://localhost:5174",  # Vite Frontend (alternate)
-        "http://localhost:5175",  # Vite Frontend (alternate)
-        "http://localhost:5176",  # Vite Frontend (current)
-        "http://localhost:3000",  # Alternative Frontend
-        "http://localhost:8000",  # Swagger UI
-    ]
-
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+    UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "/app/uploads")
 
 settings = Settings()

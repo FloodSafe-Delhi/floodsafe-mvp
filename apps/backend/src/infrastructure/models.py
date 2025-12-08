@@ -107,6 +107,9 @@ class Report(Base):
     nearby_sensor_ids = Column(String, default="[]")  # JSON array
     prophet_prediction_match = Column(Boolean, nullable=True)  # Future: Prophet integration
 
+    # Photo location verification
+    location_verified = Column(Boolean, default=True)  # False if photo GPS doesn't match reported location
+
     # Safe routing fields (auto-populated by database trigger)
     risk_polygon = Column(Geometry('POLYGON', srid=4326), nullable=True)
     risk_radius_meters = Column(Integer, default=100)

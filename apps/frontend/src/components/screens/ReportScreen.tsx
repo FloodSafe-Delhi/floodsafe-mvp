@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, MapPin, Camera, Award, Mic, MicOff, AlertCircle, X, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, MapPin, Camera, Award, Mic, MicOff, AlertCircle, X, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
@@ -11,11 +11,12 @@ import { Badge } from '../ui/badge';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 import { Skeleton } from '../ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { WaterDepth, VehiclePassability, LocationData, LocationWithAddress } from '../../types';
+import { WaterDepth, VehiclePassability, LocationData, LocationWithAddress, PhotoData } from '../../types';
 import { useReportMutation } from '../../lib/api/hooks';
 import { useUserId } from '../../contexts/UserContext';
 import { toast } from 'sonner';
 import MapPicker from '../MapPicker';
+import PhotoCapture from '../PhotoCapture';
 
 interface ReportScreenProps {
     onBack: () => void;
@@ -75,6 +76,9 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
     const locationManuallySetRef = useRef(false); // Track if user manually selected location from map
 
+    // Photo state
+    const [photo, setPhoto] = useState<PhotoData | null>(null);
+
     const recognitionRef = useRef<any>(null);
     const isRecordingRef = useRef(false);
     const reportMutation = useReportMutation();
@@ -113,35 +117,35 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                 recognition.maxAlternatives = 1;
 
                 recognition.onresult = (event: SpeechRecognitionEvent) => {
-                    let transcript = '';
-
-                    // Collect final results with proper bounds checking
+                    // Only process FINAL results to avoid triple-counting
+                    // Interim results fire multiple times for the same phrase
                     const startIndex = event.resultIndex || 0;
-                    const endIndex = Math.min(event.results.length, startIndex + 10); // Reasonable limit
 
-                    for (let i = startIndex; i < endIndex; i++) {
+                    for (let i = startIndex; i < event.results.length; i++) {
                         const result = event.results[i];
                         if (!result || result.length === 0) continue;
 
                         const alternative = result[0];
                         if (!alternative?.transcript) continue;
 
+                        // ONLY add final results to prevent duplicates
+                        // Interim results are shown in real-time but NOT added to description
                         if (result.isFinal) {
-                            transcript += alternative.transcript + ' ';
-                        } else if (!isIOSDevice()) {
-                            // Only use interim results on non-iOS devices
-                            transcript += alternative.transcript + ' ';
+                            const finalTranscript = alternative.transcript.trim();
+                            if (finalTranscript) {
+                                setDescription(prev => {
+                                    const newText = prev ? (prev + ' ' + finalTranscript).trim() : finalTranscript;
+                                    return newText.slice(0, MAX_DESCRIPTION_LENGTH);
+                                });
+                            }
                         }
                     }
 
-                    if (transcript.trim()) {
-                        setDescription(prev => {
-                            const newText = (prev + ' ' + transcript).trim();
-                            return newText.slice(0, MAX_DESCRIPTION_LENGTH);
-                        });
-
-                        // On iOS, automatically restart for continuous recording
-                        if (isIOSDevice() && isRecordingRef.current) {
+                    // On iOS, automatically restart for continuous recording after final result
+                    if (isIOSDevice() && isRecordingRef.current) {
+                        // Check if we got a final result
+                        const hasFinalResult = Array.from(event.results).some(r => r.isFinal);
+                        if (hasFinalResult) {
                             try {
                                 recognition.start();
                             } catch (e) {
@@ -276,8 +280,12 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                 }
 
                 // Try to get location name via reverse geocoding (optional - could fail)
+                // Note: Don't use custom headers as they trigger CORS preflight which Nominatim doesn't support
                 fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`)
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        return res.json();
+                    })
                     .then(data => {
                         if (data.display_name) {
                             const parts = data.display_name.split(',');
@@ -410,6 +418,10 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
             // Location step - need valid location and description
             return !locationLoading && location && description.length >= MIN_DESCRIPTION_LENGTH && !validationErrors.description;
         }
+        if (step === 3) {
+            // Photo step - photo is required with GPS
+            return photo !== null && photo.gps !== null;
+        }
         if (step === 4) {
             // Confirmation step - need confirmation checkbox
             return confirmed;
@@ -426,6 +438,10 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
             if (description.length === 0) return 'Please add a description';
             if (description.length < MIN_DESCRIPTION_LENGTH) return `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters (currently ${description.length})`;
             if (validationErrors.description) return validationErrors.description;
+        }
+        if (step === 3) {
+            if (!photo) return 'Please take or upload a geotagged photo';
+            if (!photo.gps) return 'Photo must have location data';
         }
         if (step === 4 && !confirmed) return 'Please confirm your report is accurate';
         return '';
@@ -469,18 +485,28 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
             return;
         }
 
+        // Validate photo exists
+        if (!photo) {
+            setErrorType('photo');
+            setErrorMessage('Photo is required. Please go back and add a geotagged photo.');
+            return;
+        }
+
         try {
             // Build comprehensive description with tags
             const tagPrefix = selectedTags.length > 0 ? `[${selectedTags.join(', ')}] ` : '';
             const fullDescription = `${tagPrefix}${description} - Depth: ${waterDepth}, Passability: ${vehiclePassability}`;
 
-            // Use real GPS coordinates
+            // Use real GPS coordinates and photo
             await reportMutation.mutateAsync({
                 user_id: userId,
                 latitude: location.latitude,
                 longitude: location.longitude,
                 description: fullDescription,
-                image: undefined // Image upload not implemented in UI yet
+                image: photo.file,
+                photo_latitude: photo.gps.lat,
+                photo_longitude: photo.gps.lng,
+                photo_location_verified: photo.isLocationVerified
             });
             toast.success('Report submitted successfully!');
             onSubmit();
@@ -665,11 +691,11 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                         </span>
                                     </div>
 
-                                    <div className="relative">
+                                    <div className="space-y-2">
                                         <Textarea
                                             id="desc"
                                             placeholder="e.g., 'Road flooded near Bus Stop 123' or 'Heavy waterlogging at Main Street intersection'"
-                                            className="min-h-32 pr-14 resize-none"
+                                            className="min-h-32 resize-none"
                                             value={description}
                                             onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
                                             maxLength={MAX_DESCRIPTION_LENGTH}
@@ -680,18 +706,27 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                             <button
                                                 type="button"
                                                 onClick={toggleVoiceRecording}
-                                                className={`absolute right-2 top-2 min-w-[44px] min-h-[44px] p-2 rounded-lg transition-all active:scale-95 z-10 ${
+                                                className={`w-full flex items-center justify-center gap-3 py-3 px-4 rounded-lg font-medium transition-all active:scale-[0.98] ${
                                                     isRecording
-                                                        ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-200 ring-2 ring-red-300 ring-offset-2'
-                                                        : 'bg-blue-500 text-white hover:bg-blue-600 shadow-md hover:shadow-lg'
+                                                        ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-200 ring-2 ring-red-300 ring-offset-2 animate-pulse'
+                                                        : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-md hover:shadow-lg'
                                                 }`}
-                                                title={isRecording ? 'Stop recording' : 'Start voice input'}
                                                 aria-label={isRecording ? 'Stop voice recording' : 'Start voice recording'}
                                             >
                                                 {isRecording ? (
-                                                    <MicOff className="w-5 h-5 animate-pulse" />
+                                                    <>
+                                                        <MicOff className="w-5 h-5" />
+                                                        <span>Tap to Stop Recording</span>
+                                                        <span className="flex h-3 w-3">
+                                                            <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-white opacity-75"></span>
+                                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                                                        </span>
+                                                    </>
                                                 ) : (
-                                                    <Mic className="w-5 h-5" />
+                                                    <>
+                                                        <Mic className="w-5 h-5" />
+                                                        <span>🎤 Tap to Speak Description</span>
+                                                    </>
                                                 )}
                                             </button>
                                         )}
@@ -836,22 +871,42 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                     </Card>
                 )}
 
-                {/* Step 3: Photo */}
+                {/* Step 3: Photo (Required) */}
                 {step === 3 && (
                     <Card className="p-4">
-                        <h3 className="mb-2">Add Photo (Optional)</h3>
-                        <p className="text-sm text-gray-600 mb-4">Photos help validate reports faster</p>
+                        <h3 className="mb-2 flex items-center gap-2">
+                            <Camera className="w-5 h-5 text-blue-600" />
+                            Add Photo (Required)
+                        </h3>
+                        <p className="text-sm text-gray-600 mb-4">
+                            A geotagged photo is required to verify your report
+                        </p>
 
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8">
-                            <div className="text-center">
-                                <Camera className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                                <Button variant="outline" className="mb-2">
-                                    <Camera className="w-4 h-4 mr-2" />
-                                    Take Photo
-                                </Button>
-                                <p className="text-xs text-gray-500">or choose from gallery</p>
-                            </div>
-                        </div>
+                        <PhotoCapture
+                            reportedLocation={location}
+                            onPhotoCapture={setPhoto}
+                            photo={photo}
+                        />
+
+                        {!photo && (
+                            <Alert className="mt-4">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertDescription className="text-xs">
+                                    Take a photo or upload a geotagged image from your gallery.
+                                    The photo's location will be compared to your reported location.
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {photo && !photo.isLocationVerified && (
+                            <Alert className="mt-4 border-yellow-200 bg-yellow-50">
+                                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                <AlertDescription className="text-xs text-yellow-800">
+                                    Photo location differs from reported location. Your report will still be submitted
+                                    but flagged for additional review.
+                                </AlertDescription>
+                            </Alert>
+                        )}
                     </Card>
                 )}
 
@@ -967,6 +1022,36 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                 <div>
                                     <p className="text-gray-600">Vehicle Passability</p>
                                     <p className="capitalize">{vehiclePassability.replace('-', ' ')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-600">Photo</p>
+                                    {photo ? (
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <img
+                                                src={photo.previewUrl}
+                                                alt="Report photo"
+                                                className="w-16 h-16 object-cover rounded"
+                                            />
+                                            <div>
+                                                {photo.isLocationVerified ? (
+                                                    <Badge className="bg-green-500 text-white text-xs flex items-center gap-1 w-fit">
+                                                        <CheckCircle className="w-3 h-3" />
+                                                        Location Verified
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge className="bg-yellow-500 text-white text-xs flex items-center gap-1 w-fit">
+                                                        <AlertTriangle className="w-3 h-3" />
+                                                        Location Not Verified
+                                                    </Badge>
+                                                )}
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {photo.source === 'camera' ? 'Taken with camera' : 'From gallery'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-orange-600">No photo added</p>
+                                    )}
                                 </div>
                             </div>
                         </Card>

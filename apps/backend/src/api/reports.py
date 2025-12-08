@@ -153,22 +153,23 @@ async def create_report(
         exif_data = get_exif_data(img)
         img_lat, img_lng = get_lat_lon(exif_data)
 
+        # Initialize location_verified flag
+        location_verified = True
+
         if not img_lat or not img_lng:
-            raise HTTPException(
-                status_code=400,
-                detail="Photo must have GPS coordinates. Please enable location services and retake the photo."
-            )
+            # No GPS in photo - flag as not location verified (don't block)
+            location_verified = False
+            logger.warning(f"Report photo has no GPS coordinates")
+        else:
+            media_metadata["gps"] = {"lat": img_lat, "lng": img_lng}
 
-        media_metadata["gps"] = {"lat": img_lat, "lng": img_lng}
-
-        # 3. Strict GPS validation: Photo GPS must match reported location within 100m
-        # 100m ≈ 0.001 degrees at equator
-        gps_tolerance = 0.001
-        if abs(img_lat - latitude) > gps_tolerance or abs(img_lng - longitude) > gps_tolerance:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Photo location ({img_lat:.6f}, {img_lng:.6f}) does not match reported location ({latitude:.6f}, {longitude:.6f}). Please ensure you're taking a photo at the actual flood location."
-            )
+            # 3. GPS validation: Check if photo GPS matches reported location within 100m
+            # 100m ≈ 0.001 degrees at equator
+            gps_tolerance = 0.001
+            if abs(img_lat - latitude) > gps_tolerance or abs(img_lng - longitude) > gps_tolerance:
+                # GPS mismatch - flag as not location verified (don't block, allow with warning)
+                location_verified = False
+                logger.warning(f"Report photo GPS ({img_lat:.6f}, {img_lng:.6f}) doesn't match reported location ({latitude:.6f}, {longitude:.6f})")
 
         # TODO: Upload to S3/Blob Storage and get URL
         # media_url = s3_upload(content)
@@ -192,7 +193,8 @@ async def create_report(
             phone_number=phone_number,
             phone_verified=True,  # Verified via OTP
             water_depth=water_depth,
-            vehicle_passability=vehicle_passability
+            vehicle_passability=vehicle_passability,
+            location_verified=location_verified  # Photo GPS matches reported location
         )
 
         db.add(new_report)
@@ -277,7 +279,8 @@ async def create_report(
             phone_verified=new_report.phone_verified,
             water_depth=new_report.water_depth,
             vehicle_passability=new_report.vehicle_passability,
-            iot_validation_score=new_report.iot_validation_score
+            iot_validation_score=new_report.iot_validation_score,
+            location_verified=new_report.location_verified
         )
     except HTTPException:
         db.rollback()

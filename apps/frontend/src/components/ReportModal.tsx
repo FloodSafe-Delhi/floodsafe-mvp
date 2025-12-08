@@ -55,8 +55,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, userL
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Description</label>
+                        <label htmlFor="report-description" className="block text-sm font-medium text-gray-700">Description</label>
                         <textarea
+                            id="report-description"
+                            name="description"
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
                             rows={3}
                             value={description}
@@ -66,8 +68,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, userL
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Photo (Optional)</label>
+                        <label htmlFor="report-photo" className="block text-sm font-medium text-gray-700">Photo (Optional)</label>
                         <input
+                            id="report-photo"
+                            name="photo"
                             type="file"
                             accept="image/*"
                             onChange={(e) => setImage(e.target.files?.[0] || null)}

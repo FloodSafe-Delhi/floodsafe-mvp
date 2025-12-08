@@ -95,6 +95,9 @@ class Report(BaseModel):
     nearby_sensor_ids: str = "[]"  # JSON array of nearby sensor UUIDs
     prophet_prediction_match: Optional[bool] = None  # Future: matches Prophet forecast
 
+    # Photo location verification
+    location_verified: bool = True  # False if photo GPS doesn't match reported location
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -282,6 +285,9 @@ class ReportResponse(BaseModel):
     water_depth: Optional[str]
     vehicle_passability: Optional[str]
     iot_validation_score: int
+
+    # Photo location verification
+    location_verified: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 

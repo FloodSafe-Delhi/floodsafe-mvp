@@ -13,7 +13,16 @@ export function useMap(
     const [isLoaded, setIsLoaded] = useState(false);
 
     useEffect(() => {
-        if (!containerRef.current || mapRef.current) return;
+        // Reset isLoaded when city changes to prevent accessing stale map
+        setIsLoaded(false);
+
+        if (!containerRef.current) return;
+
+        // If map already exists, remove it before creating new one
+        if (mapRef.current) {
+            mapRef.current.remove();
+            mapRef.current = null;
+        }
 
         const cityConfig = getCityConfig(cityKey);
 
@@ -64,6 +73,11 @@ export function useMap(
                 'metro-stations': {
                     type: 'geojson',
                     data: cityConfig.metro.stations
+                },
+                // Add search result marker source
+                'search-result': {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
                 }
             },
             layers: [
@@ -137,6 +151,49 @@ export function useMap(
                             4, '#225EA8'   // Dark blue - highest flood risk
                         ],
                         'fill-opacity': 0.6
+                    }
+                },
+                // Search result marker - outer glow
+                {
+                    id: 'search-marker-glow',
+                    type: 'circle',
+                    source: 'search-result',
+                    paint: {
+                        'circle-radius': 20,
+                        'circle-color': '#ef4444',
+                        'circle-opacity': 0.3,
+                        'circle-blur': 0.5
+                    }
+                },
+                // Search result marker - main circle
+                {
+                    id: 'search-marker',
+                    type: 'circle',
+                    source: 'search-result',
+                    paint: {
+                        'circle-radius': 10,
+                        'circle-color': '#ef4444',
+                        'circle-stroke-width': 3,
+                        'circle-stroke-color': '#ffffff'
+                    }
+                },
+                // Search result label
+                {
+                    id: 'search-label',
+                    type: 'symbol',
+                    source: 'search-result',
+                    layout: {
+                        'text-field': ['get', 'name'],
+                        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                        'text-size': 13,
+                        'text-offset': [0, 2],
+                        'text-anchor': 'top',
+                        'text-max-width': 15
+                    },
+                    paint: {
+                        'text-color': '#1f2937',
+                        'text-halo-color': '#ffffff',
+                        'text-halo-width': 2
                     }
                 }
             ]
@@ -223,8 +280,11 @@ export function useMap(
         mapRef.current = map;
 
         return () => {
-            map.remove();
-            mapRef.current = null;
+            // Only remove if map still exists (might already be removed on city change)
+            if (mapRef.current) {
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
             // Only remove protocol if we added it
             if (protocolAdded) {
                 try {

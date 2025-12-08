@@ -122,9 +122,32 @@ export interface GeocodingResult {
     lon: string;
     address?: {
         road?: string;
+        neighbourhood?: string;
         suburb?: string;
         city?: string;
+        town?: string;
+        village?: string;
         state?: string;
         country?: string;
     };
+}
+
+// Photo capture types for geotagged report photos
+export interface PhotoGps {
+    lat: number;
+    lng: number;
+}
+
+export interface PhotoData {
+    file: File;
+    gps: PhotoGps;
+    source: 'camera' | 'gallery';
+    isLocationVerified: boolean; // true if within 100m of reported location
+    previewUrl: string;
+}
+
+export interface PhotoCaptureProps {
+    reportedLocation: LocationData | null;
+    onPhotoCapture: (photo: PhotoData | null) => void;
+    photo: PhotoData | null;
 }

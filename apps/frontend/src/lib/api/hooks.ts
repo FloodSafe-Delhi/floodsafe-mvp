@@ -41,6 +41,9 @@ export interface ReportCreate {
     latitude: number;
     longitude: number;
     image?: File;
+    photo_latitude?: number;
+    photo_longitude?: number;
+    photo_location_verified?: boolean;
 }
 
 // Re-export User from types for backwards compatibility
@@ -161,6 +164,16 @@ export function useReportMutation() {
             formData.append('longitude', data.longitude.toString());
             if (data.image) {
                 formData.append('image', data.image);
+            }
+            // Photo GPS fields for verification
+            if (data.photo_latitude !== undefined) {
+                formData.append('photo_latitude', data.photo_latitude.toString());
+            }
+            if (data.photo_longitude !== undefined) {
+                formData.append('photo_longitude', data.photo_longitude.toString());
+            }
+            if (data.photo_location_verified !== undefined) {
+                formData.append('photo_location_verified', data.photo_location_verified.toString());
             }
             return uploadFile('/reports/', formData);
         },

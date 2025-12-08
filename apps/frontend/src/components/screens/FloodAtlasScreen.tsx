@@ -96,7 +96,6 @@ export function FloodAtlasScreen() {
                 title="Flood Atlas"
                 showControls={true}
                 showCitySelector={true}
-                activeRoute={activeRoute}
             />
 
             {/* Floating Route Button */}

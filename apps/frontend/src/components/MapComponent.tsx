@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMap } from '../lib/map/useMap';
 import { useSensors, useReports, Sensor, Report } from '../lib/api/hooks';
 import maplibregl from 'maplibre-gl';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { Plus, Minus, Navigation, Layers, Train, AlertCircle, MapPin } from 'lucide-react';
 import MapLegend from './MapLegend';
+import SearchBar from './SearchBar';
 import { useCurrentCity, useCityContext } from '../contexts/CityContext';
 import { isWithinCityBounds, getAvailableCities, getCityConfig, type CityKey } from '../lib/map/cityConfigs';
 
@@ -373,25 +373,89 @@ export default function MapComponent({ className, title, showControls, showCityS
         }));
     };
 
+    // Handle search location selection
+    const handleSearchLocationSelect = useCallback((lat: number, lng: number, name: string) => {
+        if (!map || !isLoaded) return;
+
+        try {
+            // Update the search-result source with the selected location
+            const source = map.getSource('search-result') as maplibregl.GeoJSONSource;
+            if (source) {
+                source.setData({
+                    type: 'FeatureCollection',
+                    features: [{
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [lng, lat]
+                        },
+                        properties: {
+                            name: name
+                        }
+                    }]
+                });
+            }
+
+            // Fly to the selected location with smooth animation
+            map.flyTo({
+                center: [lng, lat],
+                zoom: 15,
+                duration: 1500,
+                essential: true
+            });
+        } catch (error) {
+            console.log('Could not update search location:', error);
+        }
+    }, [map, isLoaded]);
+
+    // Clear search marker when city changes
+    useEffect(() => {
+        if (!map || !isLoaded) return;
+
+        try {
+            const source = map.getSource('search-result') as maplibregl.GeoJSONSource;
+            if (source) {
+                source.setData({
+                    type: 'FeatureCollection',
+                    features: []
+                });
+            }
+        } catch (error) {
+            // Map might be in transition state during city change
+            console.log('Could not clear search marker:', error);
+        }
+    }, [city, map, isLoaded]);
+
     return (
         <div className="relative w-full h-full">
-            {/* Title - Top Left */}
+            {/* Title and Search Bar - Top Left */}
             {title && (
-                <div className="absolute top-4 left-4 z-[100] pointer-events-auto">
+                <div className="absolute pointer-events-auto flex flex-col gap-2" style={{ top: '16px', left: '24px', zIndex: 100 }}>
                     <div className="bg-white/90 backdrop-blur-md shadow-lg rounded-lg px-4 py-2">
                         <h1 className="text-lg font-bold text-gray-900">{title}</h1>
                         <p className="text-xs text-gray-500">Real-time flood monitoring</p>
                     </div>
+                    {/* Search Bar below title */}
+                    {showCitySelector && (
+                        <SearchBar
+                            onLocationSelect={handleSearchLocationSelect}
+                            cityKey={city}
+                            placeholder={`Search in ${currentCityConfig.displayName}...`}
+                            className="w-72"
+                        />
+                    )}
                 </div>
             )}
 
-            {/* City Selector - Styled like control buttons */}
+            {/* City Selector - Top Right */}
             {showCitySelector && availableCities.length > 0 && (
-                <div className="absolute top-4 right-4 z-[60]">
+                <div className="absolute top-4 right-4" style={{ zIndex: 60 }}>
                     <div className="bg-white/90 backdrop-blur-sm shadow-xl rounded-lg px-3 py-2 border border-gray-200">
                         <div className="flex items-center gap-2">
                             <MapPin className="w-4 h-4 text-blue-600 flex-shrink-0" />
                             <select
+                                id="city-selector"
+                                name="city"
                                 value={city}
                                 onChange={(e) => handleCityChange(e.target.value)}
                                 disabled={isChangingCity}
@@ -411,7 +475,7 @@ export default function MapComponent({ className, title, showControls, showCityS
                 </div>
             )}
             {isChangingCity && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-[90] flex items-center justify-center">
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center" style={{ zIndex: 90 }}>
                     <div className="bg-white shadow-xl rounded-lg p-6 flex flex-col items-center gap-3">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                         <p className="text-sm font-medium text-gray-700">
@@ -420,13 +484,13 @@ export default function MapComponent({ className, title, showControls, showCityS
                     </div>
                 </div>
             )}
-            <div ref={mapContainer} className={className} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
+            <div ref={mapContainer} className={`${className} relative`} style={{ width: '100%', height: '100%', minHeight: '300px', zIndex: 1 }} />
 
             {/* Map Controls Overlay */}
             {showControls && isLoaded && (
                 <>
                     {/* Zoom Controls - Bottom Right */}
-                    <div className="absolute right-4 flex flex-col gap-2 z-[60]" style={{ bottom: '144px' }}>
+                    <div className="absolute right-4 flex flex-col gap-2" style={{ bottom: '144px', zIndex: 60 }}>
                         <Button
                             size="icon"
                             onClick={handleZoomIn}
@@ -478,7 +542,7 @@ export default function MapComponent({ className, title, showControls, showCityS
                     </div>
 
                     {/* Map Legend - Bottom Left */}
-                    <div className="absolute z-[60]" style={{ bottom: '144px', left: '24px' }}>
+                    <div className="absolute" style={{ bottom: '144px', left: '24px', zIndex: 60 }}>
                         <MapLegend className="max-w-xs" />
                     </div>
                 </>

@@ -18,8 +18,8 @@ export default defineConfig({
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
       'Access-Control-Allow-Headers': 'Range',
-      // Enable caching for static assets
-      'Cache-Control': 'public, max-age=31536000',
+      // Disable caching in dev to prevent HMR reload issues
+      'Cache-Control': 'no-store',
     },
     // Configure HMR for WebSocket connections
     hmr: {

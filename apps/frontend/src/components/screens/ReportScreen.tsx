@@ -11,7 +11,7 @@ import { Badge } from '../ui/badge';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 import { Skeleton } from '../ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
-import { WaterDepth, VehiclePassability, LocationData, LocationWithAddress, PhotoData } from '../../types';
+import { WaterDepth, VehiclePassability, LocationWithAddress, PhotoData } from '../../types';
 import { useReportMutation } from '../../lib/api/hooks';
 import { useUserId } from '../../contexts/UserContext';
 import { toast } from 'sonner';

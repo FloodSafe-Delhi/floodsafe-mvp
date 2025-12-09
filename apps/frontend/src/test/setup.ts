@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
 
 // Mock matchMedia for components that use it
 Object.defineProperty(window, 'matchMedia', {
     writable: true,
-    value: vi.fn().mockImplementation(query => ({
+    value: vi.fn().mockImplementation((query: string) => ({
         matches: false,
         media: query,
         onchange: null,
@@ -16,22 +17,22 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
+globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
     observe: vi.fn(),
     unobserve: vi.fn(),
     disconnect: vi.fn(),
-}));
+})) as any;
 
 // Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
+globalThis.IntersectionObserver = vi.fn().mockImplementation(() => ({
     observe: vi.fn(),
     unobserve: vi.fn(),
     disconnect: vi.fn(),
-}));
+})) as any;
 
 // Mock scrollTo
-Element.prototype.scrollTo = vi.fn();
-window.scrollTo = vi.fn();
+Element.prototype.scrollTo = vi.fn() as any;
+window.scrollTo = vi.fn() as any;
 
 // Suppress console errors in tests (optional - comment out for debugging)
 // vi.spyOn(console, 'error').mockImplementation(() => {});

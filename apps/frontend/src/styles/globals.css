@@ -260,3 +260,37 @@ html {
 .h-\[90vh\] { height: 90vh; }
 .h-\[80vh\] { height: 80vh; }
 .h-\[70vh\] { height: 70vh; }
+
+/* ============================================================================
+   Dynamic viewport height fallback for older browsers
+   Modern browsers support 100dvh, but older ones need a fallback
+   ============================================================================ */
+
+/* CSS custom property for dynamic viewport height (set via JS) */
+:root {
+  --vh: 1vh;
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+/* Fallback for browsers that don't support dvh */
+@supports not (height: 100dvh) {
+  .h-\[calc\(100dvh-56px\)\] {
+    height: calc(100vh - 56px);
+    height: calc(var(--vh, 1vh) * 100 - 56px);
+  }
+}
+
+/* Touch scrolling optimization for iOS */
+.overscroll-contain {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area padding utilities */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pb-safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

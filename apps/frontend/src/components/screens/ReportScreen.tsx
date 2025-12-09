@@ -17,6 +17,7 @@ import { useUserId } from '../../contexts/UserContext';
 import { toast } from 'sonner';
 import MapPicker from '../MapPicker';
 import PhotoCapture from '../PhotoCapture';
+import { useAdaptiveScrollPadding } from '../../hooks/useAdaptiveScrollPadding';
 
 interface ReportScreenProps {
     onBack: () => void;
@@ -78,14 +79,34 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
     // Photo state
     const [photo, setPhoto] = useState<PhotoData | null>(null);
+    const [photoLocationName, setPhotoLocationName] = useState<string>('');
 
     const recognitionRef = useRef<any>(null);
     const isRecordingRef = useRef(false);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const reportMutation = useReportMutation();
     const userId = useUserId();
 
+    // Adaptive scroll padding for dynamic viewport handling
+    const bottomPadding = useAdaptiveScrollPadding(scrollContainerRef);
+
     const totalSteps = 4;
     const progressValue = (step / totalSteps) * 100;
+
+    // Fallback for browsers without dvh support - set CSS custom property
+    useEffect(() => {
+        const setVH = () => {
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        };
+        setVH();
+        window.addEventListener('resize', setVH);
+        window.addEventListener('orientationchange', setVH);
+        return () => {
+            window.removeEventListener('resize', setVH);
+            window.removeEventListener('orientationchange', setVH);
+        };
+    }, []);
 
     // Check for Web Speech API support and mobile platform
     useEffect(() => {
@@ -348,6 +369,29 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
         setValidationErrors(errors);
     }, [description, location, locationLoading, locationError]);
 
+    // Reverse geocode photo GPS location
+    useEffect(() => {
+        if (photo?.gps) {
+            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${photo.gps.lat}&lon=${photo.gps.lng}&zoom=18&addressdetails=1`)
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    if (data?.display_name) {
+                        const parts = data.display_name.split(',');
+                        setPhotoLocationName(parts.slice(0, 3).join(',').trim());
+                    }
+                })
+                .catch(err => {
+                    console.log('Photo reverse geocoding failed:', err);
+                    setPhotoLocationName('');
+                });
+        } else {
+            setPhotoLocationName('');
+        }
+    }, [photo?.gps?.lat, photo?.gps?.lng]);
+
     // Toggle voice recording with mobile-specific handling
     const toggleVoiceRecording = () => {
         if (!recognitionRef.current) return;
@@ -540,9 +584,13 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     };
 
     return (
-        <div className="pb-32 min-h-screen bg-gray-50">
+        <div
+            ref={scrollContainerRef}
+            className="h-[calc(100dvh-56px)] overflow-y-auto bg-gray-50 overscroll-contain"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+        >
             {/* Header */}
-            <div className="bg-white shadow-sm sticky top-14 z-40">
+            <div className="bg-white shadow-sm sticky top-0 z-40">
                 <div className="flex items-center justify-between px-4 h-14">
                     <button
                         onClick={handleBack}
@@ -579,7 +627,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
             </div>
 
             {/* Form Content */}
-            <div className="p-4 space-y-4 mb-24">
+            <div className="p-4 space-y-4" style={{ paddingBottom: `${bottomPadding}px` }}>
                 {/* Step 1: Location */}
                 {step === 1 && (
                     <div className="space-y-4">
@@ -819,54 +867,56 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
                 {/* Step 2: Flood Details */}
                 {step === 2 && (
-                    <Card className="p-4 space-y-6">
-                        <div>
-                            <h3 className="mb-4">Water Depth</h3>
-                            <RadioGroup value={waterDepth} onValueChange={(v) => setWaterDepth(v as WaterDepth)}>
-                                <div className="space-y-3">
-                                    {[
-                                        { value: 'ankle', label: 'Ankle-deep', sublabel: '< 0.3m', emoji: '🚶' },
-                                        { value: 'knee', label: 'Knee-deep', sublabel: '0.3-0.6m', emoji: '🚶‍♂️' },
-                                        { value: 'waist', label: 'Waist-deep', sublabel: '0.6-1.2m', emoji: '🏊' },
-                                        { value: 'impassable', label: 'Impassable', sublabel: '> 1.2m', emoji: '⚠️' }
-                                    ].map((option) => (
-                                        <div key={option.value} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50">
-                                            <RadioGroupItem value={option.value} id={option.value} />
-                                            <Label htmlFor={option.value} className="flex-1 flex items-center gap-3 cursor-pointer">
-                                                <span className="text-2xl">{option.emoji}</span>
-                                                <div>
-                                                    <p className="text-sm">{option.label}</p>
-                                                    <p className="text-xs text-gray-500">{option.sublabel}</p>
-                                                </div>
-                                            </Label>
-                                        </div>
-                                    ))}
-                                </div>
-                            </RadioGroup>
-                        </div>
+                    <Card className="p-4">
+                        <div className="space-y-6">
+                            <div>
+                                <h3 className="mb-4">Water Depth</h3>
+                                <RadioGroup value={waterDepth} onValueChange={(v) => setWaterDepth(v as WaterDepth)}>
+                                    <div className="space-y-3">
+                                        {[
+                                            { value: 'ankle', label: 'Ankle-deep', sublabel: '< 0.3m', emoji: '🚶' },
+                                            { value: 'knee', label: 'Knee-deep', sublabel: '0.3-0.6m', emoji: '🚶‍♂️' },
+                                            { value: 'waist', label: 'Waist-deep', sublabel: '0.6-1.2m', emoji: '🏊' },
+                                            { value: 'impassable', label: 'Impassable', sublabel: '> 1.2m', emoji: '⚠️' }
+                                        ].map((option) => (
+                                            <div key={option.value} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50">
+                                                <RadioGroupItem value={option.value} id={option.value} />
+                                                <Label htmlFor={option.value} className="flex-1 flex items-center gap-3 cursor-pointer">
+                                                    <span className="text-2xl">{option.emoji}</span>
+                                                    <div>
+                                                        <p className="text-sm">{option.label}</p>
+                                                        <p className="text-xs text-gray-500">{option.sublabel}</p>
+                                                    </div>
+                                                </Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </RadioGroup>
+                            </div>
 
-                        <div>
-                            <h3 className="mb-4">Vehicle Passability</h3>
-                            <RadioGroup value={vehiclePassability} onValueChange={(v) => setVehiclePassability(v as VehiclePassability)}>
-                                <div className="space-y-3">
-                                    {[
-                                        { value: 'all', label: 'All vehicles passing', icon: '🚗' },
-                                        { value: 'high-clearance', label: 'High-clearance only', sublabel: 'SUVs, buses', icon: '🚙' },
-                                        { value: 'none', label: 'No vehicles passing', icon: '🚫' }
-                                    ].map((option) => (
-                                        <div key={option.value} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50">
-                                            <RadioGroupItem value={option.value} id={`vehicle-${option.value}`} />
-                                            <Label htmlFor={`vehicle-${option.value}`} className="flex-1 flex items-center gap-3 cursor-pointer">
-                                                <span className="text-xl">{option.icon}</span>
-                                                <div>
-                                                    <p className="text-sm">{option.label}</p>
-                                                    {option.sublabel && <p className="text-xs text-gray-500">{option.sublabel}</p>}
-                                                </div>
-                                            </Label>
-                                        </div>
-                                    ))}
-                                </div>
-                            </RadioGroup>
+                            <div>
+                                <h3 className="mb-4">Vehicle Passability</h3>
+                                <RadioGroup value={vehiclePassability} onValueChange={(v) => setVehiclePassability(v as VehiclePassability)}>
+                                    <div className="space-y-3">
+                                        {[
+                                            { value: 'all', label: 'All vehicles passing', icon: '🚗' },
+                                            { value: 'high-clearance', label: 'High-clearance only', sublabel: 'SUVs, buses', icon: '🚙' },
+                                            { value: 'none', label: 'No vehicles passing', icon: '🚫' }
+                                        ].map((option) => (
+                                            <div key={option.value} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50">
+                                                <RadioGroupItem value={option.value} id={`vehicle-${option.value}`} />
+                                                <Label htmlFor={`vehicle-${option.value}`} className="flex-1 flex items-center gap-3 cursor-pointer">
+                                                    <span className="text-xl">{option.icon}</span>
+                                                    <div>
+                                                        <p className="text-sm">{option.label}</p>
+                                                        {option.sublabel && <p className="text-xs text-gray-500">{option.sublabel}</p>}
+                                                    </div>
+                                                </Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </RadioGroup>
+                            </div>
                         </div>
                     </Card>
                 )}
@@ -1026,27 +1076,44 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                 <div>
                                     <p className="text-gray-600">Photo</p>
                                     {photo ? (
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <img
-                                                src={photo.previewUrl}
-                                                alt="Report photo"
-                                                className="w-16 h-16 object-cover rounded"
-                                            />
-                                            <div>
-                                                {photo.isLocationVerified ? (
-                                                    <Badge className="bg-green-500 text-white text-xs flex items-center gap-1 w-fit">
-                                                        <CheckCircle className="w-3 h-3" />
-                                                        Location Verified
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge className="bg-yellow-500 text-white text-xs flex items-center gap-1 w-fit">
-                                                        <AlertTriangle className="w-3 h-3" />
-                                                        Location Not Verified
-                                                    </Badge>
-                                                )}
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    {photo.source === 'camera' ? 'Taken with camera' : 'From gallery'}
-                                                </p>
+                                        <div className="mt-1">
+                                            <div className="flex items-center gap-2">
+                                                <img
+                                                    src={photo.previewUrl}
+                                                    alt="Report photo"
+                                                    className="w-16 h-16 object-cover rounded"
+                                                />
+                                                <div>
+                                                    {photo.isLocationVerified ? (
+                                                        <Badge className="bg-green-500 text-white text-xs flex items-center gap-1 w-fit">
+                                                            <CheckCircle className="w-3 h-3" />
+                                                            Location Verified
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge className="bg-yellow-500 text-white text-xs flex items-center gap-1 w-fit">
+                                                            <AlertTriangle className="w-3 h-3" />
+                                                            Location Not Verified
+                                                        </Badge>
+                                                    )}
+                                                    <p className="text-xs text-gray-500 mt-1">
+                                                        {photo.source === 'camera' ? 'Taken with camera' : 'From gallery'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {/* Photo GPS Location Display */}
+                                            <div className="mt-2 p-2 bg-gray-50 rounded-lg">
+                                                <div className="flex items-start gap-2 text-sm">
+                                                    <MapPin className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                                    <div className="min-w-0">
+                                                        <p className="font-medium text-gray-700">Photo Location</p>
+                                                        <p className="text-xs text-gray-600">
+                                                            {photo.gps.lat.toFixed(6)}, {photo.gps.lng.toFixed(6)}
+                                                        </p>
+                                                        {photoLocationName && (
+                                                            <p className="text-xs text-gray-500 mt-0.5 break-words">{photoLocationName}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     ) : (
@@ -1083,7 +1150,10 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
             </div>
 
             {/* Action Buttons */}
-            <div className="fixed bottom-16 left-0 right-0 bg-white border-t p-4 space-y-2 safe-area-bottom">
+            <div
+                data-action-buttons
+                className="fixed bottom-16 left-0 right-0 bg-white border-t p-4 space-y-2 safe-area-bottom"
+            >
                 {step < totalSteps ? (
                     <>
                         {!isStepValid() ? (

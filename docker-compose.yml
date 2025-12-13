@@ -19,12 +19,16 @@ services:
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./apps/backend:/app
+      - ./apps/frontend/public:/frontend-public:ro
+      - ./apps/ml-service/data:/ml-service-data:ro
     ports:
       - "8000:8000"
     depends_on:
       - db
     environment:
       DATABASE_URL: postgresql://user:password@db:5432/floodsafe
+      ML_SERVICE_URL: http://ml-service:8002
+      ML_SERVICE_DATA_DIR: /ml-service-data
 
   frontend:
     image: node:18-alpine
@@ -33,7 +37,7 @@ services:
       - ./apps/frontend:/app
     command: sh -c "npm install && npm run dev -- --host"
     ports:
-      - "5175:5173"
+      - "5175:5175"
     environment:
       VITE_API_URL: http://localhost:8000
 
@@ -47,5 +51,26 @@ services:
     ports:
       - "8001:8001"
 
+  ml-service:
+    build:
+      context: ./apps/ml-service
+      dockerfile: Dockerfile
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8002 --reload
+    volumes:
+      - ./apps/ml-service:/app
+      - ml_models:/app/models
+      - ml_cache:/app/cache
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/floodsafe
+      GCP_PROJECT_ID: gen-lang-client-0669818939
+      MODEL_CACHE_DIR: /app/models
+      DATA_CACHE_DIR: /app/cache
+    depends_on:
+      - db
+
 volumes:
   postgres_data:
+  ml_models:
+  ml_cache:

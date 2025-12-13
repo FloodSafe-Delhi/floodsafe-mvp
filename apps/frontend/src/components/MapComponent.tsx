@@ -1,19 +1,32 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMap } from '../lib/map/useMap';
-import { useSensors, useReports, Sensor, Report } from '../lib/api/hooks';
+import { useSensors, useReports, usePredictionGrid, useHistoricalFloods, useHotspots, Sensor, Report } from '../lib/api/hooks';
 import maplibregl from 'maplibre-gl';
 import { Button } from './ui/button';
-import { Plus, Minus, Navigation, Layers, Train, AlertCircle, MapPin } from 'lucide-react';
+import { Plus, Minus, Navigation, Layers, Train, AlertCircle, MapPin, History, Droplets } from 'lucide-react';
 import MapLegend from './MapLegend';
 import SearchBar from './SearchBar';
+import HistoricalFloodsPanel from './HistoricalFloodsPanel';
 import { useCurrentCity, useCityContext } from '../contexts/CityContext';
 import { isWithinCityBounds, getAvailableCities, getCityConfig, type CityKey } from '../lib/map/cityConfigs';
+import { RouteOption, MetroStation } from '../types';
+import { toast } from 'sonner';
 
 interface MapComponentProps {
     className?: string;
     title?: string;
     showControls?: boolean;
     showCitySelector?: boolean;
+    targetLocation?: { lat: number; lng: number } | null;
+    onLocationReached?: () => void;
+    // Navigation routing props
+    navigationRoutes?: RouteOption[];
+    selectedRouteId?: string;
+    navigationOrigin?: { lat: number; lng: number };
+    navigationDestination?: { lat: number; lng: number };
+    nearbyMetros?: MetroStation[];
+    floodZones?: GeoJSON.FeatureCollection;
+    onMetroClick?: (station: MetroStation) => void;
 }
 
 interface LayersVisibility {
@@ -22,22 +35,66 @@ interface LayersVisibility {
     reports: boolean;
     routes: boolean;
     metro: boolean;
+    predictions: boolean;  // ML flood hotspot predictions
+    hotspots: boolean;     // 62 Delhi waterlogging hotspots
 }
 
-export default function MapComponent({ className, title, showControls, showCitySelector }: MapComponentProps) {
+interface MapBounds {
+    minLng: number;
+    minLat: number;
+    maxLng: number;
+    maxLat: number;
+}
+
+export default function MapComponent({
+    className,
+    title,
+    showControls,
+    showCitySelector,
+    targetLocation,
+    onLocationReached,
+    navigationRoutes,
+    selectedRouteId,
+    navigationOrigin,
+    navigationDestination,
+    nearbyMetros,
+    floodZones,
+    onMetroClick
+}: MapComponentProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const city = useCurrentCity();
     const { setCity } = useCityContext();
     const { map, isLoaded } = useMap(mapContainer, city);
     const { data: sensors } = useSensors();
     const { data: reports } = useReports();
+    const { data: historicalFloods } = useHistoricalFloods(city);
     const [layersVisible, setLayersVisible] = useState<LayersVisibility>({
         flood: true,
         sensors: true,
         reports: true,
         routes: true,
-        metro: true
+        metro: true,
+        predictions: true,  // ON by default per user decision
+        hotspots: true      // Waterlogging hotspots ON by default
     });
+    const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
+    const [showHistoricalPanel, setShowHistoricalPanel] = useState(false);
+
+    // Check if predictions are available for current city
+    // Currently, ML predictions are only available for Delhi
+    const isDelhiCity = city === 'delhi';
+
+    // Fetch ML predictions for heatmap (only for Delhi)
+    const { data: predictionGrid } = usePredictionGrid({
+        bounds: mapBounds,
+        resolutionKm: 2.0, // 2km resolution for performance
+        horizonDays: 0,    // Today only
+        enabled: isDelhiCity && layersVisible.predictions && !!mapBounds,
+    });
+
+    // Fetch waterlogging hotspots (only for Delhi)
+    const { data: hotspotsData, error: hotspotsError } = useHotspots(isDelhiCity);
+
     const [isChangingCity, setIsChangingCity] = useState(false);
     const availableCities = showCitySelector ? getAvailableCities() : [];
     const currentCityConfig = getCityConfig(city);
@@ -50,6 +107,29 @@ export default function MapComponent({ className, title, showControls, showCityS
         setTimeout(() => setIsChangingCity(false), 500);
     };
 
+    // Show "Coming Soon" message when switching to non-Delhi city with predictions enabled
+    useEffect(() => {
+        if (!isDelhiCity && layersVisible.predictions) {
+            const cityName = city.charAt(0).toUpperCase() + city.slice(1);
+            toast.info(`Flood predictions coming soon for ${cityName}`, {
+                description: 'ML predictions are currently available only for Delhi',
+                duration: 4000,
+            });
+            // Auto-disable predictions layer for non-Delhi cities
+            setLayersVisible(prev => ({ ...prev, predictions: false }));
+        }
+    }, [city, isDelhiCity, layersVisible.predictions]);
+
+    // Show error toast when hotspots fail to load
+    useEffect(() => {
+        if (hotspotsError && isDelhiCity) {
+            toast.error('Failed to load waterlogging hotspots', {
+                description: 'Some flood risk data may be unavailable',
+                duration: 5000,
+            });
+        }
+    }, [hotspotsError, isDelhiCity]);
+
     // Force resize when the component mounts or className changes
     useEffect(() => {
         if (map) {
@@ -57,11 +137,79 @@ export default function MapComponent({ className, title, showControls, showCityS
         }
     }, [map, className]);
 
+    // Track map bounds for prediction grid (debounced)
     useEffect(() => {
         if (!map || !isLoaded) return;
 
-        // 1. Add Sensors Source & Layer (Existing)
-        if (sensors && !map.getSource('sensors')) {
+        // Verify map is functional - check isStyleLoaded() to prevent sourceCaches race
+        try {
+            if (!map.isStyleLoaded() || !map.getStyle()?.sources) return;
+        } catch {
+            return;
+        }
+
+        const updateBounds = () => {
+            try {
+                const bounds = map.getBounds();
+                setMapBounds({
+                    minLng: bounds.getWest(),
+                    minLat: bounds.getSouth(),
+                    maxLng: bounds.getEast(),
+                    maxLat: bounds.getNorth(),
+                });
+            } catch (error) {
+                console.log('Could not get map bounds:', error);
+            }
+        };
+
+        // Set initial bounds
+        updateBounds();
+
+        // Update bounds on map move (debounced)
+        let timeoutId: ReturnType<typeof setTimeout>;
+        const handleMoveEnd = () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(updateBounds, 500); // Debounce 500ms
+        };
+
+        map.on('moveend', handleMoveEnd);
+
+        return () => {
+            map.off('moveend', handleMoveEnd);
+            clearTimeout(timeoutId);
+        };
+    }, [map, isLoaded]);
+
+    useEffect(() => {
+        if (!map || !isLoaded) return;
+
+        // Verify map is fully initialized and functional
+        // Check isStyleLoaded() to prevent race condition with sourceCaches
+        try {
+            if (!map.isStyleLoaded()) {
+                console.log('Map style not fully loaded yet, waiting...');
+                // Subscribe to styledata event once
+                const onStyleData = () => {
+                    map.off('styledata', onStyleData);
+                    // Re-trigger this effect by forcing a re-render
+                    // The effect will run again when the style is ready
+                };
+                map.on('styledata', onStyleData);
+                return;
+            }
+            const style = map.getStyle();
+            if (!style || !style.sources) {
+                console.log('Map not fully initialized yet, skipping layer update');
+                return;
+            }
+        } catch (e) {
+            console.log('Map not ready yet:', e);
+            return;
+        }
+
+        try {
+            // 1. Add Sensors Source & Layer (Existing)
+            if (sensors && !map.getSource('sensors')) {
             map.addSource('sensors', {
                 type: 'geojson',
                 data: {
@@ -102,30 +250,38 @@ export default function MapComponent({ className, title, showControls, showCityS
         }
 
         // 2. Add Community Reports Source & Layer
-        if (reports && !map.getSource('reports')) {
-            map.addSource('reports', {
-                type: 'geojson',
-                data: {
-                    type: 'FeatureCollection',
-                    features: reports.map((report: Report) => ({
-                        type: 'Feature',
-                        geometry: {
-                            type: 'Point',
-                            coordinates: [report.longitude, report.latitude]
-                        },
-                        properties: {
-                            id: report.id,
-                            description: report.description,
-                            verified: report.verified,
-                            phone_verified: report.phone_verified,
-                            water_depth: report.water_depth || 'unknown',
-                            vehicle_passability: report.vehicle_passability || 'unknown',
-                            iot_validation_score: report.iot_validation_score,
-                            timestamp: report.timestamp
-                        }
-                    }))
-                }
-            });
+        if (reports) {
+            const reportsGeoJSON = {
+                type: 'FeatureCollection' as const,
+                features: reports.map((report: Report) => ({
+                    type: 'Feature' as const,
+                    geometry: {
+                        type: 'Point' as const,
+                        coordinates: [report.longitude, report.latitude]
+                    },
+                    properties: {
+                        id: report.id,
+                        description: report.description,
+                        verified: report.verified,
+                        phone_verified: report.phone_verified,
+                        water_depth: report.water_depth || 'unknown',
+                        vehicle_passability: report.vehicle_passability || 'unknown',
+                        iot_validation_score: report.iot_validation_score,
+                        timestamp: report.timestamp
+                    }
+                }))
+            };
+
+            const existingSource = map.getSource('reports') as maplibregl.GeoJSONSource;
+            if (existingSource) {
+                // Update existing source with new data
+                existingSource.setData(reportsGeoJSON);
+            } else {
+                // Create source and layers for first time
+                map.addSource('reports', {
+                    type: 'geojson',
+                    data: reportsGeoJSON
+                });
 
             // Add outer glow/halo for verified reports
             map.addLayer({
@@ -185,19 +341,50 @@ export default function MapComponent({ className, title, showControls, showCityS
                 const waterDepth = props.water_depth || 'unknown';
                 const vehiclePassability = (props.vehicle_passability || 'unknown').replace('-', ' ');
                 const iotScore = props.iot_validation_score ?? 0;
+                const description = props.description || 'No description provided';
+
+                // Parse timestamp as UTC (backend stores UTC but without 'Z' suffix)
+                const parseUTCTimestamp = (timestamp: string) => {
+                    // If timestamp doesn't have timezone info, treat as UTC
+                    if (!timestamp.endsWith('Z') && !timestamp.includes('+') && !timestamp.includes('-', 10)) {
+                        return new Date(timestamp + 'Z');
+                    }
+                    return new Date(timestamp);
+                };
+
+                // Calculate relative time
+                const getRelativeTime = (timestamp: string) => {
+                    const now = new Date();
+                    const then = parseUTCTimestamp(timestamp);
+                    const diffMs = now.getTime() - then.getTime();
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMins / 60);
+                    const diffDays = Math.floor(diffHours / 24);
+
+                    if (diffMins < 1) return 'Just now';
+                    if (diffMins < 60) return `${diffMins}m ago`;
+                    if (diffHours < 24) return `${diffHours}h ago`;
+                    if (diffDays < 7) return `${diffDays}d ago`;
+                    return then.toLocaleDateString();
+                };
 
                 const popupHTML = `
-                    <div class="p-2 min-w-[200px]">
+                    <div class="p-3 min-w-[240px] max-w-[300px]">
                         <div class="flex items-center gap-2 mb-2">
                             <h3 class="font-bold text-sm">Community Report</h3>
                             ${props.verified ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded">✓ Verified</span>' : '<span class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded">Pending</span>'}
                         </div>
-                        <div class="text-xs space-y-1 text-gray-700">
-                            <p><strong>Water Depth:</strong> <span class="capitalize">${waterDepth}</span></p>
-                            <p><strong>Vehicle:</strong> <span class="capitalize">${vehiclePassability}</span></p>
-                            <p><strong>IoT Score:</strong> ${iotScore}/100</p>
-                            ${props.phone_verified ? '<p class="text-green-600">📱 Phone verified</p>' : ''}
-                            <p class="text-gray-500 text-[10px] mt-2">${new Date(props.timestamp).toLocaleString()}</p>
+                        <p class="text-sm text-gray-800 mb-2 line-clamp-3">${description}</p>
+                        <div class="text-xs space-y-1 text-gray-600 border-t pt-2">
+                            <div class="flex justify-between">
+                                <span><strong>Water:</strong> <span class="capitalize">${waterDepth}</span></span>
+                                <span><strong>Vehicle:</strong> <span class="capitalize">${vehiclePassability}</span></span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span><strong>IoT Score:</strong> ${iotScore}/100</span>
+                                ${props.phone_verified ? '<span class="text-green-600">📱 Verified</span>' : ''}
+                            </div>
+                            <p class="text-gray-400 text-[10px] mt-1">${getRelativeTime(props.timestamp)} · ${parseUTCTimestamp(props.timestamp).toLocaleString()}</p>
                         </div>
                     </div>
                 `;
@@ -216,76 +403,594 @@ export default function MapComponent({ className, title, showControls, showCityS
             map.on('mouseleave', 'reports-layer', () => {
                 map.getCanvas().style.cursor = '';
             });
+            }
         }
 
-        // 3. Add Safe Routes (Mock Data for Visualization)
-        if (!map.getSource('safe-routes')) {
-            map.addSource('safe-routes', {
+        // 2b. Historical Flood Events - Now shown as info panel instead of map markers
+        // (See HistoricalFloodsPanel component - toggled via History button)
+
+        // 2c. Add Waterlogging Hotspots Layer (62 Delhi locations with ML risk)
+        if (hotspotsData && isDelhiCity) {
+            const hotspotsGeoJSON = {
+                type: 'FeatureCollection' as const,
+                features: hotspotsData.features
+            };
+
+            const existingSource = map.getSource('hotspots') as maplibregl.GeoJSONSource;
+            if (existingSource) {
+                // Update existing source with new data
+                existingSource.setData(hotspotsGeoJSON);
+            } else {
+                // Create source and layers for first time
+                map.addSource('hotspots', {
+                    type: 'geojson',
+                    data: hotspotsGeoJSON
+                });
+
+                // Add halo/glow effect for hotspots - FHI color primary, fallback to ML risk
+                map.addLayer({
+                    id: 'hotspots-halo',
+                    type: 'circle',
+                    source: 'hotspots',
+                    paint: {
+                        'circle-radius': 18,
+                        'circle-color': ['coalesce', ['get', 'fhi_color'], ['get', 'risk_color']],
+                        'circle-opacity': 0.25,
+                        'circle-blur': 0.8
+                    }
+                });
+
+                // Main hotspot markers - FHI color primary (live weather), fallback to ML risk
+                map.addLayer({
+                    id: 'hotspots-layer',
+                    type: 'circle',
+                    source: 'hotspots',
+                    paint: {
+                        'circle-radius': 8,
+                        'circle-color': ['coalesce', ['get', 'fhi_color'], ['get', 'risk_color']],
+                        'circle-stroke-width': 2,
+                        'circle-stroke-color': '#ffffff',
+                        'circle-opacity': 0.9
+                    }
+                });
+
+                // Add click handler for hotspots
+                map.on('click', 'hotspots-layer', (e: maplibregl.MapMouseEvent) => {
+                    const features = map.queryRenderedFeatures(e.point, { layers: ['hotspots-layer'] });
+                    if (!features || features.length === 0) return;
+
+                    const feature = features[0];
+                    if (!feature.geometry || feature.geometry.type !== 'Point') return;
+                    const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+                    const props = feature.properties;
+
+                    // Parse risk probability for display (ML Risk)
+                    const riskPct = Math.round((props.risk_probability || 0) * 100);
+                    const riskLevel = props.risk_level || 'Unknown';
+                    const riskColor = props.risk_color || '#94a3b8';
+
+                    // Parse FHI (Flood Hazard Index - Live)
+                    const fhiScore = props.fhi_score ?? null;
+                    const fhiLevel = props.fhi_level || null;
+                    const fhiColor = props.fhi_color || '#9ca3af';
+                    const fhiPct = fhiScore !== null ? Math.round(fhiScore * 100) : null;
+                    const elevation = props.elevation_m ?? null;
+
+                    // Use FHI color as primary indicator color
+                    const primaryColor = fhiColor || riskColor;
+
+                    const popupHTML = `
+                        <div class="p-3 min-w-[240px] max-w-[320px]">
+                            <div class="flex items-center gap-2 mb-2">
+                                <div class="w-3 h-3 rounded-full" style="background-color: ${primaryColor}"></div>
+                                <h3 class="font-bold text-sm">Waterlogging Hotspot</h3>
+                            </div>
+                            <p class="text-sm font-medium text-gray-800 mb-2">${props.name || 'Unknown Location'}</p>
+
+                            <!-- FHI Section (PRIMARY - Live Weather) -->
+                            ${fhiScore !== null ? `
+                            <div class="text-xs space-y-1 text-gray-600 pt-2 pb-2">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-gray-500 flex items-center gap-1">
+                                        <span class="w-2 h-2 rounded-full animate-pulse" style="background-color: ${fhiColor}"></span>
+                                        Live Flood Risk
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded text-xs font-bold" style="background-color: ${fhiColor}20; color: ${fhiColor}">
+                                        ${fhiLevel ? fhiLevel.toUpperCase() : 'N/A'}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 bg-gray-200 rounded-full h-2.5">
+                                        <div
+                                            class="h-2.5 rounded-full transition-all"
+                                            style="width: ${fhiPct}%; background-color: ${fhiColor}"
+                                        ></div>
+                                    </div>
+                                    <span class="text-sm font-bold" style="color: ${fhiColor}">
+                                        ${fhiPct}%
+                                    </span>
+                                </div>
+                                ${elevation !== null ? `<div class="text-xs text-gray-400 mt-1">Elevation: ${elevation.toFixed(1)}m</div>` : ''}
+                                <p class="text-gray-400 text-[10px] italic mt-1">Based on current weather conditions</p>
+                            </div>
+                            ` : ''}
+
+                            <!-- ML Risk Score Section (Secondary - Static) -->
+                            <div class="text-xs space-y-1 text-gray-500 ${fhiScore !== null ? 'mt-2 pt-2 border-t border-gray-200' : 'pt-2'}">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-400">Base Risk (ML)</span>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-medium" style="background-color: ${riskColor}15; color: ${riskColor}">${riskLevel.toUpperCase()}</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <div class="flex-1 bg-gray-100 rounded-full h-1.5">
+                                        <div class="h-1.5 rounded-full transition-all" style="width: ${riskPct}%; background-color: ${riskColor}"></div>
+                                    </div>
+                                    <span class="text-xs" style="color: ${riskColor}">${riskPct}%</span>
+                                </div>
+                                <p class="text-gray-300 text-[9px] italic">Terrain & land cover baseline</p>
+                            </div>
+
+                            <!-- Zone Info -->
+                            ${props.zone ? `
+                            <div class="text-xs text-gray-500 mt-2 pt-2 border-t">
+                                <strong>Zone:</strong> ${props.zone}
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+
+                    new maplibregl.Popup({ offset: 15 })
+                        .setLngLat(coordinates)
+                        .setHTML(popupHTML)
+                        .addTo(map);
+                });
+
+                // Change cursor on hover
+                map.on('mouseenter', 'hotspots-layer', () => {
+                    map.getCanvas().style.cursor = 'pointer';
+                });
+
+                map.on('mouseleave', 'hotspots-layer', () => {
+                    map.getCanvas().style.cursor = '';
+                });
+            }
+        }
+
+        // 3. Add Navigation Routes
+        if (!map.getSource('navigation-routes')) {
+            map.addSource('navigation-routes', {
                 type: 'geojson',
                 data: {
                     type: 'FeatureCollection',
-                    features: [
-                        {
-                            type: 'Feature',
-                            properties: { type: 'safe' },
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: [
-                                    [77.5777, 12.9776],
-                                    [77.5800, 12.9800],
-                                    [77.5850, 12.9820]
-                                ]
-                            }
-                        },
-                        {
-                            type: 'Feature',
-                            properties: { type: 'flooded' },
-                            geometry: {
-                                type: 'LineString',
-                                coordinates: [
-                                    [77.5700, 12.9700],
-                                    [77.5720, 12.9720],
-                                    [77.5750, 12.9750]
-                                ]
-                            }
-                        }
-                    ]
+                    features: []
                 }
             });
 
             map.addLayer({
                 id: 'routes-layer',
                 type: 'line',
-                source: 'safe-routes',
+                source: 'navigation-routes',
                 layout: {
                     'line-join': 'round',
-                    'line-cap': 'round'
+                    'line-cap': 'round',
+                    'visibility': 'visible'  // Toggle effect controls visibility
                 },
                 paint: {
                     'line-color': [
                         'match',
                         ['get', 'type'],
-                        'safe', '#22c55e', // Green
-                        'flooded', '#ef4444', // Red
-                        '#888888'
+                        'safe', '#22c55e',       // Green
+                        'balanced', '#3b82f6',   // Blue
+                        'fast', '#f97316',       // Orange
+                        '#888888'                // Default gray
                     ],
-                    'line-width': 4,
-                    'line-opacity': 0.8
+                    'line-width': [
+                        'case',
+                        ['==', ['get', 'id'], selectedRouteId || ''],
+                        6,  // Selected route is thicker
+                        3   // Others are thinner
+                    ],
+                    'line-opacity': [
+                        'case',
+                        ['==', ['get', 'id'], selectedRouteId || ''],
+                        1.0,  // Selected route is fully opaque
+                        0.6   // Others are semi-transparent
+                    ]
                 }
             });
         }
 
-        // 4. Add Pulse Effect for Critical Sensors
+        // Update navigation routes data
+        if (navigationRoutes && navigationRoutes.length > 0) {
+            const source = map.getSource('navigation-routes') as maplibregl.GeoJSONSource;
+            if (source) {
+                const features = navigationRoutes.map(route => ({
+                    type: 'Feature' as const,
+                    properties: {
+                        id: route.id,
+                        type: route.type,
+                        distance: route.distance_meters,
+                        duration: route.duration_seconds,
+                        safety_score: route.safety_score
+                    },
+                    geometry: route.geometry
+                }));
+
+                source.setData({
+                    type: 'FeatureCollection',
+                    features
+                });
+            }
+        }
+
+        // 4. Add Origin/Destination Markers
+        if (!map.getSource('navigation-markers')) {
+            map.addSource('navigation-markers', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            // Origin marker (green)
+            map.addLayer({
+                id: 'navigation-origin',
+                type: 'circle',
+                source: 'navigation-markers',
+                filter: ['==', 'type', 'origin'],
+                paint: {
+                    'circle-radius': 10,
+                    'circle-color': '#22c55e',
+                    'circle-stroke-width': 3,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+
+            // Destination marker (red)
+            map.addLayer({
+                id: 'navigation-destination',
+                type: 'circle',
+                source: 'navigation-markers',
+                filter: ['==', 'type', 'destination'],
+                paint: {
+                    'circle-radius': 10,
+                    'circle-color': '#ef4444',
+                    'circle-stroke-width': 3,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+        }
+
+        // Update origin/destination markers
+        if (navigationOrigin || navigationDestination) {
+            const source = map.getSource('navigation-markers') as maplibregl.GeoJSONSource;
+            if (source) {
+                const features = [];
+                if (navigationOrigin) {
+                    features.push({
+                        type: 'Feature' as const,
+                        properties: { type: 'origin' },
+                        geometry: {
+                            type: 'Point' as const,
+                            coordinates: [navigationOrigin.lng, navigationOrigin.lat]
+                        }
+                    });
+                }
+                if (navigationDestination) {
+                    features.push({
+                        type: 'Feature' as const,
+                        properties: { type: 'destination' },
+                        geometry: {
+                            type: 'Point' as const,
+                            coordinates: [navigationDestination.lng, navigationDestination.lat]
+                        }
+                    });
+                }
+
+                source.setData({
+                    type: 'FeatureCollection',
+                    features
+                });
+            }
+        }
+
+        // 5. Add Nearby Metro Stations
+        if (!map.getSource('nearby-metros')) {
+            map.addSource('nearby-metros', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            map.addLayer({
+                id: 'nearby-metros-layer',
+                type: 'circle',
+                source: 'nearby-metros',
+                layout: {
+                    'visibility': 'visible'  // Toggle effect controls visibility
+                },
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': ['get', 'color'],
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+
+            // Add metro station labels
+            map.addLayer({
+                id: 'nearby-metros-labels',
+                type: 'symbol',
+                source: 'nearby-metros',
+                layout: {
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Regular'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.5],
+                    'visibility': 'visible'  // Toggle effect controls visibility
+                },
+                paint: {
+                    'text-color': '#000000',
+                    'text-halo-color': '#ffffff',
+                    'text-halo-width': 2
+                }
+            });
+
+            // Add click handler for metro stations
+            map.on('click', 'nearby-metros-layer', (e) => {
+                const features = map.queryRenderedFeatures(e.point, { layers: ['nearby-metros-layer'] });
+                if (features && features.length > 0 && onMetroClick) {
+                    const feature = features[0];
+                    const station: MetroStation = {
+                        id: feature.properties?.id,
+                        name: feature.properties?.name,
+                        line: feature.properties?.line,
+                        color: feature.properties?.color,
+                        lat: feature.properties?.lat,
+                        lng: feature.properties?.lng,
+                        distance_meters: feature.properties?.distance_meters,
+                        walking_minutes: feature.properties?.walking_minutes
+                    };
+                    onMetroClick(station);
+                }
+            });
+
+            map.on('mouseenter', 'nearby-metros-layer', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'nearby-metros-layer', () => {
+                map.getCanvas().style.cursor = '';
+            });
+        }
+
+        // Update nearby metros data
+        if (nearbyMetros && nearbyMetros.length > 0) {
+            const source = map.getSource('nearby-metros') as maplibregl.GeoJSONSource;
+            if (source) {
+                const features = nearbyMetros.map(station => ({
+                    type: 'Feature' as const,
+                    properties: {
+                        id: station.id,
+                        name: station.name,
+                        line: station.line,
+                        color: station.color,
+                        lat: station.lat,
+                        lng: station.lng,
+                        distance_meters: station.distance_meters,
+                        walking_minutes: station.walking_minutes
+                    },
+                    geometry: {
+                        type: 'Point' as const,
+                        coordinates: [station.lng, station.lat]
+                    }
+                }));
+
+                source.setData({
+                    type: 'FeatureCollection',
+                    features
+                });
+            }
+        }
+
+        // 6. Add Flood Zones overlay from route calculation
+        if (!map.getSource('route-flood-zones')) {
+            map.addSource('route-flood-zones', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+
+            // Insert flood zones below routes layer
+            map.addLayer({
+                id: 'route-flood-zones-layer',
+                type: 'fill',
+                source: 'route-flood-zones',
+                layout: {
+                    'visibility': 'visible'
+                },
+                paint: {
+                    'fill-color': '#ef4444',
+                    'fill-opacity': 0.5  // Increased from 0.3 for better visibility
+                }
+            }, 'routes-layer'); // Insert below routes layer
+
+            // Add border for better visibility
+            map.addLayer({
+                id: 'route-flood-zones-border',
+                type: 'line',
+                source: 'route-flood-zones',
+                layout: {
+                    'visibility': 'visible'
+                },
+                paint: {
+                    'line-color': '#dc2626',
+                    'line-width': 2,
+                    'line-opacity': 0.6
+                }
+            }, 'routes-layer');
+        }
+
+        // Update flood zones data
+        if (floodZones) {
+            const source = map.getSource('route-flood-zones') as maplibregl.GeoJSONSource;
+            if (source) {
+                source.setData(floodZones);
+            }
+        }
+
+        // 7. Add Pulse Effect for Critical Sensors
         // (Optional polish, can add later if needed)
 
-    }, [map, isLoaded, sensors, reports]);
+        } catch (error) {
+            console.error('Error updating map layers:', error);
+        }
+
+    }, [map, isLoaded, sensors, reports, hotspotsData, isDelhiCity, navigationRoutes, selectedRouteId, navigationOrigin, navigationDestination, nearbyMetros, floodZones, onMetroClick]);
+
+    // Auto-zoom map to fit routes when calculated
+    useEffect(() => {
+        if (!map || !isLoaded || !navigationRoutes || navigationRoutes.length === 0) return;
+
+        // Verify map is functional - check isStyleLoaded() to prevent sourceCaches race
+        try {
+            if (!map.isStyleLoaded() || !map.getStyle()?.sources) return;
+        } catch {
+            return;
+        }
+
+        try {
+            const allCoords: [number, number][] = [];
+
+        // Collect all coordinates from all routes
+        navigationRoutes.forEach(route => {
+            if (route.geometry?.coordinates) {
+                route.geometry.coordinates.forEach(coord => {
+                    allCoords.push(coord as [number, number]);
+                });
+            }
+        });
+
+        // Add origin and destination markers
+        if (navigationOrigin) {
+            allCoords.push([navigationOrigin.lng, navigationOrigin.lat]);
+        }
+        if (navigationDestination) {
+            allCoords.push([navigationDestination.lng, navigationDestination.lat]);
+        }
+
+        // If we have coordinates, fit the map to show them all
+        if (allCoords.length > 0) {
+            const bounds = allCoords.reduce((b, coord) => {
+                return b.extend(coord as maplibregl.LngLatLike);
+            }, new maplibregl.LngLatBounds(allCoords[0], allCoords[0]));
+
+            map.fitBounds(bounds, {
+                padding: { top: 100, bottom: 250, left: 50, right: 50 },
+                duration: 1000,
+                maxZoom: 15 // Don't zoom in too much
+            });
+        }
+        } catch (error) {
+            console.error('Error auto-zooming map:', error);
+        }
+    }, [map, isLoaded, navigationRoutes, navigationOrigin, navigationDestination]);
+
+    // 5. Add ML Prediction Heatmap Layer
+    useEffect(() => {
+        if (!map || !isLoaded) return;
+
+        // Verify map is functional - check isStyleLoaded() to prevent sourceCaches race
+        try {
+            if (!map.isStyleLoaded() || !map.getStyle()?.sources) return;
+        } catch {
+            return;
+        }
+
+        try {
+            // Create predictions source and heatmap layer if not exists
+            if (!map.getSource('predictions')) {
+            map.addSource('predictions', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+
+            // Add heatmap layer for flood predictions
+            // Insert before other layers so it appears as a background
+            map.addLayer({
+                id: 'predictions-heatmap',
+                type: 'heatmap',
+                source: 'predictions',
+                paint: {
+                    // Weight based on flood probability
+                    'heatmap-weight': ['get', 'flood_probability'],
+                    // Intensity of heatmap
+                    'heatmap-intensity': 1.2,
+                    // Color gradient from green (low risk) to red (high risk)
+                    'heatmap-color': [
+                        'interpolate',
+                        ['linear'],
+                        ['heatmap-density'],
+                        0.0, 'rgba(34, 197, 94, 0)',     // Green - transparent (low)
+                        0.2, 'rgba(34, 197, 94, 0.3)',  // Green - light
+                        0.4, 'rgba(234, 179, 8, 0.5)',  // Yellow (moderate)
+                        0.6, 'rgba(249, 115, 22, 0.7)', // Orange (high)
+                        0.8, 'rgba(239, 68, 68, 0.85)', // Red (extreme)
+                        1.0, 'rgba(127, 29, 29, 0.95)'  // Dark Red (critical)
+                    ],
+                    // Radius in pixels
+                    'heatmap-radius': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        8, 20,   // At zoom 8, radius = 20px
+                        12, 40,  // At zoom 12, radius = 40px
+                        16, 60   // At zoom 16, radius = 60px
+                    ],
+                    // Overall opacity
+                    'heatmap-opacity': 0.7
+                }
+            }, 'sensors-layer'); // Insert below sensors layer
+        }
+
+        // Update predictions data when available
+        if (predictionGrid?.features) {
+            const source = map.getSource('predictions') as maplibregl.GeoJSONSource;
+            if (source) {
+                source.setData({
+                    type: 'FeatureCollection',
+                    features: predictionGrid.features.map(f => ({
+                        type: 'Feature' as const,
+                        geometry: f.geometry,
+                        properties: {
+                            flood_probability: f.properties.flood_probability,
+                            risk_level: f.properties.risk_level
+                        }
+                    }))
+                });
+            }
+        }
+        } catch (error) {
+            console.error('Error updating prediction heatmap:', error);
+        }
+    }, [map, isLoaded, predictionGrid]);
 
     // Toggle layer visibility
     useEffect(() => {
         if (!map || !isLoaded) return;
 
+        // Verify map is functional - check isStyleLoaded() to prevent sourceCaches race
+        try {
+            if (!map.isStyleLoaded() || !map.getStyle()?.sources) return;
+        } catch {
+            return;
+        }
+
         // Toggle flood layer
-        if (map.getLayer('flood-layer')) {
+        try {
+            if (map.getLayer('flood-layer')) {
             map.setLayoutProperty('flood-layer', 'visibility', layersVisible.flood ? 'visible' : 'none');
         }
 
@@ -307,15 +1012,42 @@ export default function MapComponent({ className, title, showControls, showCityS
             map.setLayoutProperty('routes-layer', 'visibility', layersVisible.routes ? 'visible' : 'none');
         }
 
-        // Toggle metro layers
-        if (map.getLayer('metro-lines-layer')) {
-            map.setLayoutProperty('metro-lines-layer', 'visibility', layersVisible.metro ? 'visible' : 'none');
+        // Toggle metro layers (with error handling for missing layers)
+        try {
+            // Metro lines from useMap.ts
+            if (map.getLayer('metro-lines-layer')) {
+                map.setLayoutProperty('metro-lines-layer', 'visibility', layersVisible.metro ? 'visible' : 'none');
+            }
+            if (map.getLayer('metro-stations-layer')) {
+                map.setLayoutProperty('metro-stations-layer', 'visibility', layersVisible.metro ? 'visible' : 'none');
+            }
+            if (map.getLayer('metro-station-names-layer')) {
+                map.setLayoutProperty('metro-station-names-layer', 'visibility', layersVisible.metro ? 'visible' : 'none');
+            }
+            // Nearby metro stations from MapComponent
+            if (map.getLayer('nearby-metros-layer')) {
+                map.setLayoutProperty('nearby-metros-layer', 'visibility', layersVisible.metro ? 'visible' : 'none');
+            }
+            if (map.getLayer('nearby-metros-labels')) {
+                map.setLayoutProperty('nearby-metros-labels', 'visibility', layersVisible.metro ? 'visible' : 'none');
+            }
+        } catch (error) {
+            console.warn('Metro layers not available:', error);
         }
-        if (map.getLayer('metro-stations-layer')) {
-            map.setLayoutProperty('metro-stations-layer', 'visibility', layersVisible.metro ? 'visible' : 'none');
+
+        // Heatmap removed - FHI hotspots provide better spatial variation
+
+        // Historical floods - now shown as info panel, not map layer
+
+        // Toggle hotspots layers
+        if (map.getLayer('hotspots-halo')) {
+            map.setLayoutProperty('hotspots-halo', 'visibility', layersVisible.hotspots ? 'visible' : 'none');
         }
-        if (map.getLayer('metro-station-names-layer')) {
-            map.setLayoutProperty('metro-station-names-layer', 'visibility', layersVisible.metro ? 'visible' : 'none');
+        if (map.getLayer('hotspots-layer')) {
+            map.setLayoutProperty('hotspots-layer', 'visibility', layersVisible.hotspots ? 'visible' : 'none');
+        }
+        } catch (error) {
+            console.error('Error toggling layer visibility:', error);
         }
     }, [map, isLoaded, layersVisible]);
 
@@ -412,6 +1144,13 @@ export default function MapComponent({ className, title, showControls, showCityS
     useEffect(() => {
         if (!map || !isLoaded) return;
 
+        // Verify map is functional - check isStyleLoaded() to prevent sourceCaches race
+        try {
+            if (!map.isStyleLoaded() || !map.getStyle()?.sources) return;
+        } catch {
+            return;
+        }
+
         try {
             const source = map.getSource('search-result') as maplibregl.GeoJSONSource;
             if (source) {
@@ -426,10 +1165,39 @@ export default function MapComponent({ className, title, showControls, showCityS
         }
     }, [city, map, isLoaded]);
 
+    // Fly to target location when targetLocation prop changes
+    useEffect(() => {
+        if (!targetLocation || !isLoaded || !map) return;
+
+        // Fly to the target location with smooth animation
+        map.flyTo({
+            center: [targetLocation.lng, targetLocation.lat],
+            zoom: 16,
+            duration: 2000,
+            essential: true
+        });
+
+        // Add a temporary marker at the target location
+        const marker = new maplibregl.Marker({ color: '#ef4444' })
+            .setLngLat([targetLocation.lng, targetLocation.lat])
+            .addTo(map);
+
+        // Call callback after animation completes
+        const callbackTimer = setTimeout(() => {
+            onLocationReached?.();
+        }, 2100);
+
+        // Cleanup function to remove marker and clear timeout
+        return () => {
+            clearTimeout(callbackTimer);
+            marker.remove();
+        };
+    }, [targetLocation, isLoaded, map, onLocationReached]);
+
     return (
         <div className="relative w-full h-full">
             {/* Title and Search Bar - Top Left */}
-            {title && (
+            {title && !showHistoricalPanel && (
                 <div className="absolute pointer-events-auto flex flex-col gap-2" style={{ top: '16px', left: '24px', zIndex: 100 }}>
                     <div className="bg-white/90 backdrop-blur-md shadow-lg rounded-lg px-4 py-2">
                         <h1 className="text-lg font-bold text-gray-900">{title}</h1>
@@ -539,6 +1307,22 @@ export default function MapComponent({ className, title, showControls, showCityS
                         >
                             <AlertCircle className="h-5 w-5" />
                         </Button>
+                        <Button
+                            size="icon"
+                            onClick={() => setShowHistoricalPanel(prev => !prev)}
+                            className={`${showHistoricalPanel ? '!bg-purple-500 !hover:bg-purple-600 !text-white' : '!bg-white !hover:bg-gray-100 !text-gray-800 border-2 border-gray-300'} shadow-xl rounded-full w-11 h-11 !opacity-100`}
+                            title="View historical flood events (1967-2023)"
+                        >
+                            <History className="h-5 w-5" />
+                        </Button>
+                        <Button
+                            size="icon"
+                            onClick={() => setLayersVisible(prev => ({ ...prev, hotspots: !prev.hotspots }))}
+                            className={`${layersVisible.hotspots ? '!bg-cyan-500 !hover:bg-cyan-600 !text-white' : '!bg-white !hover:bg-gray-100 !text-gray-800 border-2 border-gray-300'} shadow-xl rounded-full w-11 h-11 !opacity-100`}
+                            title="Toggle waterlogging hotspots (62 Delhi locations)"
+                        >
+                            <Droplets className="h-5 w-5" />
+                        </Button>
                     </div>
 
                     {/* Map Legend - Bottom Left */}
@@ -547,6 +1331,25 @@ export default function MapComponent({ className, title, showControls, showCityS
                     </div>
                 </>
             )}
+
+            {/* Historical Floods Info Panel - Overlay */}
+            <HistoricalFloodsPanel
+                floods={historicalFloods?.features?.map((f) => ({
+                    id: f.properties.id || '',
+                    date: f.properties.date || '',
+                    districts: f.properties.districts || '',
+                    severity: f.properties.severity || 'minor',
+                    fatalities: f.properties.fatalities || 0,
+                    injured: f.properties.injured || 0,
+                    displaced: f.properties.displaced || 0,
+                    duration_days: f.properties.duration_days,
+                    main_cause: f.properties.main_cause || '',
+                })) || []}
+                onClose={() => setShowHistoricalPanel(false)}
+                isOpen={showHistoricalPanel}
+                cityName={currentCityConfig.displayName}
+                comingSoonMessage={historicalFloods?.metadata?.message}
+            />
         </div>
     );
 }

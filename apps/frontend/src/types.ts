@@ -13,6 +13,7 @@ export interface FloodAlert {
     isActive: boolean;
     color: 'red' | 'orange' | 'yellow' | 'green';
     coordinates: [number, number];
+    timestamp?: string; // Sensor last_ping timestamp
 }
 
 export type WaterDepth = 'ankle' | 'knee' | 'waist' | 'impassable';
@@ -66,20 +67,45 @@ export interface RouteResponse {
     warnings: string[];
 }
 
+export interface MetroStation {
+    id: string;
+    name: string;
+    line: string;
+    color: string;
+    lat: number;
+    lng: number;
+    distance_meters: number;
+    walking_minutes: number;
+}
+
+export interface RouteCalculationRequest {
+    origin: { lat: number; lng: number };
+    destination: { lat: number; lng: number };
+    mode: 'driving' | 'walking' | 'cycling' | 'metro' | 'combined';
+    city: string;
+    avoid_ml_risk?: boolean;
+}
+
+export interface RouteCalculationResponse {
+    routes: RouteOption[];
+    flood_zones: GeoJSON.FeatureCollection;
+}
+
 // User type - used across the application
 export interface User {
     id: string;
     username: string;
-    email: string;
+    email?: string;  // Optional for phone-auth users
     phone?: string;
     profile_photo_url?: string;
     role: string;
-    created_at: string;
+    created_at?: string;  // Optional since auth endpoint may not return it
     points: number;
     level: number;
-    reports_count: number;
-    verified_reports_count: number;
+    reports_count?: number;  // Optional since auth endpoint may not return it
+    verified_reports_count?: number;  // Optional since auth endpoint may not return it
     badges?: string[];
+    reputation_score?: number;  // Added for auth users
     // Profile-specific optional fields
     language?: string;
     notification_push?: boolean;
@@ -92,6 +118,39 @@ export interface User {
         warning: boolean;
         emergency: boolean;
     };
+    // Onboarding & City Preference
+    city_preference?: 'bangalore' | 'delhi';
+    profile_complete?: boolean;
+    onboarding_step?: number;  // 1-5, tracks current step if incomplete
+    // Privacy settings
+    leaderboard_visible?: boolean;
+    profile_public?: boolean;
+    display_name?: string | null;
+}
+
+// Daily Route types for user's regular commute routes
+export interface DailyRoute {
+    id: string;
+    user_id: string;
+    name: string;
+    origin_latitude: number;
+    origin_longitude: number;
+    destination_latitude: number;
+    destination_longitude: number;
+    transport_mode: 'driving' | 'walking' | 'metro' | 'combined';
+    notify_on_flood: boolean;
+    created_at: string;
+}
+
+export interface DailyRouteCreate {
+    user_id: string;
+    name: string;
+    origin_latitude: number;
+    origin_longitude: number;
+    destination_latitude: number;
+    destination_longitude: number;
+    transport_mode?: 'driving' | 'walking' | 'metro' | 'combined';
+    notify_on_flood?: boolean;
 }
 
 // Location-related types for MapPicker
@@ -132,6 +191,69 @@ export interface GeocodingResult {
     };
 }
 
+// ============================================================================
+// UNIFIED SEARCH TYPES
+// ============================================================================
+
+export type SearchIntent = 'location' | 'report' | 'user' | 'mixed' | 'empty';
+
+export interface SearchLocationResult {
+    type: 'location';
+    display_name: string;
+    lat: number;
+    lng: number;
+    address: Record<string, string>;
+    importance: number;
+    formatted_name: string;
+}
+
+export interface SearchReportResult {
+    type: 'report';
+    id: string;
+    description: string;
+    lat: number | null;
+    lng: number | null;
+    water_depth: string | null;
+    vehicle_passability: string | null;
+    verified: boolean;
+    timestamp: string | null;
+    media_url: string | null;
+    highlight: string;
+}
+
+export interface SearchUserResult {
+    type: 'user';
+    id: string;
+    username: string;
+    display_name: string | null;
+    points: number;
+    level: number;
+    reports_count: number;
+    profile_photo_url: string | null;
+}
+
+export interface SearchSuggestion {
+    type: 'tip' | 'action' | 'popular';
+    text: string;
+    options?: string[];
+    action?: string;
+    data?: SearchLocationResult;
+}
+
+export interface UnifiedSearchResponse {
+    query: string;
+    intent: SearchIntent;
+    locations: SearchLocationResult[];
+    reports: SearchReportResult[];
+    users: SearchUserResult[];
+    suggestions: SearchSuggestion[];
+}
+
+export interface TrendingSearchResponse {
+    trending: string[];
+    recent_areas: string[];
+}
+
 // Photo capture types for geotagged report photos
 export interface PhotoGps {
     lat: number;
@@ -150,4 +272,316 @@ export interface PhotoCaptureProps {
     reportedLocation: LocationData | null;
     onPhotoCapture: (photo: PhotoData | null) => void;
     photo: PhotoData | null;
+}
+
+// ============================================================================
+// WATCH AREA TYPES (for onboarding & alerts)
+// ============================================================================
+
+export interface WatchArea {
+    id: string;
+    user_id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    radius: number;
+    created_at: string;
+}
+
+export interface WatchAreaCreate {
+    user_id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+    radius?: number;  // defaults to 1000m
+}
+
+// ============================================================================
+// ONBOARDING TYPES
+// ============================================================================
+
+// Onboarding form state (local, not persisted)
+export interface OnboardingFormState {
+    currentStep: number;  // 1-5
+
+    // Step 1: City
+    city: 'bangalore' | 'delhi' | null;
+
+    // Step 2: Profile
+    username: string;
+    phone: string;
+
+    // Step 3: Watch Areas (accumulated)
+    watchAreas: WatchAreaCreate[];
+
+    // Step 4: Daily Routes (accumulated)
+    dailyRoutes: DailyRouteCreate[];
+
+    // Validation
+    errors: Record<string, string>;
+    isSubmitting: boolean;
+}
+
+export type OnboardingAction =
+    | { type: 'SET_CITY'; payload: 'bangalore' | 'delhi' }
+    | { type: 'SET_PROFILE'; payload: { username: string; phone: string } }
+    | { type: 'ADD_WATCH_AREA'; payload: WatchAreaCreate }
+    | { type: 'REMOVE_WATCH_AREA'; payload: number }  // index
+    | { type: 'ADD_DAILY_ROUTE'; payload: DailyRouteCreate }
+    | { type: 'REMOVE_DAILY_ROUTE'; payload: number }  // index
+    | { type: 'NEXT_STEP' }
+    | { type: 'PREV_STEP' }
+    | { type: 'SET_STEP'; payload: number }
+    | { type: 'SET_ERROR'; payload: { field: string; message: string } }
+    | { type: 'CLEAR_ERRORS' }
+    | { type: 'SET_SUBMITTING'; payload: boolean };
+
+// ============================================================================
+// FLOOD PREDICTION TYPES (ML Hotspot Visualization)
+// ============================================================================
+
+export type FloodRiskLevel = 'low' | 'moderate' | 'high' | 'extreme';
+
+// ============================================================================
+// FLOOD HAZARD INDEX (FHI) TYPES - Live weather-based hazard assessment
+// ============================================================================
+
+export type FHILevel = 'low' | 'moderate' | 'high' | 'extreme';
+
+export interface FHIComponents {
+    P: number;  // Precipitation (0-1)
+    I: number;  // Intensity (0-1)
+    S: number;  // Soil saturation (0-1)
+    A: number;  // Antecedent conditions (0-1)
+    R: number;  // Runoff potential (0-1)
+    E: number;  // Elevation risk (0-1)
+}
+
+export interface FHIConfidence {
+    precipitation: 'high' | 'medium' | 'low';
+    intensity: 'high' | 'medium' | 'low';
+    saturation: 'high' | 'medium' | 'low';
+    overall: 'high' | 'medium' | 'low';
+    notes: string[];
+}
+
+export interface FloodHazardIndex {
+    fhi_score: number;        // 0.0-1.0 (with safety factor)
+    fhi_score_raw?: number;   // 0.0-1.0 (without safety factor)
+    fhi_level: FHILevel;      // Risk classification
+    fhi_color: string;        // Hex color for UI (#22c55e, #eab308, #f97316, #ef4444)
+    elevation_m: number;      // Elevation in meters
+    components?: FHIComponents;  // Breakdown (optional, available on single hotspot)
+    monsoon_modifier?: number;   // 1.0 or 1.2 during monsoon season
+    is_urban_calibrated?: boolean;  // Whether urban calibration was applied
+    confidence?: FHIConfidence;     // Confidence indicators
+}
+
+export interface FHIResponse extends FloodHazardIndex {
+    precipitation_24h_mm: number;
+    precipitation_48h_mm: number;
+    precipitation_72h_mm: number;
+    precipitation_corrected_24h_mm: number;  // With 1.2x safety factor
+    soil_moisture_raw: number;    // Raw API value (not used for urban)
+    saturation_proxy: number;     // Hybrid urban saturation proxy
+    surface_pressure_hpa: number;
+    is_monsoon: boolean;
+}
+
+export interface PredictionGridFeature {
+    type: 'Feature';
+    geometry: {
+        type: 'Point';
+        coordinates: [number, number]; // [lng, lat]
+    };
+    properties: {
+        flood_probability: number; // 0.0 - 1.0
+        risk_level: FloodRiskLevel;
+    };
+}
+
+export interface PredictionGridResponse {
+    type: 'FeatureCollection';
+    features: PredictionGridFeature[];
+    metadata: {
+        generated_at: string;
+        model: string;
+        grid_points: number;
+        resolution_km: number;
+        horizon_days: number;
+        bounds: {
+            min_lat: number;
+            max_lat: number;
+            min_lng: number;
+            max_lng: number;
+        };
+    };
+}
+
+// ============================================================================
+// ROUTE COMPARISON TYPES (Normal vs FloodSafe route analysis)
+// ============================================================================
+
+export type FloodSeverity = 'none' | 'ankle' | 'knee' | 'waist' | 'impassable' | 'warning' | 'critical';
+
+export interface RiskBreakdown {
+    // Current data sources
+    active_reports: number;
+    sensor_warnings: number;
+
+    // ML sources (scalable slots)
+    ml_high_risk_zones: number;
+    ml_extreme_risk_zones: number;
+    ml_max_probability: number;
+    ml_avg_probability: number;
+
+    // Future expansion
+    historical_flood_frequency: number;
+    current_rain_intensity_mm: number;
+    forecast_rain_24h_mm: number;
+
+    // Aggregate
+    total_flood_zones_avoided: number;
+    overall_risk_score: number;
+}
+
+export interface StuckTimeEstimate {
+    min_stuck_minutes: number;
+    avg_stuck_minutes: number;
+    worst_case_minutes: number;
+    severity_level: FloodSeverity;
+    risk_factors: string[];
+}
+
+export interface NetTimeSaved {
+    vs_average_stuck: number;  // minutes saved vs average case
+    vs_worst_case: number;     // minutes saved vs worst case
+}
+
+export interface FloodImpact {
+    lat: number;
+    lng: number;
+    severity: string;
+    type: 'report' | 'sensor' | 'ml_prediction';
+    penalty_seconds: number;
+}
+
+export interface NormalRouteOption {
+    id: string;
+    type: 'normal';
+    geometry: GeoJSON.LineString;
+    distance_meters: number;
+    duration_seconds: number;
+    adjusted_duration_seconds: number;  // Duration accounting for flood delays
+    safety_score: number;
+    flood_intersections: number;
+    flood_impacts: FloodImpact[];
+    instructions: RouteInstruction[];
+}
+
+export interface RouteComparisonRequest {
+    origin: { lat: number; lng: number };
+    destination: { lat: number; lng: number };
+    mode: 'driving' | 'walking' | 'cycling';
+    city: string;
+}
+
+// =============================================================================
+// HOTSPOT ANALYSIS TYPES (for route planning)
+// Uses FHILevel from FLOOD HAZARD INDEX section above
+// =============================================================================
+
+export interface NearbyHotspot {
+    id: number;
+    name: string;
+    fhi_level: FHILevel;
+    fhi_color: string;
+    fhi_score: number;
+    distance_to_route_m: number;
+    estimated_delay_seconds: number;
+    must_avoid: boolean;  // True if HIGH or EXTREME (HARD AVOID)
+}
+
+export interface HotspotAnalysis {
+    // Counts
+    total_hotspots_on_normal: number;
+    total_hotspots_on_safe: number;
+    hotspots_avoided: number;
+    critical_hotspots_avoided: number;  // HIGH/EXTREME count
+
+    // FHI levels
+    highest_fhi_normal: number | null;
+    highest_fhi_safe: number | null;
+
+    // Safety status
+    normal_route_safe: boolean;  // False if any HARD AVOID hotspots
+    safe_route_safe: boolean;
+    must_reroute: boolean;  // True if normal route has HARD AVOID hotspots
+
+    // User messaging
+    warning_message: string | null;
+
+    // Nearby hotspots (top 5 on normal route)
+    nearby_hotspots: NearbyHotspot[];
+}
+
+export interface RouteComparisonResponse {
+    // Route options
+    normal_route: NormalRouteOption | null;
+    floodsafe_route: RouteOption | null;
+
+    // Comparison metrics
+    time_penalty_seconds: number;
+    distance_difference_meters: number;
+    flood_zones_avoided: number;
+
+    // Risk analysis
+    risk_breakdown: RiskBreakdown;
+    stuck_time_estimate: StuckTimeEstimate;
+    net_time_saved: NetTimeSaved;
+
+    // Recommendation
+    recommendation: string;
+
+    // Hotspot analysis (Delhi only - null for other cities)
+    hotspot_analysis: HotspotAnalysis | null;
+
+    // Flood zones GeoJSON for map display
+    flood_zones: GeoJSON.FeatureCollection;
+}
+
+// ============================================================================
+// UNIFIED ALERTS TYPES (Enhanced Alerts Section)
+// ============================================================================
+
+export type AlertSource = 'imd' | 'cwc' | 'twitter' | 'rss' | 'telegram' | 'floodsafe';
+export type AlertType = 'external' | 'community';
+export type AlertSeverity = 'low' | 'moderate' | 'high' | 'severe';
+export type AlertSourceFilter = 'all' | 'official' | 'news' | 'social' | 'community';
+
+export interface UnifiedAlert {
+    id: string;
+    type: AlertType;
+    source: AlertSource;
+    source_name?: string;
+    title: string;
+    message: string;
+    severity?: AlertSeverity;
+    latitude?: number;
+    longitude?: number;
+    url?: string;
+    created_at: string;
+}
+
+export interface AlertSourceMeta {
+    name: string;
+    count: number;
+    enabled: boolean;
+}
+
+export interface UnifiedAlertsResponse {
+    alerts: UnifiedAlert[];
+    sources: Record<string, AlertSourceMeta>;
+    total: number;
+    city: string;
 }

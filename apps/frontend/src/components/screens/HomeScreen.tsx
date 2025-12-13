@@ -8,10 +8,13 @@ import {
 } from 'lucide-react';
 import { FloodAlert } from '../../types';
 import MapComponent from '../MapComponent';
-import { useSensors, useReports, useUsers, useActiveReporters, useNearbyReporters, useLocationDetails } from '../../lib/api/hooks';
+import { useSensors, useReports, useUsers, useActiveReporters, useNearbyReporters, useLocationDetails, useWatchAreas, useDailyRoutes } from '../../lib/api/hooks';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { getNestedArray, hasLocationData } from '../../lib/safe-access';
+import { detectCityFromCoordinates, getCityKeyFromCoordinates, type CityKey } from '../../lib/map/cityConfigs';
+import { useAuth } from '../../contexts/AuthContext';
+import { CITIES } from '../../lib/map/cityConfigs';
 import {
     Select,
     SelectContent,
@@ -33,6 +36,7 @@ interface HomeScreenProps {
     onNavigateToReport?: () => void;
     onNavigateToAlerts?: () => void;
     onNavigateToProfile?: () => void;
+    onNavigateToMapWithRoute?: (destination: [number, number]) => void;
 }
 
 // Refresh interval options - Updated as per requirement: 15s, 2m, 10m (default)
@@ -43,32 +47,83 @@ const REFRESH_INTERVALS = {
 } as const;
 
 type RefreshInterval = keyof typeof REFRESH_INTERVALS;
+type CityFilter = 'all' | CityKey;
 
 export function HomeScreen({
     onAlertClick,
     onNavigateToMap,
     onNavigateToReport,
     onNavigateToAlerts,
-    onNavigateToProfile
+    onNavigateToProfile,
+    onNavigateToMapWithRoute
 }: HomeScreenProps) {
+    const { user } = useAuth();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>('10m'); // Default 10 minutes
+    const [cityFilter, setCityFilter] = useState<CityFilter>(() => {
+        // Initialize with user's city preference, fallback to 'all'
+        return (user?.city_preference as CityFilter) || 'all';
+    });
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [mapTargetLocation, setMapTargetLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-    // User's current location (for demonstration, using Delhi coordinates)
-    // In production, this would come from geolocation API
-    const userLocation = { latitude: 28.6139, longitude: 77.2090 };
+    // Update city filter when user's city preference changes
+    useEffect(() => {
+        if (user?.city_preference) {
+            setCityFilter(user.city_preference as CityFilter);
+        }
+    }, [user?.city_preference]);
+
+    // User's current location from geolocation API
+    const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+    // Get user's GPS location
+    useEffect(() => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setUserLocation({
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude
+                    });
+                },
+                (error) => {
+                    console.warn('Geolocation error:', error);
+                    // Fallback to default location based on city preference
+                    const fallbackCoords = user?.city_preference === 'bangalore'
+                        ? { latitude: 12.9716, longitude: 77.5946 }
+                        : { latitude: 28.6139, longitude: 77.2090 };
+                    setUserLocation(fallbackCoords);
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            // Browser doesn't support geolocation - use default
+            const fallbackCoords = user?.city_preference === 'bangalore'
+                ? { latitude: 12.9716, longitude: 77.5946 }
+                : { latitude: 28.6139, longitude: 77.2090 };
+            setUserLocation(fallbackCoords);
+        }
+    }, [user?.city_preference]);
 
     const { data: sensors, refetch: refetchSensors } = useSensors();
     const { data: reports, refetch: refetchReports } = useReports();
     const { data: users } = useUsers();
     const { data: activeReportersData } = useActiveReporters();
-    const { data: nearbyReportersData } = useNearbyReporters(userLocation.latitude, userLocation.longitude, 5.0);
+    const { data: nearbyReportersData } = useNearbyReporters(
+        userLocation?.latitude ?? 0,
+        userLocation?.longitude ?? 0,
+        5.0
+    );
     const { data: locationDetails } = useLocationDetails(
         selectedLocation?.lat || null,
         selectedLocation?.lng || null,
         500 // 500 meter radius
     );
+
+    // Fetch user's watch areas and daily routes
+    const { data: userWatchAreas = [] } = useWatchAreas(user?.id);
+    const { data: userDailyRoutes = [] } = useDailyRoutes(user?.id);
 
     // Transform sensors into alerts with location info
     const activeAlerts: FloodAlert[] = (sensors ?? [])
@@ -82,16 +137,35 @@ export function HomeScreen({
             confidence: 90,
             isActive: true,
             color: s.status === 'critical' ? 'red' : 'orange',
-            coordinates: [s.longitude, s.latitude]
+            coordinates: [s.longitude, s.latitude] as [number, number],
+            timestamp: s.last_ping || undefined, // Use sensor's last_ping as timestamp
         }));
+
+    // Filter alerts by city
+    const filteredAlerts = cityFilter === 'all'
+        ? activeAlerts
+        : activeAlerts.filter(alert => {
+            const cityKey = getCityKeyFromCoordinates(alert.coordinates[0], alert.coordinates[1]);
+            return cityKey === cityFilter;
+        });
+
+    // Filter reports by city
+    const filteredReports = cityFilter === 'all'
+        ? reports
+        : reports?.filter(report => {
+            const cityKey = getCityKeyFromCoordinates(report.longitude, report.latitude);
+            return cityKey === cityFilter;
+        }) || [];
 
     // Community stats with proper logic
     const activeReporters = activeReportersData?.count || 0; // Users with reports in past 7 days
     const nearbyReporters = nearbyReportersData?.count || 0; // Users who reported within 5km
-    const currentUser = users?.[0]; // Mock current user - in real app would come from auth
+
+    // Use authenticated user's data
+    // Note: reports_count would need to be fetched from backend separately
     const userImpact = {
-        reports: currentUser?.reports_count || 0,
-        helped: (currentUser?.reports_count || 0) * 15, // Rough estimate
+        reports: 0, // TODO: Fetch from backend /api/reports/user/{id}/count
+        helped: 0,
     };
 
     // Determine risk level
@@ -112,6 +186,39 @@ export function HomeScreen({
         high: 'HIGH FLOOD RISK',
         severe: 'SEVERE FLOOD RISK'
     };
+
+    // Dynamic user area data - Use first watch area or city preference
+    const userAreaName = userWatchAreas.length > 0
+        ? userWatchAreas[0].name
+        : user?.city_preference
+            ? CITIES[user.city_preference as 'bangalore' | 'delhi']?.displayName || 'Your Area'
+            : 'Your Area';
+
+    // Calculate risk level for user's area (using filtered alerts)
+    const userAreaAlerts = filteredAlerts.length; // Alerts in user's selected city
+    const userAreaRiskLevel = userAreaAlerts === 0 ? 'Low Risk' :
+                              userAreaAlerts > 3 ? 'High Risk' :
+                              userAreaAlerts > 1 ? 'Moderate Risk' : 'Low Risk';
+
+    // Calculate time to next alert (find nearest future alert)
+    const now = new Date();
+    const nextAlertTime = activeAlerts.length > 0
+        ? (() => {
+            // For simplicity, calculate based on alert timestamps
+            const alertTimes = activeAlerts
+                .filter(a => a.timestamp) // Only alerts with timestamps
+                .map(a => new Date(a.timestamp!))
+                .filter(t => t > now);
+            if (alertTimes.length === 0) return 'Active now';
+
+            const nextAlert = Math.min(...alertTimes.map(t => t.getTime()));
+            const hoursUntil = Math.round((nextAlert - now.getTime()) / (1000 * 60 * 60));
+            return hoursUntil === 0 ? 'Active now' : `${hoursUntil} hr${hoursUntil > 1 ? 's' : ''} ahead`;
+          })()
+        : 'No alerts';
+
+    // User's daily routes count (from backend)
+    const userRoutesCount = userDailyRoutes.length;
 
     // Auto-refresh with configurable interval
     useEffect(() => {
@@ -157,20 +264,60 @@ export function HomeScreen({
     };
 
     const handleAreaDetails = () => {
-        toast.info('Viewing Whitefield area details');
+        toast.info(`Viewing ${userAreaName} area details`);
     };
 
     const handleViewAllAlerts = () => {
         onNavigateToAlerts?.();
     };
 
-    const handleNavigateRoutes = () => {
-        onNavigateToMap?.();
-        toast.success('Opening safe routes map');
+    const handleNavigateRoutes = (alert?: FloodAlert) => {
+        if (alert) {
+            // Navigate to FloodAtlasScreen with destination from alert
+            onNavigateToMapWithRoute?.(alert.coordinates);
+            toast.info(`Opening navigation to plan safe routes avoiding ${alert.location}`, {
+                duration: 4000,
+            });
+        } else {
+            // Navigate to FloodAtlasScreen without preset destination
+            onNavigateToMap?.();
+            toast.success('Opening safe route navigation');
+        }
     };
 
-    const handleShare = (_alertId: string) => {
-        toast.success('Alert shared successfully');
+    const handleShare = async (alert: FloodAlert) => {
+        const shareText = `⚠️ Flood Alert: ${alert.location}\n\n${alert.description}\n\n📍 Location: ${alert.coordinates[1].toFixed(4)}, ${alert.coordinates[0].toFixed(4)}\n\nStay safe! - via FloodSafe`;
+        const shareUrl = `https://floodsafe.app/alert/${alert.id}`;
+
+        // Try Web Share API first (mobile-friendly)
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Flood Alert: ${alert.location}`,
+                    text: shareText,
+                    url: shareUrl,
+                });
+                toast.success('Alert shared successfully');
+            } catch (err) {
+                // User cancelled or share failed
+                if ((err as Error).name !== 'AbortError') {
+                    // Fallback to clipboard
+                    await copyToClipboard(shareText);
+                }
+            }
+        } else {
+            // Fallback to clipboard for desktop
+            await copyToClipboard(shareText);
+        }
+    };
+
+    const copyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success('Alert copied to clipboard!');
+        } catch {
+            toast.error('Failed to copy alert');
+        }
     };
 
     const handleThankReporter = () => {
@@ -197,23 +344,43 @@ export function HomeScreen({
     };
 
     const handleLocateAlert = (lat: number, lng: number, locationName: string) => {
+        setMapTargetLocation({ lat, lng }); // Trigger map pan
         setSelectedLocation({ lat, lng });
         toast.info(`Locating ${locationName} on map`);
     };
 
-    const formatTimeAgo = (timestamp: string) => {
+    // Parse timestamp as UTC (backend stores UTC but without 'Z' suffix)
+    const parseUTCTimestamp = (timestamp: string) => {
+        if (!timestamp) return new Date();
+        // If timestamp doesn't have timezone info, treat as UTC
+        if (!timestamp.endsWith('Z') && !timestamp.includes('+') && !timestamp.includes('-', 10)) {
+            return new Date(timestamp + 'Z');
+        }
+        return new Date(timestamp);
+    };
+
+    const formatTimeAgo = (timestamp: string | null | undefined) => {
+        if (!timestamp) return 'Just now';
+
         const now = new Date();
-        const time = new Date(timestamp);
+        const time = parseUTCTimestamp(timestamp);
         const diff = now.getTime() - time.getTime();
         const minutes = Math.floor(diff / 60000);
 
+        if (minutes < 0) return 'Just now'; // Future timestamp edge case
         if (minutes < 1) return 'Just now';
         if (minutes === 1) return '1 min ago';
         if (minutes < 60) return `${minutes} min ago`;
 
         const hours = Math.floor(minutes / 60);
         if (hours === 1) return '1 hour ago';
-        return `${hours} hours ago`;
+        if (hours < 24) return `${hours} hours ago`;
+
+        const days = Math.floor(hours / 24);
+        if (days === 1) return '1 day ago';
+        if (days < 7) return `${days} days ago`;
+
+        return time.toLocaleDateString();
     };
 
     return (
@@ -254,8 +421,13 @@ export function HomeScreen({
                         <MapPin className="w-4 h-4" />
                         <span>Your Area</span>
                     </div>
-                    <div className="font-bold text-sm md:text-base">Whitefield</div>
-                    <div className="text-green-600 text-xs">Low Risk</div>
+                    <div className="font-bold text-sm md:text-base">{userAreaName}</div>
+                    <div className={cn(
+                        "text-xs",
+                        userAreaRiskLevel === 'Low Risk' && 'text-green-600',
+                        userAreaRiskLevel === 'Moderate Risk' && 'text-yellow-600',
+                        userAreaRiskLevel === 'High Risk' && 'text-red-600'
+                    )}>{userAreaRiskLevel}</div>
                     <button
                         onClick={handleAreaDetails}
                         className="text-blue-500 text-xs mt-2 flex items-center gap-1 hover:underline min-h-[32px]"
@@ -270,7 +442,7 @@ export function HomeScreen({
                         <span>Alerts</span>
                     </div>
                     <div className="font-bold text-sm md:text-base">{activeAlerts.length} Active</div>
-                    <div className="text-gray-600 text-xs">2 hrs ahead</div>
+                    <div className="text-gray-600 text-xs">{nextAlertTime}</div>
                     <button
                         onClick={handleViewAllAlerts}
                         className="text-blue-500 text-xs mt-2 flex items-center gap-1 hover:underline min-h-[32px]"
@@ -284,13 +456,13 @@ export function HomeScreen({
                         <Shield className="w-4 h-4" />
                         <span>Safety</span>
                     </div>
-                    <div className="font-bold text-sm md:text-base">3 Routes</div>
-                    <div className="text-gray-600 text-xs">Available</div>
+                    <div className="font-bold text-sm md:text-base">{userRoutesCount} {userRoutesCount === 1 ? 'Route' : 'Routes'}</div>
+                    <div className="text-gray-600 text-xs">{userRoutesCount > 0 ? 'Available' : 'Set up routes'}</div>
                     <button
-                        onClick={handleNavigateRoutes}
+                        onClick={() => handleNavigateRoutes()}
                         className="text-blue-500 text-xs mt-2 flex items-center gap-1 hover:underline min-h-[32px]"
                     >
-                        Navigate <ChevronRight className="w-3 h-3" />
+                        {userRoutesCount > 0 ? 'Navigate' : 'Add Routes'} <ChevronRight className="w-3 h-3" />
                     </button>
                 </Card>
             </div>
@@ -319,7 +491,7 @@ export function HomeScreen({
                     </button>
 
                     <button
-                        onClick={handleNavigateRoutes}
+                        onClick={() => handleNavigateRoutes()}
                         className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-all border-2 border-green-100 hover:border-green-300 min-h-[100px]"
                     >
                         <div className="bg-green-500 text-white p-3 rounded-full">
@@ -334,7 +506,11 @@ export function HomeScreen({
             <div className="px-4 pb-3">
                 <Card className="overflow-hidden">
                     <div className="relative h-48 bg-gradient-to-br from-blue-100 to-blue-200">
-                        <MapComponent className="w-full h-full" />
+                        <MapComponent
+                            className="w-full h-full"
+                            targetLocation={mapTargetLocation}
+                            onLocationReached={() => setMapTargetLocation(null)}
+                        />
 
                         {/* Floating indicators */}
                         <div className="absolute top-4 left-4 bg-green-500 text-white px-2 py-1 rounded-full text-xs animate-pulse">
@@ -392,6 +568,17 @@ export function HomeScreen({
                                     <SelectItem value="10m">10 min</SelectItem>
                                 </SelectContent>
                             </Select>
+                            <Select value={cityFilter} onValueChange={(value) => setCityFilter(value as CityFilter)}>
+                                <SelectTrigger className="w-[110px] h-8 text-xs">
+                                    <MapPin className="w-3 h-3 mr-1" />
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Cities</SelectItem>
+                                    <SelectItem value="delhi">Delhi</SelectItem>
+                                    <SelectItem value="bangalore">Bangalore</SelectItem>
+                                </SelectContent>
+                            </Select>
                             <button
                                 onClick={handleRefresh}
                                 className="text-xs text-blue-500 hover:underline min-h-[32px] px-2"
@@ -403,8 +590,8 @@ export function HomeScreen({
 
                     <div className="divide-y">
                         {/* Sensor Alerts with Location and Locate Button */}
-                        {activeAlerts.length > 0 ? (
-                            activeAlerts.slice(0, 2).map((alert, index) => (
+                        {filteredAlerts.length > 0 ? (
+                            filteredAlerts.slice(0, 2).map((alert, index) => (
                                 <div key={alert.id} className="p-3">
                                     <div className="flex items-start gap-3">
                                         <div className={cn(
@@ -414,7 +601,7 @@ export function HomeScreen({
                                             <AlertTriangle className="w-4 h-4" />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-xs text-gray-500">{index === 0 ? '2 min ago' : '15 min ago'}</div>
+                                            <div className="text-xs text-gray-500">{formatTimeAgo(alert.timestamp)}</div>
                                             <div className="font-medium text-sm mt-1">
                                                 {alert.level === 'critical' ? 'High' : 'Moderate'} water detected - {alert.location}
                                             </div>
@@ -425,6 +612,8 @@ export function HomeScreen({
                                             <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                                                 <MapPin className="w-3 h-3" />
                                                 <span>
+                                                    {detectCityFromCoordinates(alert.coordinates[0], alert.coordinates[1])}
+                                                    {' · '}
                                                     {alert.coordinates[1].toFixed(4)}, {alert.coordinates[0].toFixed(4)}
                                                 </span>
                                             </div>
@@ -443,14 +632,14 @@ export function HomeScreen({
                                                     Locate
                                                 </button>
                                                 <button
-                                                    onClick={() => handleShare(alert.id)}
+                                                    onClick={() => handleShare(alert)}
                                                     className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors min-h-[32px]"
                                                 >
                                                     <Share2 className="w-3 h-3 inline mr-1" />
                                                     Share
                                                 </button>
                                                 <button
-                                                    onClick={handleNavigateRoutes}
+                                                    onClick={() => handleNavigateRoutes(alert)}
                                                     className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded hover:bg-green-100 transition-colors min-h-[32px]"
                                                 >
                                                     Alt Routes
@@ -463,8 +652,8 @@ export function HomeScreen({
                         ) : null}
 
                         {/* Community Reports with Location and Locate Button */}
-                        {reports && reports.length > 0 ? (
-                            reports.slice(0, 2).map((report) => (
+                        {filteredReports && filteredReports.length > 0 ? (
+                            filteredReports.slice(0, 2).map((report) => (
                                 <div key={report.id} className="p-3">
                                     <div className="flex items-start gap-3">
                                         <div className={cn(
@@ -485,6 +674,8 @@ export function HomeScreen({
                                             <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                                                 <MapPin className="w-3 h-3" />
                                                 <span>
+                                                    {detectCityFromCoordinates(report.longitude, report.latitude)}
+                                                    {' · '}
                                                     {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
                                                 </span>
                                             </div>
@@ -519,7 +710,7 @@ export function HomeScreen({
                         ) : null}
 
                         {/* All Clear Message */}
-                        {activeAlerts.length === 0 && (!reports || reports.length === 0) && (
+                        {filteredAlerts.length === 0 && (!filteredReports || filteredReports.length === 0) && (
                             <div className="p-3">
                                 <div className="flex items-start gap-3">
                                     <div className="bg-green-100 text-green-600 p-2 rounded-full">
@@ -691,6 +882,7 @@ export function HomeScreen({
                     )}
                 </DialogContent>
             </Dialog>
+
         </div>
     );
 }

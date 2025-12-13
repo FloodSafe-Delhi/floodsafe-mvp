@@ -24,7 +24,6 @@ export function ResponsiveLayout({
                 <TopNav
                     onNotificationClick={onNotificationClick}
                     onProfileClick={onProfileClick}
-                    notificationCount={2}
                 />
             </div>
 

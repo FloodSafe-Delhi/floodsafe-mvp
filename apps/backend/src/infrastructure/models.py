@@ -1,5 +1,5 @@
-from sqlalchemy import Column, String, Float, DateTime, Boolean, ForeignKey, Integer
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, String, Float, DateTime, Boolean, ForeignKey, Integer, Text, Index
+from sqlalchemy.dialects.postgresql import UUID, JSON
 from sqlalchemy.orm import relationship, object_session
 from sqlalchemy.ext.hybrid import hybrid_property
 from geoalchemy2 import Geometry
@@ -15,6 +15,12 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     role = Column(String, default="user")
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Authentication fields
+    google_id = Column(String, unique=True, nullable=True, index=True)
+    phone_verified = Column(Boolean, default=False)
+    auth_provider = Column(String, default='local')  # 'google', 'phone', 'local'
 
     # Gamification
     points = Column(Integer, default=0)
@@ -44,6 +50,15 @@ class User(Base):
     notification_whatsapp = Column(Boolean, default=False)
     notification_email = Column(Boolean, default=True)
     alert_preferences = Column(String, default='{"watch":true,"advisory":true,"warning":true,"emergency":true}') # JSON string
+
+    # Onboarding & City Preference
+    city_preference = Column(String, nullable=True)  # 'bangalore' | 'delhi'
+    profile_complete = Column(Boolean, default=False)
+    onboarding_step = Column(Integer, nullable=True)  # 1-5, tracks current step if incomplete
+
+    # Relationships
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    saved_routes = relationship("SavedRoute", back_populates="user", cascade="all, delete-orphan")
 
 class Sensor(Base):
     __tablename__ = "sensors"
@@ -170,6 +185,48 @@ class WatchArea(Base):
                 return float(result) if result is not None else None
         return None
 
+class DailyRoute(Base):
+    """Daily route model for storing user's regular commute routes"""
+    __tablename__ = "daily_routes"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)  # e.g., "Home to Work"
+    origin_latitude = Column(Float, nullable=False)
+    origin_longitude = Column(Float, nullable=False)
+    destination_latitude = Column(Float, nullable=False)
+    destination_longitude = Column(Float, nullable=False)
+    transport_mode = Column(String, default='driving')  # driving, walking, metro, combined
+    notify_on_flood = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    @hybrid_property
+    def origin_lat(self):
+        return self.origin_latitude
+
+    @hybrid_property
+    def origin_lng(self):
+        return self.origin_longitude
+
+    @hybrid_property
+    def dest_lat(self):
+        return self.destination_latitude
+
+    @hybrid_property
+    def dest_lng(self):
+        return self.destination_longitude
+
+class Alert(Base):
+    """Alert model for notifying users about flood reports in their watch areas."""
+    __tablename__ = "alerts"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False)
+    watch_area_id = Column(UUID(as_uuid=True), ForeignKey("watch_areas.id", ondelete="CASCADE"), nullable=False)
+    message = Column(String, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ReputationHistory(Base):
     __tablename__ = "reputation_history"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -202,3 +259,72 @@ class UserBadge(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     badge_id = Column(UUID(as_uuid=True), ForeignKey("badges.id", ondelete="CASCADE"), nullable=False)
     earned_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RefreshToken(Base):
+    """Stores refresh tokens for JWT authentication with rotation support"""
+    __tablename__ = "refresh_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    token_hash = Column(String, unique=True, nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    revoked = Column(Boolean, default=False)
+
+    # Relationship
+    user = relationship("User", back_populates="refresh_tokens")
+
+
+class SavedRoute(Base):
+    """Saved route bookmarks for quick access to frequently used routes"""
+    __tablename__ = "saved_routes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(100), nullable=False)
+    origin_latitude = Column(Float, nullable=False)
+    origin_longitude = Column(Float, nullable=False)
+    origin_name = Column(String(255), nullable=True)
+    destination_latitude = Column(Float, nullable=False)
+    destination_longitude = Column(Float, nullable=False)
+    destination_name = Column(String(255), nullable=True)
+    transport_mode = Column(String(20), default="driving")
+    use_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship
+    user = relationship("User", back_populates="saved_routes")
+
+
+class ExternalAlert(Base):
+    """
+    External flood alerts aggregated from multiple sources:
+    - IMD (India Meteorological Department)
+    - CWC (Central Water Commission)
+    - RSS news feeds
+    - Twitter/X
+    - Telegram channels
+    """
+    __tablename__ = "external_alerts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source = Column(String(50), nullable=False, index=True)  # 'imd', 'cwc', 'twitter', 'rss', 'telegram'
+    source_id = Column(String(255), nullable=True, unique=True)  # Original ID for deduplication
+    source_name = Column(String(100), nullable=True)  # Display name: "Hindustan Times", "IMD Delhi"
+    city = Column(String(50), nullable=False, index=True)  # 'delhi', 'bangalore'
+    title = Column(String(500), nullable=False)
+    message = Column(Text, nullable=False)
+    severity = Column(String(20), nullable=True)  # 'low', 'moderate', 'high', 'severe'
+    url = Column(String(2048), nullable=True)  # Link to original source
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    raw_data = Column(JSON, nullable=True)  # Store original API/RSS response
+    expires_at = Column(DateTime, nullable=True)  # When alert becomes stale
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index('ix_external_alerts_city_created', 'city', 'created_at'),
+        Index('ix_external_alerts_source_city', 'source', 'city'),
+    )

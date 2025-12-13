@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
+import { useAuth, AuthUser } from './AuthContext';
 
 interface UserContextType {
     user: User | null;
@@ -10,47 +11,40 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-const DEMO_USER_ID = 'admin'; // For MVP - in production this comes from auth
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+/**
+ * Convert AuthUser to User type for backwards compatibility.
+ */
+function authUserToUser(authUser: AuthUser): User {
+    return {
+        id: authUser.id,
+        username: authUser.username,
+        email: authUser.email || undefined,
+        phone: authUser.phone || undefined,
+        role: authUser.role,
+        points: authUser.points,
+        level: authUser.level,
+        reputation_score: authUser.reputation_score,
+        profile_photo_url: authUser.profile_photo_url || undefined,
+    };
+}
 
 export function UserProvider({ children }: { children: ReactNode }) {
+    const { user: authUser, isLoading: authLoading, isAuthenticated } = useAuth();
     const [user, setUser] = useState<User | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
 
+    // Sync user state with auth context
     useEffect(() => {
-        // For MVP: Auto-fetch demo user
-        // In production: This would check auth tokens and fetch current user
-        const fetchDemoUser = async () => {
-            try {
-                setIsLoading(true);
-                const response = await fetch(`${API_URL}/api/leaderboards/top?limit=50`);
-                if (!response.ok) throw new Error('Failed to fetch users');
-
-                const users = await response.json();
-                const adminUser = users.find((u: User) => u.username === 'admin');
-
-                if (adminUser) {
-                    setUser(adminUser);
-                } else if (users.length > 0) {
-                    // Fallback to first user
-                    setUser(users[0]);
-                } else {
-                    console.warn('No users found in database');
-                }
-            } catch (error) {
-                console.error('Failed to fetch user:', error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchDemoUser();
-    }, []);
+        if (isAuthenticated && authUser) {
+            setUser(authUserToUser(authUser));
+        } else {
+            setUser(null);
+        }
+    }, [authUser, isAuthenticated]);
 
     const value: UserContextType = {
         user,
         setUser,
-        isLoading,
+        isLoading: authLoading,
         userId: user?.id || null,
     };
 
@@ -66,10 +60,22 @@ export function useUser() {
 }
 
 /**
- * Hook to get current user ID with a fallback
- * Returns demo user ID if no user is logged in (for MVP)
+ * Hook to get current user ID
+ * Returns null if no user is loaded (caller should handle this)
  */
-export function useUserId(): string {
+export function useUserId(): string | null {
     const { userId } = useUser();
-    return userId || DEMO_USER_ID;
+    return userId;
+}
+
+/**
+ * Hook to check if user is ready for actions that require authentication
+ */
+export function useUserReady(): { userId: string | null; isLoading: boolean; isReady: boolean } {
+    const { userId, isLoading } = useUser();
+    return {
+        userId,
+        isLoading,
+        isReady: !isLoading && userId !== null
+    };
 }

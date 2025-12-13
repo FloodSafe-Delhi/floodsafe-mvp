@@ -13,7 +13,7 @@ import { Skeleton } from '../ui/skeleton';
 import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { WaterDepth, VehiclePassability, LocationWithAddress, PhotoData } from '../../types';
 import { useReportMutation } from '../../lib/api/hooks';
-import { useUserId } from '../../contexts/UserContext';
+import { useUserReady } from '../../contexts/UserContext';
 import { toast } from 'sonner';
 import MapPicker from '../MapPicker';
 import PhotoCapture from '../PhotoCapture';
@@ -51,6 +51,18 @@ const isAndroidDevice = () => {
     return /Android/.test(navigator.userAgent);
 };
 
+// Helper to calculate distance between two GPS coordinates using Haversine formula
+const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+};
+
 export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     const [step, setStep] = useState(1);
     const [waterDepth, setWaterDepth] = useState<WaterDepth>('knee');
@@ -85,7 +97,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     const isRecordingRef = useRef(false);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const reportMutation = useReportMutation();
-    const userId = useUserId();
+    const { userId } = useUserReady();
 
     // Adaptive scroll padding for dynamic viewport handling
     const bottomPadding = useAdaptiveScrollPadding(scrollContainerRef);
@@ -522,6 +534,13 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
         setErrorMessage('');
         setErrorType(null);
 
+        // Validate user is loaded
+        if (!userId) {
+            setErrorMessage('User not loaded. Please refresh the page and try again.');
+            toast.error('Unable to submit report - user not authenticated');
+            return;
+        }
+
         // Validate location exists
         if (!location) {
             setErrorType('gps');
@@ -537,20 +556,22 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
         }
 
         try {
-            // Build comprehensive description with tags
+            // Build description with tags (depth/passability sent as separate fields)
             const tagPrefix = selectedTags.length > 0 ? `[${selectedTags.join(', ')}] ` : '';
-            const fullDescription = `${tagPrefix}${description} - Depth: ${waterDepth}, Passability: ${vehiclePassability}`;
+            const fullDescription = `${tagPrefix}${description}`;
 
             // Use real GPS coordinates and photo
             await reportMutation.mutateAsync({
-                user_id: userId,
+                user_id: userId,  // Now guaranteed to be string (not null)
                 latitude: location.latitude,
                 longitude: location.longitude,
                 description: fullDescription,
                 image: photo.file,
                 photo_latitude: photo.gps.lat,
                 photo_longitude: photo.gps.lng,
-                photo_location_verified: photo.isLocationVerified
+                photo_location_verified: photo.isLocationVerified,
+                water_depth: waterDepth,
+                vehicle_passability: vehiclePassability
             });
             toast.success('Report submitted successfully!');
             onSubmit();
@@ -948,12 +969,16 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                             </Alert>
                         )}
 
-                        {photo && !photo.isLocationVerified && (
+                        {photo && !photo.isLocationVerified && location && (
                             <Alert className="mt-4 border-yellow-200 bg-yellow-50">
                                 <AlertTriangle className="h-4 w-4 text-yellow-600" />
                                 <AlertDescription className="text-xs text-yellow-800">
-                                    Photo location differs from reported location. Your report will still be submitted
-                                    but flagged for additional review.
+                                    <strong>Location Mismatch Warning</strong><br />
+                                    Photo was taken {Math.round(calculateDistance(
+                                        photo.gps.lat, photo.gps.lng,
+                                        location.latitude, location.longitude
+                                    ))}m away from your reported location.<br />
+                                    Report will still be submitted but flagged for additional review.
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -1092,7 +1117,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                                     ) : (
                                                         <Badge className="bg-yellow-500 text-white text-xs flex items-center gap-1 w-fit">
                                                             <AlertTriangle className="w-3 h-3" />
-                                                            Location Not Verified
+                                                            {location ? `${Math.round(calculateDistance(photo.gps.lat, photo.gps.lng, location.latitude, location.longitude))}m away` : 'Location Mismatch'}
                                                         </Badge>
                                                     )}
                                                     <p className="text-xs text-gray-500 mt-1">

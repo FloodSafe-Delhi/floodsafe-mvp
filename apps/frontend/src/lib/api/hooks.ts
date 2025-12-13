@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, uploadFile } from './client';
-import { User, RouteRequest, RouteResponse, GeocodingResult } from '../../types';
+import { User, RouteRequest, RouteResponse, GeocodingResult, DailyRoute, DailyRouteCreate, WatchArea, WatchAreaCreate, RouteCalculationRequest, RouteCalculationResponse, MetroStation, RouteOption, RouteComparisonRequest, RouteComparisonResponse } from '../../types';
 import { validateUsers, validateSensors, validateReports } from './validators';
 
 // Types
@@ -40,10 +40,12 @@ export interface ReportCreate {
     description: string;
     latitude: number;
     longitude: number;
-    image?: File;
+    image: File;  // Required by backend
     photo_latitude?: number;
     photo_longitude?: number;
     photo_location_verified?: boolean;
+    water_depth?: string;
+    vehicle_passability?: string;
 }
 
 // Re-export User from types for backwards compatibility
@@ -70,6 +72,18 @@ export function useReports() {
             return validateReports(data);
         },
         refetchInterval: 30000, // Default 30 second refresh
+    });
+}
+
+export function useUserReports(userId: string | undefined, limit: number = 50) {
+    return useQuery({
+        queryKey: ['reports', 'user', userId, limit],
+        queryFn: async () => {
+            const data = await fetchJson<unknown>(`/reports/user/${userId}?limit=${limit}`);
+            return validateReports(data);
+        },
+        enabled: !!userId, // Only run if userId is provided
+        staleTime: 30000, // Consider fresh for 30 seconds
     });
 }
 
@@ -152,6 +166,62 @@ export function useLocationDetails(latitude: number | null, longitude: number | 
     });
 }
 
+// Alert types and hooks
+export interface Alert {
+    id: string;
+    user_id: string;
+    report_id: string;
+    watch_area_id: string;
+    message: string;
+    is_read: boolean;
+    created_at: string;
+    report_latitude: number | null;
+    report_longitude: number | null;
+    watch_area_name: string | null;
+}
+
+export function useUserAlerts(userId: string | undefined, unreadOnly: boolean = false) {
+    return useQuery({
+        queryKey: ['alerts', 'user', userId, unreadOnly],
+        queryFn: () => fetchJson<Alert[]>(`/alerts/user/${userId}?unread_only=${unreadOnly}`),
+        enabled: !!userId,
+        refetchInterval: 30000, // Check for new alerts every 30 seconds
+    });
+}
+
+export function useUnreadAlertCount(userId: string | undefined) {
+    return useQuery({
+        queryKey: ['alerts', 'count', userId],
+        queryFn: () => fetchJson<{ count: number }>(`/alerts/user/${userId}/count`),
+        enabled: !!userId,
+        refetchInterval: 30000,
+    });
+}
+
+export function useMarkAlertRead() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ alertId, userId }: { alertId: string; userId: string }) => {
+            return fetchJson(`/alerts/${alertId}/read?user_id=${userId}`, { method: 'POST' });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['alerts'] });
+        },
+    });
+}
+
+export function useMarkAllAlertsRead() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (userId: string) => {
+            return fetchJson(`/alerts/user/${userId}/read-all`, { method: 'POST' });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['alerts'] });
+        },
+    });
+}
+
 export function useReportMutation() {
     const queryClient = useQueryClient();
 
@@ -162,8 +232,17 @@ export function useReportMutation() {
             formData.append('description', data.description);
             formData.append('latitude', data.latitude.toString());
             formData.append('longitude', data.longitude.toString());
-            if (data.image) {
-                formData.append('image', data.image);
+            // Image is required by backend - throw error if missing
+            if (!data.image) {
+                throw new Error('Image is required for report submission');
+            }
+            formData.append('image', data.image);
+            // Water depth and vehicle passability
+            if (data.water_depth) {
+                formData.append('water_depth', data.water_depth);
+            }
+            if (data.vehicle_passability) {
+                formData.append('vehicle_passability', data.vehicle_passability);
             }
             // Photo GPS fields for verification
             if (data.photo_latitude !== undefined) {
@@ -175,6 +254,17 @@ export function useReportMutation() {
             if (data.photo_location_verified !== undefined) {
                 formData.append('photo_location_verified', data.photo_location_verified.toString());
             }
+
+            // Debug: Log what we're sending
+            console.log('Submitting report with FormData:');
+            for (const [key, value] of formData.entries()) {
+                if (value instanceof File) {
+                    console.log(`  ${key}: File(${value.name}, ${value.size} bytes, ${value.type})`);
+                } else {
+                    console.log(`  ${key}: ${value}`);
+                }
+            }
+
             return uploadFile('/reports/', formData);
         },
         onSuccess: () => {
@@ -187,10 +277,68 @@ export function useReportMutation() {
 // ROUTING HOOKS (Safe route navigation)
 // ============================================================================
 
-export function useRouteCalculation() {
+export function useCalculateRoutes() {
     return useMutation({
-        mutationFn: async (request: RouteRequest): Promise<RouteResponse> => {
-            const response = await fetchJson<RouteResponse>('/routes/calculate', {
+        mutationFn: async (request: RouteCalculationRequest): Promise<RouteCalculationResponse> => {
+            const response = await fetchJson<RouteCalculationResponse>('/routes/calculate', {
+                method: 'POST',
+                body: JSON.stringify(request),
+            });
+            return response;
+        },
+        retry: 1,
+    });
+}
+
+export function useNearbyMetros(lat: number | null, lng: number | null, city: string = 'BLR', radius_km: number = 2.0) {
+    return useQuery({
+        queryKey: ['nearby-metros', lat, lng, city, radius_km],
+        queryFn: async () => {
+            if (!lat || !lng) return { metros: [], count: 0 };
+
+            const response = await fetchJson<{ metros: MetroStation[]; count: number }>(
+                `/routes/nearby-metros?lat=${lat}&lng=${lng}&city=${city}&radius_km=${radius_km}`
+            );
+            return response;
+        },
+        enabled: !!(lat && lng),
+        staleTime: 5 * 60 * 1000, // 5 minutes - metro stations don't change often
+        gcTime: 10 * 60 * 1000, // 10 minutes
+    });
+}
+
+export function useWalkingRoute() {
+    return useMutation({
+        mutationFn: async (request: { origin: { lat: number; lng: number }; destination: { lat: number; lng: number } }): Promise<RouteOption> => {
+            const response = await fetchJson<RouteOption>('/routes/walking-route', {
+                method: 'POST',
+                body: JSON.stringify(request),
+            });
+            return response;
+        },
+        retry: 1,
+    });
+}
+
+// Deprecated: Use useCalculateRoutes instead
+export function useRouteCalculation() {
+    return useCalculateRoutes();
+}
+
+/**
+ * Compare normal route vs FloodSafe route
+ *
+ * Returns both routes with comparison metrics including:
+ * - Time penalty for taking the safe route
+ * - Number of flood zones avoided
+ * - Estimated stuck time if taking normal route
+ * - Risk breakdown (reports, sensors, ML predictions)
+ * - Recommendation message
+ */
+export function useCompareRoutes() {
+    return useMutation({
+        mutationFn: async (request: RouteComparisonRequest): Promise<RouteComparisonResponse> => {
+            const response = await fetchJson<RouteComparisonResponse>('/routes/compare', {
                 method: 'POST',
                 body: JSON.stringify(request),
             });
@@ -231,5 +379,646 @@ export function useGeocode(query: string, enabled: boolean = true) {
         enabled: enabled && query.length >= 3,
         staleTime: 5 * 60 * 1000, // 5 minutes
         gcTime: 10 * 60 * 1000, // 10 minutes
+    });
+}
+
+// ============================================================================
+// UNIFIED SEARCH HOOKS
+// ============================================================================
+
+import type {
+    UnifiedSearchResponse,
+    TrendingSearchResponse,
+    SearchLocationResult,
+    SearchReportResult,
+    SearchUserResult
+} from '../../types';
+
+export interface UnifiedSearchOptions {
+    query: string;
+    type?: 'all' | 'locations' | 'reports' | 'users';
+    lat?: number;
+    lng?: number;
+    radius?: number;
+    limit?: number;
+    city?: string;
+    enabled?: boolean;
+}
+
+/**
+ * Unified search hook for locations, reports, and users
+ * Uses backend /api/search/ endpoint with smart intent detection
+ */
+export function useUnifiedSearch(options: UnifiedSearchOptions) {
+    const { query, type, lat, lng, radius = 5000, limit = 10, city, enabled = true } = options;
+
+    return useQuery({
+        queryKey: ['unified-search', query, type, lat, lng, radius, limit, city],
+        queryFn: async (): Promise<UnifiedSearchResponse> => {
+            const params = new URLSearchParams({
+                q: query,
+                limit: limit.toString()
+            });
+
+            // Only add city if explicitly provided
+            if (city) params.append('city', city);
+            if (type) params.append('type', type);
+            if (lat !== undefined) params.append('lat', lat.toString());
+            if (lng !== undefined) params.append('lng', lng.toString());
+            if (radius) params.append('radius', radius.toString());
+
+            const response = await fetchJson<UnifiedSearchResponse>(
+                `/search/?${params.toString()}`
+            );
+            return response;
+        },
+        enabled: enabled && query.length >= 2,
+        staleTime: 60 * 1000, // Increased to 1 minute for better caching
+        gcTime: 5 * 60 * 1000, // 5 minutes
+    });
+}
+
+/**
+ * Get trending search terms and recent popular areas
+ */
+export function useTrendingSearches(limit: number = 5) {
+    return useQuery({
+        queryKey: ['trending-searches', limit],
+        queryFn: async (): Promise<TrendingSearchResponse> => {
+            const response = await fetchJson<TrendingSearchResponse>(
+                `/search/suggestions/?limit=${limit}`
+            );
+            return response;
+        },
+        staleTime: 60 * 1000, // 1 minute
+        gcTime: 5 * 60 * 1000, // 5 minutes
+    });
+}
+
+/**
+ * Search for locations only (optimized)
+ */
+export function useLocationSearch(query: string, limit: number = 5, enabled: boolean = true) {
+    return useQuery({
+        queryKey: ['location-search', query, limit],
+        queryFn: async (): Promise<SearchLocationResult[]> => {
+            const response = await fetchJson<SearchLocationResult[]>(
+                `/search/locations/?q=${encodeURIComponent(query)}&limit=${limit}`
+            );
+            return response;
+        },
+        enabled: enabled && query.length >= 2,
+        staleTime: 5 * 60 * 1000, // 5 minutes (locations don't change often)
+        gcTime: 10 * 60 * 1000,
+    });
+}
+
+/**
+ * Search for reports by text (optimized)
+ */
+export function useReportSearch(
+    query: string,
+    options?: { lat?: number; lng?: number; radius?: number; limit?: number },
+    enabled: boolean = true
+) {
+    const { lat, lng, radius = 5000, limit = 10 } = options || {};
+
+    return useQuery({
+        queryKey: ['report-search', query, lat, lng, radius, limit],
+        queryFn: async (): Promise<SearchReportResult[]> => {
+            const params = new URLSearchParams({
+                q: query,
+                limit: limit.toString()
+            });
+
+            if (lat !== undefined) params.append('lat', lat.toString());
+            if (lng !== undefined) params.append('lng', lng.toString());
+            if (radius) params.append('radius', radius.toString());
+
+            const response = await fetchJson<SearchReportResult[]>(
+                `/search/reports/?${params.toString()}`
+            );
+            return response;
+        },
+        enabled: enabled && query.length >= 2,
+        staleTime: 30 * 1000, // 30 seconds (reports change frequently)
+        gcTime: 5 * 60 * 1000,
+    });
+}
+
+/**
+ * Search for users by username (optimized)
+ */
+export function useUserSearch(query: string, limit: number = 10, enabled: boolean = true) {
+    return useQuery({
+        queryKey: ['user-search', query, limit],
+        queryFn: async (): Promise<SearchUserResult[]> => {
+            const response = await fetchJson<SearchUserResult[]>(
+                `/search/users/?q=${encodeURIComponent(query)}&limit=${limit}`
+            );
+            return response;
+        },
+        enabled: enabled && query.length >= 2,
+        staleTime: 60 * 1000, // 1 minute
+        gcTime: 5 * 60 * 1000,
+    });
+}
+
+// ============================================================================
+// DAILY ROUTES HOOKS (User's regular commute routes for flood alerts)
+// ============================================================================
+
+/**
+ * Get all daily routes for a user
+ */
+export function useDailyRoutes(userId: string | undefined) {
+    return useQuery({
+        queryKey: ['dailyRoutes', userId],
+        queryFn: async (): Promise<DailyRoute[]> => {
+            if (!userId) return [];
+            const response = await fetchJson<DailyRoute[]>(`/daily-routes/user/${userId}`);
+            return response;
+        },
+        enabled: !!userId,
+        staleTime: 60 * 1000, // 1 minute (routes don't change often)
+    });
+}
+
+/**
+ * Create a new daily route for a user
+ */
+export function useCreateDailyRoute() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (route: DailyRouteCreate): Promise<DailyRoute> => {
+            const response = await fetchJson<DailyRoute>('/daily-routes/', {
+                method: 'POST',
+                body: JSON.stringify(route),
+            });
+            return response;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['dailyRoutes'] });
+        },
+    });
+}
+
+/**
+ * Update an existing daily route
+ */
+export function useUpdateDailyRoute() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ routeId, data }: { routeId: string; data: DailyRouteCreate }): Promise<DailyRoute> => {
+            const response = await fetchJson<DailyRoute>(`/daily-routes/${routeId}`, {
+                method: 'PATCH',
+                body: JSON.stringify(data),
+            });
+            return response;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['dailyRoutes'] });
+        },
+    });
+}
+
+/**
+ * Delete a daily route
+ */
+export function useDeleteDailyRoute() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (routeId: string): Promise<void> => {
+            await fetchJson(`/daily-routes/${routeId}`, {
+                method: 'DELETE',
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['dailyRoutes'] });
+        },
+    });
+}
+
+// ============================================================================
+// WATCH AREA HOOKS (for onboarding & alerts)
+// ============================================================================
+
+/**
+ * Get all watch areas for a user
+ */
+export function useWatchAreas(userId: string | undefined) {
+    return useQuery({
+        queryKey: ['watchAreas', userId],
+        queryFn: async (): Promise<WatchArea[]> => {
+            if (!userId) return [];
+            const response = await fetchJson<WatchArea[]>(`/watch-areas/user/${userId}`);
+            return response;
+        },
+        enabled: !!userId,
+        staleTime: 60 * 1000, // 1 minute
+    });
+}
+
+/**
+ * Create a new watch area
+ */
+export function useCreateWatchArea() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (watchArea: WatchAreaCreate): Promise<WatchArea> => {
+            const response = await fetchJson<WatchArea>('/watch-areas/', {
+                method: 'POST',
+                body: JSON.stringify(watchArea),
+            });
+            return response;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['watchAreas'] });
+        },
+    });
+}
+
+/**
+ * Delete a watch area
+ */
+export function useDeleteWatchArea() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (watchAreaId: string): Promise<void> => {
+            await fetchJson(`/watch-areas/${watchAreaId}`, {
+                method: 'DELETE',
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['watchAreas'] });
+        },
+    });
+}
+
+/**
+ * Update user onboarding progress and profile information
+ */
+export function useUpdateUserOnboarding() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({
+            userId,
+            data
+        }: {
+            userId: string;
+            data: {
+                onboarding_step?: number;
+                profile_complete?: boolean;
+                username?: string;
+                phone?: string;
+                city_preference?: string;
+            }
+        }): Promise<void> => {
+            await fetchJson(`/users/${userId}`, {
+                method: 'PATCH',
+                body: JSON.stringify(data),
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['user'] });
+        },
+    });
+}
+
+// ============================================================================
+// FLOOD PREDICTION HOOKS (ML Hotspot Visualization)
+// ============================================================================
+
+import type { PredictionGridResponse } from '../../types';
+
+export interface PredictionGridOptions {
+    /** Bounding box for the grid */
+    bounds: {
+        minLng: number;
+        minLat: number;
+        maxLng: number;
+        maxLat: number;
+    } | null;
+    /** Grid resolution in km (default: 1.0) */
+    resolutionKm?: number;
+    /** Days ahead to predict (0 = today, default) */
+    horizonDays?: number;
+    /** Whether to enable the query */
+    enabled?: boolean;
+}
+
+/**
+ * Fetch flood prediction grid for heatmap visualization
+ *
+ * @param options - Grid options including bounds, resolution, and horizon
+ * @returns GeoJSON FeatureCollection with flood probabilities at each grid point
+ */
+export function usePredictionGrid(options: PredictionGridOptions) {
+    const {
+        bounds,
+        resolutionKm = 1.0,
+        horizonDays = 0,
+        enabled = true
+    } = options;
+
+    return useQuery({
+        queryKey: ['prediction-grid', bounds, resolutionKm, horizonDays],
+        queryFn: async (): Promise<PredictionGridResponse | null> => {
+            if (!bounds) return null;
+
+            const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
+            const params = new URLSearchParams({
+                bbox,
+                resolution_km: resolutionKm.toString(),
+                horizon_days: horizonDays.toString(),
+            });
+
+            const response = await fetchJson<PredictionGridResponse>(
+                `/predictions/grid?${params.toString()}`
+            );
+            return response;
+        },
+        enabled: enabled && !!bounds,
+        staleTime: 60 * 60 * 1000, // 1 hour - predictions don't change quickly
+        gcTime: 2 * 60 * 60 * 1000, // 2 hours
+        refetchOnWindowFocus: false, // Don't refetch on window focus
+        retry: 2,
+    });
+}
+
+/**
+ * Check ML service health
+ */
+export function usePredictionHealth() {
+    return useQuery({
+        queryKey: ['prediction-health'],
+        queryFn: async () => {
+            const response = await fetchJson<{
+                status: string;
+                ml_service_enabled: boolean;
+                ml_service_status?: string;
+                model_status?: string;
+            }>('/predictions/health');
+            return response;
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnWindowFocus: false,
+    });
+}
+
+// ==================== HISTORICAL FLOODS ====================
+
+import { getHistoricalFloods, HistoricalFloodsResponse } from './historical-floods';
+
+/**
+ * Fetch historical flood events for FloodAtlas.
+ * Historical data from IFI-Impacts dataset (1967-2023).
+ *
+ * @param city - City code (default: 'delhi')
+ * @returns GeoJSON FeatureCollection with historical flood events
+ */
+export function useHistoricalFloods(city: string = 'delhi') {
+    return useQuery<HistoricalFloodsResponse, Error>({
+        queryKey: ['historicalFloods', city],
+        queryFn: () => getHistoricalFloods(city),
+        staleTime: 1000 * 60 * 60 * 24, // 24 hours - historical data rarely changes
+        gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days cache
+        // Enable for all cities - API returns "Coming soon" message for unsupported cities
+        enabled: true,
+    });
+}
+
+// ==================== SAVED ROUTES ====================
+
+export interface SavedRoute {
+    id: string;
+    user_id: string;
+    name: string;
+    origin_latitude: number;
+    origin_longitude: number;
+    origin_name: string | null;
+    destination_latitude: number;
+    destination_longitude: number;
+    destination_name: string | null;
+    transport_mode: string;
+    use_count: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface SavedRouteCreate {
+    user_id: string;
+    name: string;
+    origin_latitude: number;
+    origin_longitude: number;
+    origin_name?: string | null;
+    destination_latitude: number;
+    destination_longitude: number;
+    destination_name?: string | null;
+    transport_mode?: string;
+}
+
+/**
+ * Get all saved routes for a user
+ * Routes are ordered by use_count (most used first)
+ */
+export function useSavedRoutes(userId: string | undefined) {
+    return useQuery({
+        queryKey: ['saved-routes', userId],
+        queryFn: async (): Promise<SavedRoute[]> => {
+            if (!userId) return [];
+            return fetchJson<SavedRoute[]>(`/saved-routes/user/${userId}`);
+        },
+        enabled: !!userId,
+        staleTime: 60 * 1000, // 1 minute
+        gcTime: 5 * 60 * 1000, // 5 minutes
+    });
+}
+
+/**
+ * Create a new saved route
+ */
+export function useCreateSavedRoute() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (route: SavedRouteCreate): Promise<SavedRoute> => {
+            return fetchJson<SavedRoute>('/saved-routes/', {
+                method: 'POST',
+                body: JSON.stringify(route),
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['saved-routes'] });
+        },
+    });
+}
+
+/**
+ * Delete a saved route
+ */
+export function useDeleteSavedRoute() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (routeId: string): Promise<void> => {
+            await fetchJson(`/saved-routes/${routeId}`, {
+                method: 'DELETE',
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['saved-routes'] });
+        },
+    });
+}
+
+/**
+ * Increment the use count for a saved route
+ * Call this when user loads a saved route for navigation
+ */
+export function useIncrementRouteUsage() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (routeId: string): Promise<SavedRoute> => {
+            return fetchJson<SavedRoute>(`/saved-routes/${routeId}/increment`, {
+                method: 'POST',
+            });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['saved-routes'] });
+        },
+    });
+}
+
+// ============================================================================
+// WATERLOGGING HOTSPOTS HOOKS (62 Delhi Hotspots)
+// ============================================================================
+
+export interface HotspotFeature {
+    type: 'Feature';
+    geometry: {
+        type: 'Point';
+        coordinates: [number, number]; // [lng, lat]
+    };
+    properties: {
+        id: number;
+        name: string;
+        zone: string;
+        description?: string;
+        risk_probability: number;
+        risk_level: 'low' | 'moderate' | 'high' | 'extreme';
+        risk_color: string;
+        severity_history?: string;
+        rainfall_24h_mm?: number;
+        // FHI (Flood Hazard Index) - Live weather-based risk
+        fhi_score?: number;         // 0.0-1.0 live hazard score
+        fhi_level?: string;         // 'low' | 'moderate' | 'high' | 'extreme'
+        fhi_color?: string;         // Hex color for FHI level
+        elevation_m?: number;       // Elevation in meters
+    };
+}
+
+export interface HotspotsResponse {
+    type: 'FeatureCollection';
+    features: HotspotFeature[];
+    metadata: {
+        generated_at: string;
+        total_hotspots: number;
+        current_rainfall_mm: number;
+        model_available: boolean;
+        risk_thresholds: {
+            low: string;
+            moderate: string;
+            high: string;
+            extreme: string;
+        };
+    };
+}
+
+/**
+ * Fetch all 62 Delhi waterlogging hotspots with current risk levels
+ *
+ * Risk is dynamically calculated based on:
+ * - Historical severity (always available)
+ * - XGBoost model prediction (if trained)
+ * - Current rainfall from CHIRPS (if available)
+ *
+ * @param includeRainfall - Whether to include current rainfall factor (default: true)
+ * @returns GeoJSON FeatureCollection with hotspot risk data
+ */
+export function useHotspots(includeRainfall: boolean = true) {
+    return useQuery({
+        queryKey: ['hotspots', includeRainfall],
+        queryFn: async (): Promise<HotspotsResponse> => {
+            const params = new URLSearchParams({
+                include_rainfall: includeRainfall.toString(),
+            });
+            const response = await fetchJson<HotspotsResponse>(
+                `/hotspots/all?${params.toString()}`
+            );
+            return response;
+        },
+        staleTime: 30 * 60 * 1000, // 30 minutes - risk changes with rainfall
+        gcTime: 60 * 60 * 1000, // 1 hour
+        refetchOnWindowFocus: false,
+        retry: 2,
+    });
+}
+
+/**
+ * Check hotspots service health
+ */
+export function useHotspotsHealth() {
+    return useQuery({
+        queryKey: ['hotspots-health'],
+        queryFn: async () => {
+            const response = await fetchJson<{
+                status: string;
+                hotspots_loaded: boolean;
+                total_hotspots: number;
+                model_trained: boolean;
+            }>('/hotspots/health');
+            return response;
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        refetchOnWindowFocus: false,
+    });
+}
+
+// ============================================================================
+// UNIFIED ALERTS HOOKS (Enhanced Alerts Section)
+// ============================================================================
+
+import type { UnifiedAlertsResponse, AlertSourceFilter } from '../../types';
+
+/**
+ * Fetch unified alerts from all sources (IMD, News, Twitter, Community Reports)
+ * Supports filtering by source type and city
+ */
+export function useUnifiedAlerts(city: string, sourceFilter: AlertSourceFilter = 'all') {
+    return useQuery({
+        queryKey: ['unified-alerts', city, sourceFilter],
+        queryFn: () => fetchJson<UnifiedAlertsResponse>(
+            `/alerts/unified?city=${city}&sources=${sourceFilter}`
+        ),
+        refetchInterval: 60000, // 1 minute
+        staleTime: 30000, // 30 seconds
+    });
+}
+
+/**
+ * Trigger manual refresh of external alerts from APIs
+ * Useful for pull-to-refresh functionality
+ */
+export function useRefreshExternalAlerts(city: string) {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: () => fetchJson(`/external-alerts/refresh?city=${city}`, {
+            method: 'POST'
+        }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['unified-alerts', city] });
+        },
     });
 }

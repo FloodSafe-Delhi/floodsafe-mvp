@@ -9,7 +9,7 @@ Welcome! This guide is designed to help you understand the **FloodSafe** codebas
 **All services are running and ready for development**:
 - ✅ **Backend API**: http://localhost:8000 (FastAPI with Clean Architecture)
 - ✅ **API Documentation**: http://localhost:8000/docs (Swagger UI)
-- ✅ **Frontend**: http://localhost:5173 (React + Vite + MapLibre GL)
+- ✅ **Frontend**: http://localhost:5175 (React + Vite + MapLibre GL)
 - ✅ **Database**: PostgreSQL + PostGIS on port 5432 (seeded with Bangalore data)
 - ✅ **IoT Service**: http://localhost:8001 (High-throughput ingestion)
 
@@ -214,7 +214,7 @@ python apps/backend/src/scripts/seed_db.py
 # Access the application
 # Backend API: http://localhost:8000
 # API Docs: http://localhost:8000/docs
-# Frontend: http://localhost:5173 or http://192.168.210.102:5173 (network access)
+# Frontend: http://localhost:5175 or http://192.168.210.102:5175 (network access)
 ```
 
 ### DEM Data Processing (Optional)

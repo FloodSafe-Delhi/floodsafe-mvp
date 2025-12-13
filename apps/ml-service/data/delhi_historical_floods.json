@@ -1,0 +1,1096 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1085,
+          28.7089
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1969-0005",
+        "date": "1969-08-01",
+        "districts": "North, North East, West, East, South West",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1969,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 22,
+        "main_cause": "floods",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1892,
+          28.6405
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1972-0007",
+        "date": "1972-07-01",
+        "districts": "",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1972,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 7,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2043,
+          28.6102
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1976-0012",
+        "date": "1976-08-18",
+        "districts": "New Delhi",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1976,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "incessant rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0926,
+          28.6984
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1978-0020",
+        "date": "1978-03-01",
+        "districts": "North",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1978,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 7,
+        "main_cause": "moderate",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2021,
+          28.6228
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1978-0021",
+        "date": "1978-08-01",
+        "districts": "New Delhi",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1978,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 7,
+        "main_cause": "severe",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0781,
+          28.5898
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1978-0022",
+        "date": "1978-09-01",
+        "districts": "South West, North west,North",
+        "severity": "severe",
+        "source": "IFI-Impacts",
+        "year": 1978,
+        "fatalities": 33,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 7,
+        "main_cause": "very severe",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.212,
+          28.6092
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1979-0043",
+        "date": "1979-02-21",
+        "districts": "New Delhi",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1979,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "moderate floods",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2051,
+          28.6175
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1980-0011",
+        "date": "1980-07-01",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1980,
+        "fatalities": 1,
+        "injured": 1,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2061,
+          28.6196
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1980-0012",
+        "date": "1980-07-08",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1980,
+        "fatalities": 4,
+        "injured": 4,
+        "displaced": 0,
+        "duration_days": 21,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1997,
+          28.617
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1981-0010",
+        "date": "1981-06-30",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1981,
+        "fatalities": 1,
+        "injured": 2,
+        "displaced": 0,
+        "duration_days": 2,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1987,
+          28.6205
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1982-0057",
+        "date": "1982-07-25",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1982,
+        "fatalities": 3,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.099,
+          28.7029
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1983-0107",
+        "date": "1983-04-15",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1983,
+        "fatalities": 2,
+        "injured": 7,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0925,
+          28.7083
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1983-0108",
+        "date": "1983-07-26",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1983,
+        "fatalities": 1,
+        "injured": 6,
+        "displaced": 0,
+        "duration_days": 5,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.096,
+          28.7041
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1984-0104",
+        "date": "1984-08-23",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1984,
+        "fatalities": 1,
+        "injured": 16,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1098,
+          28.7066
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1984-0105",
+        "date": "1984-09-01",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1984,
+        "fatalities": 3,
+        "injured": 3,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.097,
+          28.708
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1985-0072",
+        "date": "1985-07-11",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1985,
+        "fatalities": 2,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1138,
+          28.7012
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1985-0073",
+        "date": "1985-07-25",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1985,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1112,
+          28.7069
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1986-0082",
+        "date": "1986-08-13",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1986,
+        "fatalities": 3,
+        "injured": 2,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1123,
+          28.7085
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1986-0083",
+        "date": "1986-09-22",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1986,
+        "fatalities": 0,
+        "injured": 4,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2198,
+          28.6158
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1988-0105",
+        "date": "1988-09-22",
+        "districts": "New Delhi",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1988,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 7,
+        "main_cause": "severe",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2167,
+          28.6161
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1990-0102",
+        "date": "1990-08-22",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1990,
+        "fatalities": 3,
+        "injured": 5,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1996,
+          28.6161
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1991-0126",
+        "date": "1991-08-25",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1991,
+        "fatalities": 5,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 2,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0953,
+          28.7099
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1992-0090",
+        "date": "1992-07-24",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1992,
+        "fatalities": 1,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2039,
+          28.6067
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1993-0095",
+        "date": "1993-07-07",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1993,
+        "fatalities": 1,
+        "injured": 3,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1994,
+          28.6151
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1993-0096",
+        "date": "1993-07-22",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1993,
+        "fatalities": 1,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2184,
+          28.6139
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1993-0097",
+        "date": "1993-07-25",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1993,
+        "fatalities": 1,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1044,
+          28.7062
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1995-0158",
+        "date": "1995-09-04",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1995,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1092,
+          28.7109
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1995-0159",
+        "date": "1995-09-06",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1995,
+        "fatalities": 2,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 2,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0923,
+          28.7075
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1995-0160",
+        "date": "1995-09-09",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1995,
+        "fatalities": 1,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2028,
+          28.6065
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1996-0129",
+        "date": "1996-06-24",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1996,
+        "fatalities": 2,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2169,
+          28.62
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1996-0130",
+        "date": "1996-06-25",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1996,
+        "fatalities": 8,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0947,
+          28.7097
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1997-0143",
+        "date": "1997-06-19",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 1997,
+        "fatalities": 2,
+        "injured": 1,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.1113,
+          28.7025
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-1997-0144",
+        "date": "1997-07-13",
+        "districts": "North, North East, West, East, South West, Central, New Delhi, South, Shahdara, South East, North West",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 1997,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2065,
+          28.6144
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2003-0112",
+        "date": "2003-07-05",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 2003,
+        "fatalities": 4,
+        "injured": 6,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2185,
+          28.6101
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2003-0113",
+        "date": "2003-07-09",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 2003,
+        "fatalities": 4,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 3,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2163,
+          28.614
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2009-0086",
+        "date": "2009-07-29",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 2009,
+        "fatalities": 2,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2175,
+          28.6126
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2010-0149",
+        "date": "2010-09-23",
+        "districts": "New Delhi",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 2010,
+        "fatalities": 0,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2013,
+          28.6156
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2011-0107",
+        "date": "2011-09-09",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 2011,
+        "fatalities": 1,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2101,
+          28.6096
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2013-0133",
+        "date": "2013-06-16",
+        "districts": "New Delhi ",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 2013,
+        "fatalities": 0,
+        "injured": 1,
+        "displaced": 0,
+        "duration_days": 2,
+        "main_cause": "heavy rains ",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2207,
+          28.6126
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2020-0144",
+        "date": "2020-07-19",
+        "districts": "New Delhi",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 2020,
+        "fatalities": 1,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "Heavy rain",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2158,
+          28.6212
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2021-0321",
+        "date": "2021-07-19",
+        "districts": "New Delhi ",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 2021,
+        "fatalities": 4,
+        "injured": 0,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "Heavy rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2286,
+          28.6464
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2022-1109",
+        "date": "2022-10-09",
+        "districts": "Central",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 2022,
+        "fatalities": 3,
+        "injured": 9,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "Heavy Rains",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0943,
+          28.7096
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2023-0598",
+        "date": "2023-07-09",
+        "districts": "North",
+        "severity": "moderate",
+        "source": "IFI-Impacts",
+        "year": 2023,
+        "fatalities": 2,
+        "injured": 5,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "Heavy Rains & Floods (Yamuna River)",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.2805,
+          28.6992
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2023-0599",
+        "date": "2023-07-09",
+        "districts": "North East",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 2023,
+        "fatalities": 0,
+        "injured": 3,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "Heavy Rains & Floods (Yamuna River)",
+        "area_affected": ""
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.0733,
+          28.6564
+        ]
+      },
+      "properties": {
+        "id": "ifi_UEI-IMD-FL-2023-0600",
+        "date": "2023-07-09",
+        "districts": "West",
+        "severity": "minor",
+        "source": "IFI-Impacts",
+        "year": 2023,
+        "fatalities": 0,
+        "injured": 2,
+        "displaced": 0,
+        "duration_days": 1,
+        "main_cause": "Heavy Rains & Floods (Yamuna River)",
+        "area_affected": ""
+      }
+    }
+  ],
+  "metadata": {
+    "source": "India Flood Inventory (IFI-Impacts)",
+    "source_url": "https://zenodo.org/records/11275211",
+    "coverage": "1967-2023",
+    "region": "Delhi NCR",
+    "total_events": 45,
+    "generated_at": "2025-12-12T06:29:47.811905",
+    "coordinates_source": "District centroids with random jitter",
+    "coordinates_updated": "2025-12-12T23:39:00.738567",
+    "coordinate_accuracy": "Approximate district-level (\u00b11-5km)"
+  }
+}

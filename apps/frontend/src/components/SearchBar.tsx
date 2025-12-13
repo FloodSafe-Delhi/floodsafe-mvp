@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, MapPin, Loader2 } from 'lucide-react';
-import { useGeocode } from '../lib/api/hooks';
+import { Search, X, MapPin, Loader2, FileText, TrendingUp } from 'lucide-react';
+import { toast } from 'sonner';
+import { useLocationSearch, useTrendingSearches } from '../lib/api/hooks';
 import { isWithinCityBounds, getCityConfig, type CityKey } from '../lib/map/cityConfigs';
-import { GeocodingResult } from '../types';
+import type { SearchLocationResult } from '../types';
 
 interface SearchBarProps {
     onLocationSelect: (lat: number, lng: number, name: string) => void;
@@ -46,16 +47,21 @@ export default function SearchBar({
     // Debounce the search query (300ms)
     const debouncedQuery = useDebounce(query, 300);
 
-    // Use the geocode hook with debounced query
-    const { data: results, isLoading, isFetching } = useGeocode(debouncedQuery, debouncedQuery.length >= 3);
+    // Use the new backend location search
+    const { data: results, isLoading, isFetching } = useLocationSearch(
+        debouncedQuery,
+        10,
+        debouncedQuery.length >= 2
+    );
+
+    // Get trending searches
+    const { data: trending } = useTrendingSearches(5);
 
     const cityConfig = getCityConfig(cityKey);
 
     // Filter results to only include locations within city bounds
-    const filteredResults = (results || []).filter((result: GeocodingResult) => {
-        const lat = parseFloat(result.lat);
-        const lng = parseFloat(result.lon);
-        return isWithinCityBounds(lng, lat, cityKey);
+    const filteredResults = (results || []).filter((result: SearchLocationResult) => {
+        return isWithinCityBounds(result.lng, result.lat, cityKey);
     });
 
     // Handle click outside to close dropdown
@@ -114,43 +120,21 @@ export default function SearchBar({
     }, [isOpen, selectedIndex, filteredResults]);
 
     // Handle selection of a result
-    const handleSelect = (result: GeocodingResult) => {
-        const lat = parseFloat(result.lat);
-        const lng = parseFloat(result.lon);
-
-        // Format a clean display name
-        const displayName = formatDisplayName(result);
-
+    const handleSelect = (result: SearchLocationResult) => {
         // Clear the search and close dropdown
-        setQuery(displayName);
+        setQuery(result.formatted_name);
         setIsOpen(false);
         setSelectedIndex(-1);
 
         // Notify parent component
-        onLocationSelect(lat, lng, displayName);
+        onLocationSelect(result.lat, result.lng, result.formatted_name);
+        toast.success(`Location set: ${result.formatted_name}`, { duration: 2000 });
     };
 
-    // Format display name to be more readable
-    const formatDisplayName = (result: GeocodingResult): string => {
-        const parts: string[] = [];
-
-        // Try to get the most relevant parts of the address
-        if (result.address) {
-            const addr = result.address;
-            if (addr.road) parts.push(addr.road);
-            if (addr.neighbourhood) parts.push(addr.neighbourhood);
-            if (addr.suburb) parts.push(addr.suburb);
-            if (addr.city || addr.town || addr.village) {
-                parts.push(addr.city || addr.town || addr.village || '');
-            }
-        }
-
-        if (parts.length > 0) {
-            return parts.slice(0, 3).join(', ');
-        }
-
-        // Fallback to full display name, truncated
-        return result.display_name.split(',').slice(0, 3).join(', ');
+    // Handle trending click
+    const handleTrendingClick = (term: string) => {
+        setQuery(term);
+        inputRef.current?.focus();
     };
 
     // Clear search
@@ -162,8 +146,9 @@ export default function SearchBar({
     };
 
     const showLoading = isLoading || isFetching;
-    const showNoResults = !showLoading && debouncedQuery.length >= 3 && filteredResults.length === 0 && results && results.length > 0;
-    const showEmptySearch = !showLoading && debouncedQuery.length >= 3 && (!results || results.length === 0);
+    const showNoResults = !showLoading && debouncedQuery.length >= 2 && filteredResults.length === 0 && results && results.length > 0;
+    const showEmptySearch = !showLoading && debouncedQuery.length >= 2 && (!results || results.length === 0);
+    const showTrendingSection = query.length === 0 && trending && trending.trending.length > 0;
 
     return (
         <div ref={containerRef} className={`relative ${className}`}>
@@ -190,7 +175,7 @@ export default function SearchBar({
                         }
                     }}
                     placeholder={placeholder}
-                    className="w-full pl-11 pr-11 py-3 text-sm bg-white border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400 transition-all"
+                    className="w-full pl-11 pr-11 py-3 text-sm font-normal bg-white border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-muted-foreground transition-all font-sans"
                     autoComplete="off"
                     spellCheck="false"
                 />
@@ -206,67 +191,107 @@ export default function SearchBar({
             </div>
 
             {/* Dropdown Results */}
-            {isOpen && debouncedQuery.length >= 3 && (
+            {isOpen && (debouncedQuery.length >= 2 || showTrendingSection) && (
                 <div
                     ref={dropdownRef}
-                    className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden"
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-80 sm:max-h-96 flex flex-col font-sans"
                 >
-                    {/* Results List */}
-                    {filteredResults.length > 0 && (
-                        <ul className="max-h-64 overflow-y-auto">
-                            {filteredResults.map((result: GeocodingResult, index: number) => (
-                                <li key={`${result.lat}-${result.lon}-${index}`}>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSelect(result)}
-                                        className={`w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-gray-50 transition-colors ${
-                                            selectedIndex === index ? 'bg-blue-50' : ''
-                                        }`}
-                                    >
-                                        <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-gray-900 truncate">
-                                                {formatDisplayName(result)}
-                                            </p>
-                                            <p className="text-xs text-gray-500 truncate mt-0.5">
-                                                {result.display_name}
-                                            </p>
-                                        </div>
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                    {/* Dropdown Header with Close Button */}
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                        <span className="text-xs font-medium text-gray-600 tracking-wide">
+                            {filteredResults.length > 0 ? 'Search Results' : showTrendingSection ? 'Suggestions' : 'Search'}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(false)}
+                            className="p-1 hover:bg-gray-200 rounded transition-colors"
+                            aria-label="Close suggestions"
+                        >
+                            <X className="h-4 w-4 text-gray-500" />
+                        </button>
+                    </div>
 
-                    {/* No results in city */}
-                    {showNoResults && (
-                        <div className="px-4 py-3 text-sm text-gray-500">
-                            <p>No results found in {cityConfig.displayName}.</p>
-                            <p className="text-xs mt-1">
-                                Results are filtered to the current city area.
-                            </p>
-                        </div>
-                    )}
+                    {/* Scrollable Content */}
+                    <div className="overflow-y-auto flex-1">
+                        {/* Results List */}
+                        {filteredResults.length > 0 && (
+                            <ul>
+                                {filteredResults.map((result: SearchLocationResult, index: number) => (
+                                    <li key={`${result.lat}-${result.lng}-${index}`}>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSelect(result)}
+                                            className={`w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-gray-50 transition-colors ${
+                                                selectedIndex === index ? 'bg-blue-50' : ''
+                                            }`}
+                                        >
+                                            <MapPin className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-gray-900 truncate">
+                                                    {result.formatted_name}
+                                                </p>
+                                                <p className="text-xs text-gray-500 truncate mt-0.5">
+                                                    {result.display_name}
+                                                </p>
+                                            </div>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
 
-                    {/* No results at all */}
-                    {showEmptySearch && (
-                        <div className="px-4 py-3 text-sm text-gray-500">
-                            No locations found for "{debouncedQuery}".
-                        </div>
-                    )}
+                        {/* No results in city */}
+                        {showNoResults && (
+                            <div className="px-4 py-3 text-sm text-gray-500">
+                                <p>No results found in {cityConfig.displayName}.</p>
+                                <p className="text-xs mt-1">
+                                    Results are filtered to the current city area.
+                                </p>
+                            </div>
+                        )}
 
-                    {/* Loading state */}
-                    {showLoading && (
-                        <div className="px-4 py-3 flex items-center gap-2 text-sm text-gray-500">
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                            Searching...
-                        </div>
-                    )}
+                        {/* No results at all */}
+                        {showEmptySearch && (
+                            <div className="px-4 py-3 text-sm text-gray-500">
+                                No locations found for "{debouncedQuery}".
+                            </div>
+                        )}
+
+                        {/* Loading state */}
+                        {showLoading && (
+                            <div className="px-4 py-3 flex items-center gap-2 text-sm text-gray-500">
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                                Searching...
+                            </div>
+                        )}
+
+                        {/* Trending Searches (Empty State) */}
+                        {showTrendingSection && (
+                            <div>
+                                <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50 flex items-center gap-2">
+                                    <TrendingUp className="h-4 w-4" />
+                                    Trending Searches
+                                </div>
+                                <div className="px-4 py-3 flex flex-wrap gap-2">
+                                    {trending.trending.map((term, index) => (
+                                        <button
+                                            key={index}
+                                            type="button"
+                                            onClick={() => handleTrendingClick(term)}
+                                            className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-full transition-colors"
+                                        >
+                                            {term}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Footer */}
-                    <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
+                    <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 flex-shrink-0">
                         <p className="text-xs text-gray-400">
-                            Showing results in {cityConfig.displayName}
+                            Showing results in {cityConfig.displayName} • Powered by backend search
                         </p>
                     </div>
                 </div>

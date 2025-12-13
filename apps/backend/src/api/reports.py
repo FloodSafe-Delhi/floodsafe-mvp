@@ -13,12 +13,28 @@ from ..domain.models import ReportResponse, Report as ReportDomain, UserResponse
 from ..domain.reputation_models import ReportVerificationRequest
 from ..domain.services.reputation_service import ReputationService
 from ..core.utils import get_exif_data, get_lat_lon
+from math import radians, sin, cos, sqrt, atan2
 from ..domain.services.otp_service import get_otp_service
 from ..domain.services.validation_service import ReportValidationService
 from geoalchemy2.functions import ST_DWithin, ST_MakePoint
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Location verification tolerance in meters (matches frontend)
+LOCATION_VERIFICATION_TOLERANCE_METERS = 100
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate distance between two points in meters using Haversine formula."""
+    R = 6371000  # Earth's radius in meters
+    phi1, phi2 = radians(lat1), radians(lat2)
+    delta_phi = radians(lat2 - lat1)
+    delta_lambda = radians(lon2 - lon1)
+
+    a = sin(delta_phi / 2) ** 2 + cos(phi1) * cos(phi2) * sin(delta_lambda / 2) ** 2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+
+    return R * c
 
 @router.get("/", response_model=List[ReportResponse])
 def list_reports(db: Session = Depends(get_db)):
@@ -31,6 +47,40 @@ def list_reports(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error listing reports: {e}")
         raise HTTPException(status_code=500, detail="Failed to list reports")
+
+
+@router.get("/user/{user_id}", response_model=List[ReportResponse])
+def get_user_reports(
+    user_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all reports submitted by a specific user.
+    Returns reports ordered by timestamp (most recent first).
+    Used for the "My Reports" section in user profile.
+    """
+    try:
+        # Verify user exists
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get user's reports with pagination
+        reports = db.query(models.Report).filter(
+            models.Report.user_id == user_id
+        ).order_by(
+            models.Report.timestamp.desc()
+        ).offset(offset).limit(limit).all()
+
+        return reports
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching reports for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch user reports")
+
 
 @router.get("/location/details", response_model=dict)
 def get_location_details(
@@ -110,11 +160,11 @@ def get_location_details(
 @router.post("/", response_model=ReportResponse)
 async def create_report(
     user_id: UUID = Form(...),
-    description: str = Form(...),
-    latitude: float = Form(...),
-    longitude: float = Form(...),
-    phone_number: str = Form(...),
-    phone_verification_token: str = Form(...),
+    description: str = Form(..., min_length=10, max_length=500),
+    latitude: float = Form(..., ge=-90, le=90),
+    longitude: float = Form(..., ge=-180, le=180),
+    phone_number: Optional[str] = Form(None),  # Optional for MVP/demo mode
+    phone_verification_token: Optional[str] = Form(None),  # Optional for MVP/demo mode
     water_depth: Optional[str] = Form(None),
     vehicle_passability: Optional[str] = Form(None),
     image: UploadFile = File(...),  # MANDATORY - changed from File(None)
@@ -125,23 +175,26 @@ async def create_report(
 
     Required fields:
     - Geotagged photo (MANDATORY)
-    - Phone number with OTP verification
     - Location coordinates
+    - Phone number with OTP verification (optional for MVP/demo mode)
 
     Validation:
-    1. Verify phone number via OTP token
+    1. Verify phone number via OTP token (if provided)
     2. Extract GPS from photo EXIF
     3. Validate photo GPS matches reported location (±100m)
     4. Cross-reference with IoT sensor data
     5. Calculate validation score
     """
-    # 1. Verify phone number via OTP token
-    otp_service = get_otp_service()
-    if not otp_service.verify_token(phone_number, phone_verification_token):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid phone verification token. Please verify your phone number."
-        )
+    # 1. Verify phone number via OTP token (only if phone fields provided)
+    phone_verified = False
+    if phone_number and phone_verification_token:
+        otp_service = get_otp_service()
+        if not otp_service.verify_token(phone_number, phone_verification_token):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid phone verification token. Please verify your phone number."
+            )
+        phone_verified = True  # Only true if OTP verification succeeded
 
     media_url = None
     media_metadata = {}
@@ -163,13 +216,12 @@ async def create_report(
         else:
             media_metadata["gps"] = {"lat": img_lat, "lng": img_lng}
 
-            # 3. GPS validation: Check if photo GPS matches reported location within 100m
-            # 100m ≈ 0.001 degrees at equator
-            gps_tolerance = 0.001
-            if abs(img_lat - latitude) > gps_tolerance or abs(img_lng - longitude) > gps_tolerance:
+            # 3. GPS validation: Check if photo GPS matches reported location within tolerance
+            distance = haversine_distance(img_lat, img_lng, latitude, longitude)
+            if distance > LOCATION_VERIFICATION_TOLERANCE_METERS:
                 # GPS mismatch - flag as not location verified (don't block, allow with warning)
                 location_verified = False
-                logger.warning(f"Report photo GPS ({img_lat:.6f}, {img_lng:.6f}) doesn't match reported location ({latitude:.6f}, {longitude:.6f})")
+                logger.warning(f"Report photo GPS ({img_lat:.6f}, {img_lng:.6f}) is {distance:.1f}m from reported location ({latitude:.6f}, {longitude:.6f})")
 
         # TODO: Upload to S3/Blob Storage and get URL
         # media_url = s3_upload(content)
@@ -191,7 +243,7 @@ async def create_report(
             media_type="image",
             media_metadata=json.dumps(media_metadata),
             phone_number=phone_number,
-            phone_verified=True,  # Verified via OTP
+            phone_verified=phone_verified,  # True only if OTP verified
             water_depth=water_depth,
             vehicle_passability=vehicle_passability,
             location_verified=location_verified  # Photo GPS matches reported location
@@ -214,7 +266,7 @@ async def create_report(
             vehicle_passability=vehicle_passability,
             media_url=media_url,
             phone_number=phone_number,
-            phone_verified=True
+            phone_verified=phone_verified
         )
 
         iot_score = validation_service.validate_report(report_domain)
@@ -250,9 +302,6 @@ async def create_report(
         db.commit()
         db.refresh(new_report)
 
-        db.commit()
-        db.refresh(new_report)
-
         logger.info(f"Report created: {new_report.id}, IoT score: {iot_score}, verified: {new_report.verified}")
 
         # Update streak (using reputation service)
@@ -261,6 +310,19 @@ async def create_report(
 
         if streak_bonus:
             logger.info(f"User {user_id} earned streak bonus: {streak_bonus} points")
+
+        # Trigger alerts for users with nearby watch areas
+        try:
+            from ..domain.services.alert_service import AlertService
+            alert_service = AlertService(db)
+            alerts_created = alert_service.check_watch_areas_for_report(
+                new_report.id, latitude, longitude, user_id
+            )
+            if alerts_created > 0:
+                logger.info(f"Created {alerts_created} alerts for report {new_report.id}")
+        except Exception as e:
+            logger.warning(f"Failed to create alerts for report {new_report.id}: {e}")
+            # Don't fail the report creation if alerts fail
 
         # Return response with combined fields from both features
         return ReportResponse(

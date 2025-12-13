@@ -4,22 +4,31 @@ import { HomeScreen } from './components/screens/HomeScreen';
 import { FloodAtlasScreen } from './components/screens/FloodAtlasScreen';
 import { ReportScreen } from './components/screens/ReportScreen';
 import { ProfileScreen } from './components/screens/ProfileScreen';
-import { AlertDetailScreen, AlertsListScreen } from './components/screens/Placeholders';
+import { LoginScreen } from './components/screens/LoginScreen';
+import { OnboardingScreen } from './components/screens/OnboardingScreen';
+import { AlertsScreen } from './components/screens/AlertsScreen';
+import { AlertDetailScreen } from './components/screens/Placeholders';
+import { PrivacyPolicyScreen } from './components/screens/PrivacyPolicyScreen';
+import { TermsScreen } from './components/screens/TermsScreen';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FloodAlert } from './types';
 import { Toaster } from './components/ui/sonner';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CityProvider } from './contexts/CityContext';
 import { UserProvider } from './contexts/UserContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 const queryClient = new QueryClient();
 
-type Screen = 'home' | 'map' | 'report' | 'alerts' | 'profile' | 'alert-detail';
+type Screen = 'home' | 'map' | 'report' | 'alerts' | 'profile' | 'alert-detail' | 'privacy' | 'terms';
 
 function FloodSafeApp() {
+    const { isAuthenticated, isLoading: authLoading, user } = useAuth();
     const [activeTab, setActiveTab] = useState<Screen>('home');
     const [selectedAlert, setSelectedAlert] = useState<FloodAlert | null>(null);
     const [isOffline, setIsOffline] = useState(false);
+    const [initialRouteDestination, setInitialRouteDestination] = useState<[number, number] | null>(null);
 
     const handleAlertClick = (alert: FloodAlert) => {
         setSelectedAlert(alert);
@@ -63,6 +72,46 @@ function FloodSafeApp() {
         setActiveTab('profile');
     };
 
+    const handleNavigateToMapWithRoute = (destination: [number, number]) => {
+        setInitialRouteDestination(destination);
+        setActiveTab('map');
+    };
+
+    // Show loading screen while checking auth
+    if (authLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-50">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                    <p className="text-gray-600">Loading FloodSafe...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show login screen if not authenticated
+    if (!isAuthenticated) {
+        return (
+            <>
+                <LoginScreen />
+                <Toaster position="top-center" />
+            </>
+        );
+    }
+
+    // Show onboarding if profile not complete
+    if (user && !user.profile_complete) {
+        return (
+            <>
+                <OnboardingScreen onComplete={() => {
+                    // Force refresh to update user state
+                    window.location.reload();
+                }} />
+                <Toaster position="top-center" />
+            </>
+        );
+    }
+
     const renderScreen = () => {
         switch (activeTab) {
             case 'home':
@@ -72,6 +121,7 @@ function FloodSafeApp() {
                     onNavigateToReport={handleNavigateToReport}
                     onNavigateToAlerts={handleNavigateToAlerts}
                     onNavigateToProfile={handleNavigateToProfile}
+                    onNavigateToMapWithRoute={handleNavigateToMapWithRoute}
                 />;
             case 'alert-detail':
                 return selectedAlert ? (
@@ -83,16 +133,27 @@ function FloodSafeApp() {
                         onNavigateToReport={handleNavigateToReport}
                         onNavigateToAlerts={handleNavigateToAlerts}
                         onNavigateToProfile={handleNavigateToProfile}
+                        onNavigateToMapWithRoute={handleNavigateToMapWithRoute}
                     />
                 );
             case 'map':
-                return <FloodAtlasScreen />;
+                return <FloodAtlasScreen
+                    initialDestination={initialRouteDestination}
+                    onClearInitialDestination={() => setInitialRouteDestination(null)}
+                />;
             case 'report':
                 return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} />;
             case 'alerts':
-                return <AlertsListScreen onAlertClick={handleAlertClick} />;
+                return <AlertsScreen onNavigateToMap={(lat, lng) => {
+                    setInitialRouteDestination([lng, lat]);
+                    setActiveTab('map');
+                }} />;
             case 'profile':
-                return <ProfileScreen />;
+                return <ProfileScreen onNavigate={(screen) => setActiveTab(screen)} />;
+            case 'privacy':
+                return <PrivacyPolicyScreen />;
+            case 'terms':
+                return <TermsScreen />;
             default:
                 return <HomeScreen
                     onAlertClick={handleAlertClick}
@@ -100,6 +161,7 @@ function FloodSafeApp() {
                     onNavigateToReport={handleNavigateToReport}
                     onNavigateToAlerts={handleNavigateToAlerts}
                     onNavigateToProfile={handleNavigateToProfile}
+                    onNavigateToMapWithRoute={handleNavigateToMapWithRoute}
                 />;
         }
     };
@@ -127,11 +189,13 @@ function FloodSafeApp() {
 export default function App() {
     return (
         <QueryClientProvider client={queryClient}>
-            <UserProvider>
-                <CityProvider>
-                    <FloodSafeApp />
-                </CityProvider>
-            </UserProvider>
+            <AuthProvider>
+                <UserProvider>
+                    <CityProvider>
+                        <FloodSafeApp />
+                    </CityProvider>
+                </UserProvider>
+            </AuthProvider>
         </QueryClientProvider>
     );
 }

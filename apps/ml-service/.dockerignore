@@ -1,0 +1,21 @@
+# Python cache (regenerated on import)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments (not needed - pip installs fresh)
+venv/
+.venv/
+env/
+
+# IDE settings (developer-specific)
+.vscode/
+.idea/
+
+# Git (not needed in container)
+.git/
+
+# Jupyter checkpoints (temporary files)
+.ipynb_checkpoints/

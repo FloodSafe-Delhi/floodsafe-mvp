@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useReportMutation } from '../lib/api/hooks';
+import { useUser } from '../contexts/UserContext';
 import { X } from 'lucide-react';
 
 interface ReportModalProps {
@@ -12,6 +13,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, userL
     const [description, setDescription] = useState('');
     const [image, setImage] = useState<File | null>(null);
     const mutation = useReportMutation();
+    const { userId } = useUser();
 
     if (!isOpen) return null;
 
@@ -22,17 +24,23 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, userL
             return;
         }
 
-        // TODO: Get actual user ID from auth context. Using a hardcoded ID for MVP demo if needed, 
-        // or we should implement a simple login. For now, let's assume a demo user ID.
-        const DEMO_USER_ID = "d53568ca-649e-4a59-92d4-135058513a91"; // Replace with one from your DB
+        if (!userId) {
+            alert("Please log in to submit a report");
+            return;
+        }
+
+        if (!image) {
+            alert("Please attach a photo of the flood");
+            return;
+        }
 
         try {
             await mutation.mutateAsync({
-                user_id: DEMO_USER_ID,
+                user_id: userId,
                 description,
                 latitude: userLocation.lat,
                 longitude: userLocation.lng,
-                image: image || undefined
+                image: image
             });
             alert("Report submitted successfully!");
             onClose();
@@ -68,7 +76,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, userL
                     </div>
 
                     <div>
-                        <label htmlFor="report-photo" className="block text-sm font-medium text-gray-700">Photo (Optional)</label>
+                        <label htmlFor="report-photo" className="block text-sm font-medium text-gray-700">
+                            Photo <span className="text-red-500">*</span>
+                        </label>
                         <input
                             id="report-photo"
                             name="photo"
@@ -76,6 +86,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, userL
                             accept="image/*"
                             onChange={(e) => setImage(e.target.files?.[0] || null)}
                             className="mt-1 block w-full"
+                            required
                         />
                     </div>
 

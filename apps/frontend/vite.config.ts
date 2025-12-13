@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 5173,
+    port: 5175,  // Use 5175 for Google OAuth compatibility
     strictPort: true,
     watch: {
       usePolling: true,
@@ -24,8 +24,7 @@ export default defineConfig({
     // Configure HMR for WebSocket connections
     hmr: {
       host: 'localhost',
-      port: 5173,
-      clientPort: 5173,
+      port: 5175,
     },
   },
   // Optimize asset handling

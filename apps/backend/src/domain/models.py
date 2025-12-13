@@ -155,6 +155,11 @@ class UserUpdate(BaseModel):
     profile_public: Optional[bool] = None
     display_name: Optional[str] = Field(None, min_length=3, max_length=50)
 
+    # Onboarding & City Preference
+    city_preference: Optional[str] = Field(None, pattern="^(bangalore|delhi)$")
+    profile_complete: Optional[bool] = None
+    onboarding_step: Optional[int] = Field(None, ge=1, le=5)
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -243,6 +248,11 @@ class UserResponse(BaseModel):
     notification_email: bool = True
     alert_preferences: dict  # Parsed JSON object
 
+    # Onboarding & City Preference
+    city_preference: Optional[str] = None
+    profile_complete: bool = False
+    onboarding_step: Optional[int] = None
+
     @field_validator('badges', mode='before')
     @classmethod
     def parse_badges(cls, v):
@@ -326,6 +336,36 @@ class WatchAreaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DailyRouteCreate(BaseModel):
+    """Request DTO for creating a daily route"""
+    user_id: UUID
+    name: str = Field(..., min_length=3, max_length=100)
+    origin_latitude: float = Field(..., ge=-90, le=90)
+    origin_longitude: float = Field(..., ge=-180, le=180)
+    destination_latitude: float = Field(..., ge=-90, le=90)
+    destination_longitude: float = Field(..., ge=-180, le=180)
+    transport_mode: str = Field(default='driving', pattern="^(driving|walking|metro|combined)$")
+    notify_on_flood: bool = True
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DailyRouteResponse(BaseModel):
+    """Response DTO for daily route"""
+    id: UUID
+    user_id: UUID
+    name: str
+    origin_latitude: float
+    origin_longitude: float
+    destination_latitude: float
+    destination_longitude: float
+    transport_mode: str
+    notify_on_flood: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ============================================================================
 # ROUTING MODELS (Safe route navigation)
 # ============================================================================
@@ -381,5 +421,156 @@ class RouteResponse(BaseModel):
     routes: List[RouteOption]
     city: str
     warnings: List[str] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# ROUTE COMPARISON MODELS (Normal vs FloodSafe route analysis)
+# ============================================================================
+
+class RiskBreakdown(BaseModel):
+    """Breakdown of risk factors along a route"""
+    # Current data sources
+    active_reports: int = 0
+    sensor_warnings: int = 0
+
+    # ML sources (scalable slots for future integration)
+    ml_high_risk_zones: int = 0
+    ml_extreme_risk_zones: int = 0
+    ml_max_probability: float = 0.0
+    ml_avg_probability: float = 0.0
+
+    # Future expansion
+    historical_flood_frequency: int = 0
+    current_rain_intensity_mm: float = 0.0
+    forecast_rain_24h_mm: float = 0.0
+
+    # Aggregate
+    total_flood_zones_avoided: int = 0
+    overall_risk_score: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class StuckTimeEstimate(BaseModel):
+    """Estimated time if user gets stuck on flooded route"""
+    min_stuck_minutes: int = 0
+    avg_stuck_minutes: int = 0
+    worst_case_minutes: int = 0
+    severity_level: str = "none"  # none, ankle, knee, waist, impassable, warning, critical
+    risk_factors: List[str] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NetTimeSaved(BaseModel):
+    """Net time saved by taking FloodSafe route"""
+    vs_average_stuck: float = 0.0  # minutes saved vs average case
+    vs_worst_case: float = 0.0     # minutes saved vs worst case
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FloodImpact(BaseModel):
+    """Individual flood zone impact on a route"""
+    lat: float
+    lng: float
+    severity: str
+    type: str  # report, sensor, ml_prediction
+    penalty_seconds: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class NormalRouteOption(BaseModel):
+    """Normal route (fastest) with flood analysis"""
+    id: str
+    type: str = "normal"
+    geometry: dict
+    distance_meters: float
+    duration_seconds: float
+    adjusted_duration_seconds: float  # Duration accounting for flood delays
+    safety_score: int
+    flood_intersections: int
+    flood_impacts: List[FloodImpact] = []
+    instructions: List[RouteInstruction] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RouteComparisonRequest(BaseModel):
+    """Request DTO for route comparison"""
+    origin: LocationPoint
+    destination: LocationPoint
+    mode: str = "driving"
+    city: str = "BLR"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# =============================================================================
+# HOTSPOT ANALYSIS MODELS (for route planning)
+# =============================================================================
+
+class NearbyHotspot(BaseModel):
+    """A waterlogging hotspot near a route"""
+    id: int
+    name: str
+    fhi_level: str  # 'low' | 'moderate' | 'high' | 'extreme'
+    fhi_color: str
+    fhi_score: float = 0.0
+    distance_to_route_m: float = 0.0
+    estimated_delay_seconds: int = 0
+    must_avoid: bool = False  # True if HIGH or EXTREME (HARD AVOID)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HotspotAnalysis(BaseModel):
+    """
+    Complete hotspot analysis for a route.
+
+    Used in RouteComparisonResponse to show waterlogging risk.
+    Only populated for Delhi routes (where hotspot data exists).
+    """
+    total_hotspots_nearby: int = 0
+    hotspots_to_avoid: int = 0  # HIGH/EXTREME count (HARD AVOID)
+    hotspots_with_warnings: int = 0  # MODERATE count
+    highest_fhi_score: Optional[float] = None
+    highest_fhi_level: Optional[str] = None
+    total_delay_seconds: int = 0
+    route_is_safe: bool = True  # False if any HARD AVOID hotspots
+    must_reroute: bool = False  # True if route should be rejected
+    nearby_hotspots: List[NearbyHotspot] = []
+    warning_message: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RouteComparisonResponse(BaseModel):
+    """Response containing route comparison analysis"""
+    # Route options
+    normal_route: Optional[NormalRouteOption] = None
+    floodsafe_route: Optional[RouteOption] = None
+
+    # Comparison metrics
+    time_penalty_seconds: float = 0
+    distance_difference_meters: float = 0
+    flood_zones_avoided: int = 0
+
+    # Risk analysis
+    risk_breakdown: RiskBreakdown
+    stuck_time_estimate: StuckTimeEstimate
+    net_time_saved: NetTimeSaved
+
+    # Recommendation
+    recommendation: str = ""
+
+    # Hotspot analysis (Delhi only - where hotspot data exists)
+    hotspot_analysis: Optional[HotspotAnalysis] = None
+
+    # Flood zones GeoJSON for map display
+    flood_zones: dict = {}
 
     model_config = ConfigDict(from_attributes=True)

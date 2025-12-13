@@ -1,0 +1,9 @@
+# Node modules (npm installs fresh)
+node_modules/
+
+# IDE settings (developer-specific)
+.vscode/
+.idea/
+
+# Git (not needed in container)
+.git/

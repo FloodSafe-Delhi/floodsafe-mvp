@@ -77,6 +77,46 @@ export default function MapLegend({ className }: MapLegendProps) {
                             <LegendItem color="#ef4444" label="Flooded Route" shape="line" thickness="thick" />
                         </div>
                     </div>
+
+                    {/* Historical Floods */}
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-700 mb-2">Historical Floods (1967-2023)</h4>
+                        <div className="space-y-1.5">
+                            <LegendItem color="#22c55e" label="Minor Event" shape="circle" />
+                            <LegendItem color="#eab308" label="Moderate Event" shape="circle" />
+                            <LegendItem color="#ef4444" label="Severe Event" shape="circle" />
+                        </div>
+                        <p className="text-[10px] text-gray-500 mt-1.5">Source: India Flood Inventory</p>
+                    </div>
+
+                    {/* Flood Hazard Index (FHI) */}
+                    <div>
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                            Flood Hazard Index (Live)
+                        </h4>
+                        <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#22c55e' }}></div>
+                                <span className="text-xs text-gray-600">Low (0-20%)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#eab308' }}></div>
+                                <span className="text-xs text-gray-600">Moderate (20-40%)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f97316' }}></div>
+                                <span className="text-xs text-gray-600">High (40-70%)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ef4444' }}></div>
+                                <span className="text-xs text-gray-600">Extreme (70-100%)</span>
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1.5 italic">
+                            Real-time weather conditions
+                        </p>
+                    </div>
                 </div>
             )}
         </div>

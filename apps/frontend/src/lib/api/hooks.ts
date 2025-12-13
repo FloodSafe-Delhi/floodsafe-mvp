@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, uploadFile } from './client';
-import { User, RouteRequest, RouteResponse, GeocodingResult, DailyRoute, DailyRouteCreate, WatchArea, WatchAreaCreate, RouteCalculationRequest, RouteCalculationResponse, MetroStation, RouteOption, RouteComparisonRequest, RouteComparisonResponse } from '../../types';
+import { User, GeocodingResult, DailyRoute, DailyRouteCreate, WatchArea, WatchAreaCreate, RouteCalculationRequest, RouteCalculationResponse, MetroStation, RouteOption, RouteComparisonRequest, RouteComparisonResponse } from '../../types';
 import { validateUsers, validateSensors, validateReports } from './validators';
 
 // Types

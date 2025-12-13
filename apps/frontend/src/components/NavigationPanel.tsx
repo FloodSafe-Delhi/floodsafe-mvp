@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { Button } from './ui/button';
 import SmartSearchBar from './SmartSearchBar';
 import { useCompareRoutes, useNearbyMetros, useSavedRoutes, useCreateSavedRoute, useDeleteSavedRoute, useIncrementRouteUsage } from '../lib/api/hooks';
-import { RouteOption, MetroStation, RouteComparisonResponse, NormalRouteOption } from '../types';
+import { RouteOption, MetroStation, RouteComparisonResponse } from '../types';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { RouteComparisonCard } from './RouteComparisonCard';
@@ -39,8 +39,8 @@ export function NavigationPanel({
     const [destination, setDestination] = useState<{ lat: number; lng: number; name: string } | null>(null);
     const [useCurrentLocation, setUseCurrentLocation] = useState(true);
     const [mode, setMode] = useState<'driving' | 'walking' | 'cycling'>('driving');
-    const [routes, setRoutes] = useState<RouteOption[]>([]);
-    const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+    const [_routes, setRoutes] = useState<RouteOption[]>([]);
+    const [_selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [avoidMLRisk, setAvoidMLRisk] = useState(false);
     const [comparison, setComparison] = useState<RouteComparisonResponse | null>(null);
     const [selectedRouteType, setSelectedRouteType] = useState<'normal' | 'floodsafe' | null>(null);
@@ -161,7 +161,7 @@ export function NavigationPanel({
         );
     };
 
-    const handleRouteSelect = (route: RouteOption) => {
+    const _handleRouteSelect = (route: RouteOption) => {
         setSelectedRouteId(route.id);
         onRouteSelected(route);
     };
@@ -269,7 +269,7 @@ export function NavigationPanel({
         return `${(meters / 1000).toFixed(1)}km`;
     };
 
-    const formatDuration = (seconds?: number) => {
+    const _formatDuration = (seconds?: number) => {
         if (!seconds) return 'N/A';
         const minutes = Math.round(seconds / 60);
         if (minutes < 60) return `${minutes}min`;
@@ -278,21 +278,21 @@ export function NavigationPanel({
         return `${hours}h ${mins}min`;
     };
 
-    const getSafetyColor = (score: number) => {
+    const _getSafetyColor = (score: number) => {
         if (score >= 75) return 'text-green-600';
         if (score >= 50) return 'text-yellow-600';
         if (score >= 25) return 'text-orange-600';
         return 'text-red-600';
     };
 
-    const getSafetyLabel = (score: number) => {
+    const _getSafetyLabel = (score: number) => {
         if (score >= 75) return 'Safe';
         if (score >= 50) return 'Moderate';
         if (score >= 25) return 'Caution';
         return 'Unsafe';
     };
 
-    const getRouteTypeIcon = (type: string) => {
+    const _getRouteTypeIcon = (type: string) => {
         switch (type) {
             case 'safe': return <Shield className="h-4 w-4 text-green-600" />;
             case 'balanced': return <Navigation className="h-4 w-4 text-blue-600" />;

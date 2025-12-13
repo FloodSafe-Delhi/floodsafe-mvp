@@ -108,7 +108,7 @@ export function HomeScreen({
 
     const { data: sensors, refetch: refetchSensors } = useSensors();
     const { data: reports, refetch: refetchReports } = useReports();
-    const { data: users } = useUsers();
+    const { data: _users } = useUsers();
     const { data: activeReportersData } = useActiveReporters();
     const { data: nearbyReportersData } = useNearbyReporters(
         userLocation?.latitude ?? 0,
@@ -591,7 +591,7 @@ export function HomeScreen({
                     <div className="divide-y">
                         {/* Sensor Alerts with Location and Locate Button */}
                         {filteredAlerts.length > 0 ? (
-                            filteredAlerts.slice(0, 2).map((alert, index) => (
+                            filteredAlerts.slice(0, 2).map((alert, _index) => (
                                 <div key={alert.id} className="p-3">
                                     <div className="flex items-start gap-3">
                                         <div className={cn(

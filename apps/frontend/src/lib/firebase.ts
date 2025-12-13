@@ -17,8 +17,6 @@ import {
     RecaptchaVerifier,
     signInWithPhoneNumber,
     ConfirmationResult,
-    PhoneAuthProvider,
-    signInWithCredential,
 } from 'firebase/auth';
 
 // Firebase configuration from environment variables

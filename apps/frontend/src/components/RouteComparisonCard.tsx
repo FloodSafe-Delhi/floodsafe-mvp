@@ -1,6 +1,6 @@
 import React from 'react';
-import { Clock, Shield, Navigation, AlertTriangle, Droplets, Radio, Brain, Check, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
-import { RouteComparisonResponse, NormalRouteOption, RouteOption, HotspotAnalysis, NearbyHotspot } from '../types';
+import { Clock, Shield, AlertTriangle, Droplets, Radio, Brain, Check, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import { RouteComparisonResponse } from '../types';
 
 interface RouteComparisonCardProps {
     comparison: RouteComparisonResponse;

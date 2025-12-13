@@ -18,7 +18,7 @@ export function FloodAtlasScreen({
     onClearInitialDestination
 }: FloodAtlasScreenProps) {
     const city = useCurrentCity();
-    const { user } = useAuth();
+    const { user: _user } = useAuth();
 
     // Navigation state
     const [showNavigationPanel, setShowNavigationPanel] = useState(!!initialDestination);
@@ -26,7 +26,7 @@ export function FloodAtlasScreen({
     const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [navigationOrigin, setNavigationOrigin] = useState<{ lat: number; lng: number } | null>(null);
     const [navigationDestination, setNavigationDestination] = useState<{ lat: number; lng: number } | null>(null);
-    const [nearbyMetros, setNearbyMetros] = useState<MetroStation[]>([]);
+    const [nearbyMetros, _setNearbyMetros] = useState<MetroStation[]>([]);
     const [floodZones, setFloodZones] = useState<GeoJSON.FeatureCollection | undefined>(undefined);
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 

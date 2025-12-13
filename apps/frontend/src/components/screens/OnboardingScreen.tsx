@@ -21,7 +21,6 @@ import {
     useGeocode
 } from '../../lib/api/hooks';
 import type { OnboardingFormState, OnboardingAction, WatchAreaCreate, DailyRouteCreate, GeocodingResult } from '../../types';
-import type { CityKey } from '../../lib/map/cityConfigs';
 import { CITIES } from '../../lib/map/cityConfigs';
 
 // UI Components
@@ -131,7 +130,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                     return false;
                 }
                 return true;
-            case 3:
+            case 3: {
                 // Check both local state and existing watch areas from backend
                 const totalWatchAreas = state.watchAreas.length + existingWatchAreas.length;
                 if (totalWatchAreas < 1) {
@@ -139,6 +138,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                     return false;
                 }
                 return true;
+            }
             case 4:
                 // Optional step - always valid
                 return true;
@@ -187,7 +187,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                         await createWatchArea.mutateAsync({ ...wa, user_id: user.id });
                     }
                     // Clear local state after successful save
-                    state.watchAreas.forEach((_, i) => dispatch({ type: 'REMOVE_WATCH_AREA', payload: 0 }));
+                    state.watchAreas.forEach((_, _i) => dispatch({ type: 'REMOVE_WATCH_AREA', payload: 0 }));
                     await updateUser.mutateAsync({ userId: user.id, data: { onboarding_step: 4 } });
                     break;
                 case 4:
@@ -196,7 +196,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                         await createDailyRoute.mutateAsync({ ...route, user_id: user.id });
                     }
                     // Clear local state after successful save
-                    state.dailyRoutes.forEach((_, i) => dispatch({ type: 'REMOVE_DAILY_ROUTE', payload: 0 }));
+                    state.dailyRoutes.forEach((_, _i) => dispatch({ type: 'REMOVE_DAILY_ROUTE', payload: 0 }));
                     await updateUser.mutateAsync({ userId: user.id, data: { onboarding_step: 5 } });
                     break;
                 case 5:
@@ -466,7 +466,7 @@ interface Step3WatchAreasProps {
     userId: string;
 }
 
-function Step3WatchAreas({ watchAreas, existingWatchAreas, city, onAdd, onRemove, error, userId }: Step3WatchAreasProps) {
+function Step3WatchAreas({ watchAreas, existingWatchAreas, city: _city, onAdd, onRemove, error, userId }: Step3WatchAreasProps) {
     const [name, setName] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, X, MapPin, Loader2, FileText, TrendingUp } from 'lucide-react';
+import { Search, X, MapPin, Loader2, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocationSearch, useTrendingSearches } from '../lib/api/hooks';
 import { isWithinCityBounds, getCityConfig, type CityKey } from '../lib/map/cityConfigs';

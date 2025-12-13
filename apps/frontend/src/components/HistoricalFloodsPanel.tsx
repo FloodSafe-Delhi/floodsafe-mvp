@@ -1,5 +1,4 @@
 import { X, Calendar, AlertTriangle, Users, Clock, MapPin } from 'lucide-react';
-import { Button } from './ui/button';
 
 // Custom scrollbar styles - FORCED visible
 const scrollbarStyles = `

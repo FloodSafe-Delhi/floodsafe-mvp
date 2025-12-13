@@ -1,10 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { CityKey } from '../lib/map/cityConfigs';
 import { MAP_CONSTANTS } from '../lib/map/config';
+import { useAuth } from './AuthContext';
+import { API_BASE_URL } from '../lib/api/config';
 
 interface CityContextType {
     city: CityKey;
     setCity: (city: CityKey) => void;
+    syncCityToUser: (userId: string, newCity: CityKey) => Promise<void>;
 }
 
 const CityContext = createContext<CityContextType | undefined>(undefined);
@@ -16,16 +19,33 @@ interface CityProviderProps {
 }
 
 export function CityProvider({ children }: CityProviderProps) {
-    // Initialize from localStorage or use default
+    const { user } = useAuth();
+
+    // Initialize from user preference > localStorage > default
     const [city, setCityState] = useState<CityKey>(() => {
+        // Priority 1: User preference (if logged in)
+        if (user?.city_preference && (user.city_preference === 'bangalore' || user.city_preference === 'delhi')) {
+            return user.city_preference as CityKey;
+        }
+        // Priority 2: localStorage
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved && (saved === 'bangalore' || saved === 'delhi')) {
                 return saved as CityKey;
             }
         }
+        // Priority 3: Default
         return MAP_CONSTANTS.DEFAULT_CITY;
     });
+
+    // Sync with user preference on mount or when user changes
+    useEffect(() => {
+        if (user?.city_preference && user.city_preference !== city) {
+            if (user.city_preference === 'bangalore' || user.city_preference === 'delhi') {
+                setCityState(user.city_preference as CityKey);
+            }
+        }
+    }, [user?.city_preference]);
 
     // Persist to localStorage when city changes
     useEffect(() => {
@@ -38,8 +58,35 @@ export function CityProvider({ children }: CityProviderProps) {
         setCityState(newCity);
     };
 
+    /**
+     * Sync city preference to user profile in backend
+     * Should be called when user explicitly changes city during onboarding
+     */
+    const syncCityToUser = async (userId: string, newCity: CityKey) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                },
+                body: JSON.stringify({ city_preference: newCity })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to sync city to user profile');
+            }
+
+            // Update local state after successful API call
+            setCityState(newCity);
+        } catch (error) {
+            console.error('Error syncing city to user:', error);
+            throw error;
+        }
+    };
+
     return (
-        <CityContext.Provider value={{ city, setCity }}>
+        <CityContext.Provider value={{ city, setCity, syncCityToUser }}>
             {children}
         </CityContext.Provider>
     );

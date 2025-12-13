@@ -8,15 +8,16 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Progress } from '../ui/progress';
-import { MapPin, Award, Bell, Globe, Settings, LogOut, Edit, Trash2 } from 'lucide-react';
+import { MapPin, Award, Bell, Globe, Settings, LogOut, Edit, Trash2, FileText, Route } from 'lucide-react';
+import { useUserReports, Report, useDailyRoutes, useDeleteDailyRoute } from '../../lib/api/hooks';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Input } from '../ui/input';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
 import { User } from '../../types';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { useAuth } from '../../contexts/AuthContext';
+import { API_BASE_URL } from '../../lib/api/config';
 
 // For demo purposes, using a hardcoded user ID
 // In production, this would come from auth context
@@ -49,8 +50,13 @@ const normalizeUserData = (userData: User): User => {
   };
 };
 
-export function ProfileScreen() {
+interface ProfileScreenProps {
+  onNavigate?: (screen: 'privacy' | 'terms') => void;
+}
+
+export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const queryClient = useQueryClient();
+  const { logout } = useAuth();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   // Fetch user profile
@@ -58,7 +64,7 @@ export function ProfileScreen() {
     queryKey: ['user', DEMO_USER_ID],
     queryFn: async () => {
       // Try to get admin user first
-      const usersResponse = await fetch(`${API_URL}/api/leaderboards/top?limit=50`);
+      const usersResponse = await fetch(`${API_BASE_URL}/leaderboards/top?limit=50`);
       const users = await usersResponse.json();
       const adminUser = users.find((u: User) => u.username === 'admin');
 
@@ -82,17 +88,42 @@ export function ProfileScreen() {
     queryKey: ['watchAreas', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      const response = await fetch(`${API_URL}/api/watch-areas/user/${user.id}`);
+      const response = await fetch(`${API_BASE_URL}/watch-areas/user/${user.id}`);
       if (!response.ok) return [];
       return response.json();
     },
     enabled: !!user?.id,
   });
 
+  // Fetch user's reports
+  const { data: userReports = [], isLoading: reportsLoading } = useUserReports(user?.id);
+
+  // Fetch daily routes
+  const { data: dailyRoutes = [] } = useDailyRoutes(user?.id);
+  const deleteRouteMutation = useDeleteDailyRoute();
+
+  // Delete watch area mutation
+  const deleteWatchAreaMutation = useMutation({
+    mutationFn: async (watchAreaId: string) => {
+      const response = await fetch(`${API_BASE_URL}/watch-areas/${watchAreaId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete watch area');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchAreas'] });
+      toast.success('Watch area deleted');
+    },
+    onError: () => {
+      toast.error('Failed to delete watch area');
+    },
+  });
+
   // Update user mutation
   const updateUserMutation = useMutation({
     mutationFn: async (updates: Partial<User>) => {
-      const response = await fetch(`${API_URL}/api/users/${user?.id}`, {
+      const response = await fetch(`${API_BASE_URL}/users/${user?.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -153,10 +184,11 @@ export function ProfileScreen() {
 
   const progressToNextLevel = ((user.points % 100) / 100) * 100;
   const pointsNeeded = 100 - (user.points % 100);
-  const memberSince = new Date(user.created_at).toLocaleDateString('en-US', {
-    month: 'short',
-    year: 'numeric'
-  });
+  const memberSince = user.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : 'Recently';
+  const reportsCount = user.reports_count ?? 0;
+  const verifiedReportsCount = user.verified_reports_count ?? 0;
 
   return (
     <div className="pb-16 md:pb-4 min-h-screen bg-gray-50">
@@ -195,6 +227,40 @@ export function ProfileScreen() {
       </div>
 
       <div className="p-4 space-y-4">
+        {/* Profile Completion Card */}
+        {!user.profile_complete && (
+          <Card className="p-4 bg-blue-50 border-blue-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <Settings className="w-5 h-5 text-blue-600" />
+                Complete Your Profile
+              </h3>
+              <Badge variant="secondary" className="text-xs">
+                Step {user.onboarding_step || 1} of 5
+              </Badge>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-700">Profile Completion</span>
+                <span className="text-blue-600 font-medium">
+                  {Math.round(((user.onboarding_step || 0) / 5) * 100)}%
+                </span>
+              </div>
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-600 transition-all duration-300"
+                  style={{ width: `${((user.onboarding_step || 0) / 5) * 100}%` }}
+                />
+              </div>
+
+              <p className="text-xs text-gray-600 mt-2">
+                Complete your profile to unlock all features and personalized flood alerts
+              </p>
+            </div>
+          </Card>
+        )}
+
         {/* Reputation Section */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
@@ -218,16 +284,16 @@ export function ProfileScreen() {
 
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold">{user.reports_count}</div>
+              <div className="text-2xl font-bold">{reportsCount}</div>
               <div className="text-xs text-gray-600">Submitted</div>
             </div>
             <div className="p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{user.verified_reports_count}</div>
+              <div className="text-2xl font-bold text-green-600">{verifiedReportsCount}</div>
               <div className="text-xs text-gray-600">Verified</div>
             </div>
             <div className="p-3 bg-yellow-50 rounded-lg">
               <div className="text-2xl font-bold text-yellow-600">
-                {user.reports_count - user.verified_reports_count}
+                {reportsCount - verifiedReportsCount}
               </div>
               <div className="text-xs text-gray-600">Pending</div>
             </div>
@@ -269,7 +335,12 @@ export function ProfileScreen() {
                       </div>
                     </div>
                   </div>
-                  <Button size="sm" variant="ghost">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => deleteWatchAreaMutation.mutate(area.id)}
+                    disabled={deleteWatchAreaMutation.isPending}
+                  >
                     <Trash2 className="w-4 h-4 text-red-500" />
                   </Button>
                 </div>
@@ -280,6 +351,153 @@ export function ProfileScreen() {
               <MapPin className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p className="text-sm">No watch areas yet</p>
               <p className="text-xs mt-1">Add locations to monitor for alerts</p>
+            </div>
+          )}
+        </Card>
+
+        {/* City Preference */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-gray-600" />
+              City Preference
+            </h3>
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div>
+              <div className="text-sm font-medium">
+                {user.city_preference ? (
+                  user.city_preference === 'bangalore' ? 'Bangalore' : 'Delhi'
+                ) : (
+                  'Not set'
+                )}
+              </div>
+              <div className="text-xs text-gray-500">
+                Your primary city for flood alerts
+              </div>
+            </div>
+            {user.city_preference && (
+              <Badge variant="outline" className="text-xs">
+                {user.city_preference === 'bangalore' ? 'Karnataka' : 'NCT'}
+              </Badge>
+            )}
+          </div>
+
+          {!user.city_preference && (
+            <p className="text-xs text-gray-500 mt-2">
+              Set your city preference during onboarding or in settings
+            </p>
+          )}
+        </Card>
+
+        {/* Daily Routes */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <Route className="w-5 h-5 text-gray-600" />
+              Daily Routes ({dailyRoutes.length})
+            </h3>
+          </div>
+
+          {dailyRoutes.length > 0 ? (
+            <div className="space-y-2">
+              {dailyRoutes.map((route) => (
+                <div key={route.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2 flex-1">
+                    <Route className="w-4 h-4 text-gray-600" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{route.name}</div>
+                      <div className="text-xs text-gray-500 capitalize">
+                        {route.transport_mode} • Flood alerts: {route.notify_on_flood ? 'On' : 'Off'}
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (confirm(`Delete route "${route.name}"?`)) {
+                        deleteRouteMutation.mutate(route.id, {
+                          onSuccess: () => toast.success('Route deleted'),
+                          onError: () => toast.error('Failed to delete route'),
+                        });
+                      }
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-gray-500">
+              <Route className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No daily routes yet</p>
+              <p className="text-xs mt-1">Add routes to get flood alerts along your commute</p>
+            </div>
+          )}
+        </Card>
+
+        {/* My Reports */}
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <FileText className="w-5 h-5 text-gray-600" />
+              My Reports ({userReports.length})
+            </h3>
+          </div>
+
+          {reportsLoading ? (
+            <div className="text-center py-6 text-gray-500">
+              <div className="text-sm">Loading reports...</div>
+            </div>
+          ) : userReports.length > 0 ? (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {userReports.slice(0, 10).map((report: Report) => (
+                <div key={report.id} className="p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="text-sm font-medium line-clamp-2">{report.description}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-gray-500">
+                          {new Date(report.timestamp).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </span>
+                        {report.verified ? (
+                          <Badge variant="secondary" className="text-xs bg-green-100 text-green-800">
+                            Verified
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
+                            Pending
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-gray-500">
+                      <div>{report.upvotes} upvotes</div>
+                      {report.water_depth && (
+                        <div className="capitalize">{report.water_depth}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {userReports.length > 10 && (
+                <div className="text-center text-sm text-gray-500 pt-2">
+                  And {userReports.length - 10} more reports...
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-gray-500">
+              <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">No reports yet</p>
+              <p className="text-xs mt-1">Submit your first flood report to help your community</p>
             </div>
           )}
         </Card>
@@ -385,6 +603,57 @@ export function ProfileScreen() {
           </RadioGroup>
         </Card>
 
+        {/* Privacy Settings */}
+        <Card className="p-4">
+          <h3 className="font-semibold text-lg flex items-center gap-2 mb-3">
+            <Settings className="w-5 h-5 text-gray-600" />
+            Privacy Settings
+          </h3>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Show on Leaderboard</Label>
+                <p className="text-xs text-gray-500">Display your profile on public leaderboards</p>
+              </div>
+              <Switch
+                checked={user.leaderboard_visible !== false}
+                onCheckedChange={(checked) => updateUserMutation.mutate({ leaderboard_visible: checked } as Partial<User>)}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Public Profile</Label>
+                <p className="text-xs text-gray-500">Allow others to view your profile</p>
+              </div>
+              <Switch
+                checked={user.profile_public !== false}
+                onCheckedChange={(checked) => updateUserMutation.mutate({ profile_public: checked } as Partial<User>)}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label>Display Name</Label>
+              <p className="text-xs text-gray-500">Optional name shown instead of username</p>
+              <Input
+                placeholder="Enter display name"
+                defaultValue={user.display_name || ''}
+                onBlur={(e) => {
+                  const value = e.target.value.trim();
+                  if (value !== (user.display_name || '')) {
+                    updateUserMutation.mutate({ display_name: value || null } as Partial<User>);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </Card>
+
         {/* About Section */}
         <Card className="p-4">
           <h3 className="font-semibold text-lg flex items-center gap-2 mb-3">
@@ -395,23 +664,50 @@ export function ProfileScreen() {
           <div className="space-y-2 text-sm">
             <p className="text-gray-600">App version: 1.0.0 (MVP)</p>
             <Separator />
-            <Button variant="ghost" className="w-full justify-start p-0 h-auto text-blue-600 font-normal">
+            <Button
+              variant="ghost"
+              className="w-full justify-start p-0 h-auto text-blue-600 font-normal"
+              onClick={() => window.open('https://github.com/anthropics/floodsafe', '_blank')}
+            >
               About FloodSafe
             </Button>
-            <Button variant="ghost" className="w-full justify-start p-0 h-auto text-blue-600 font-normal">
+            <Button
+              variant="ghost"
+              className="w-full justify-start p-0 h-auto text-blue-600 font-normal"
+              onClick={() => onNavigate?.('privacy')}
+            >
               Privacy Policy
             </Button>
-            <Button variant="ghost" className="w-full justify-start p-0 h-auto text-blue-600 font-normal">
+            <Button
+              variant="ghost"
+              className="w-full justify-start p-0 h-auto text-blue-600 font-normal"
+              onClick={() => onNavigate?.('terms')}
+            >
               Terms of Service
             </Button>
-            <Button variant="ghost" className="w-full justify-start p-0 h-auto text-blue-600 font-normal">
+            <Button
+              variant="ghost"
+              className="w-full justify-start p-0 h-auto text-blue-600 font-normal"
+              onClick={() => window.location.href = 'mailto:support@floodsafe.app?subject=FloodSafe Support Request'}
+            >
               Contact Support
             </Button>
           </div>
         </Card>
 
         {/* Logout */}
-        <Button variant="destructive" className="w-full">
+        <Button
+          variant="destructive"
+          className="w-full"
+          onClick={async () => {
+            try {
+              await logout();
+              toast.success('Logged out successfully');
+            } catch (error) {
+              toast.error('Failed to logout');
+            }
+          }}
+        >
           <LogOut className="w-4 h-4 mr-2" />
           Logout
         </Button>

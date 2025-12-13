@@ -106,3 +106,36 @@ export function isWithinCityBounds(
 export function getAvailableCities(): CityKey[] {
     return Object.keys(CITIES) as CityKey[];
 }
+
+/**
+ * Detect which city a coordinate belongs to based on bounds
+ * Returns city display name or 'Unknown' if outside all known cities
+ */
+export function detectCityFromCoordinates(
+    lng: number,
+    lat: number
+): string {
+    // Check each city's bounds
+    for (const cityKey of getAvailableCities()) {
+        if (isWithinCityBounds(lng, lat, cityKey)) {
+            return CITIES[cityKey].displayName;
+        }
+    }
+    return 'Unknown';
+}
+
+/**
+ * Get city key from coordinates (for filtering)
+ * Returns city key or null if outside all known cities
+ */
+export function getCityKeyFromCoordinates(
+    lng: number,
+    lat: number
+): CityKey | null {
+    for (const cityKey of getAvailableCities()) {
+        if (isWithinCityBounds(lng, lat, cityKey)) {
+            return cityKey;
+        }
+    }
+    return null;
+}

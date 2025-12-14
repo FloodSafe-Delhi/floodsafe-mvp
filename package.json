@@ -2,6 +2,7 @@
   "name": "floodsafe-monorepo",
   "version": "0.0.1",
   "private": true,
+  "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "pnpm -r run dev",
     "build": "pnpm -r run build",

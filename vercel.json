@@ -1,5 +1,5 @@
 {
-  "installCommand": "pnpm install --no-frozen-lockfile",
+  "installCommand": "corepack enable && pnpm install --no-frozen-lockfile",
   "buildCommand": "cd apps/frontend && pnpm run build",
   "outputDirectory": "apps/frontend/dist",
   "framework": "vite"

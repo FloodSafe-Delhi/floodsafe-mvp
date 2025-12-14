@@ -55,34 +55,55 @@ def _load_static_hotspots() -> Dict[str, Any]:
         logger.error(f"Error loading static hotspots: {e}")
         raise HTTPException(status_code=500, detail=f"Error loading hotspot data: {e}")
 
+    # Handle both formats: raw array or {metadata, hotspots} object
+    if isinstance(raw_data, dict) and "hotspots" in raw_data:
+        hotspots_list = raw_data["hotspots"]
+    elif isinstance(raw_data, list):
+        hotspots_list = raw_data
+    else:
+        logger.error(f"Unexpected hotspots data format: {type(raw_data)}")
+        raise HTTPException(status_code=500, detail="Invalid hotspot data format")
+
     # Convert to GeoJSON FeatureCollection format
     features = []
-    for hotspot in raw_data:
-        # Assign baseline risk based on historical_severity
-        severity = hotspot.get("historical_severity", "moderate").lower()
-        if severity == "high":
+    for hotspot in hotspots_list:
+        # Support both property name conventions
+        severity = hotspot.get("severity_history") or hotspot.get("historical_severity", "moderate")
+        severity = severity.lower() if severity else "moderate"
+
+        # Map severity to risk levels
+        if severity in ["high", "severe"]:
             risk_prob = 0.6
             risk_level = "high"
             risk_color = "#f97316"  # orange
-        elif severity == "critical":
+        elif severity in ["critical", "extreme"]:
             risk_prob = 0.8
             risk_level = "extreme"
             risk_color = "#ef4444"  # red
-        else:  # moderate
+        else:  # moderate, low
             risk_prob = 0.4
             risk_level = "moderate"
             risk_color = "#eab308"  # yellow
+
+        # Support both coordinate conventions (lat/lng vs latitude/longitude)
+        lng = hotspot.get("lng") or hotspot.get("longitude")
+        lat = hotspot.get("lat") or hotspot.get("latitude")
+
+        if lng is None or lat is None:
+            logger.warning(f"Skipping hotspot without coordinates: {hotspot.get('id')}")
+            continue
 
         feature = {
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [hotspot["longitude"], hotspot["latitude"]]
+                "coordinates": [lng, lat]
             },
             "properties": {
                 "id": hotspot.get("id", 0),
                 "name": hotspot.get("name", "Unknown"),
                 "zone": hotspot.get("zone", "Unknown"),
+                "description": hotspot.get("description", ""),
                 "risk_probability": risk_prob,
                 "risk_level": risk_level,
                 "risk_color": risk_color,
@@ -94,6 +115,8 @@ def _load_static_hotspots() -> Dict[str, Any]:
             }
         }
         features.append(feature)
+
+    logger.info(f"Loaded {len(features)} static hotspots from {data_path}")
 
     return {
         "type": "FeatureCollection",

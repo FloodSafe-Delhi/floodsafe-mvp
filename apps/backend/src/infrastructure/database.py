@@ -54,12 +54,25 @@ def create_database_url() -> URL:
         raise ValueError(f"Invalid DATABASE_URL format: {e}")
 
 
+# Determine if we need SSL (required for cloud databases like Supabase)
+def get_connect_args(url: URL) -> dict:
+    """Get connection arguments based on host (SSL for cloud, none for localhost)."""
+    host = url.host or ""
+    if "localhost" in host or "127.0.0.1" in host or "db" == host:
+        # Local development - no SSL needed
+        return {}
+    else:
+        # Cloud database (Supabase, etc.) - require SSL
+        return {"sslmode": "require"}
+
+
 # Sync engine (for existing endpoints)
 try:
     database_url = create_database_url()
-    engine = create_engine(database_url)
+    connect_args = get_connect_args(database_url)
+    engine = create_engine(database_url, connect_args=connect_args)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    logger.info("Database sync engine initialized successfully")
+    logger.info(f"Database sync engine initialized (SSL: {'sslmode' in connect_args})")
 except Exception as e:
     logger.error(f"CRITICAL: Failed to initialize database engine: {e}")
     logger.error(f"DATABASE_URL env var exists: {bool(os.getenv('DATABASE_URL'))}")
@@ -69,11 +82,15 @@ except Exception as e:
 try:
     # Create async version of the URL
     async_url = database_url.set(drivername="postgresql+asyncpg")
-    async_engine = create_async_engine(async_url, echo=False)
+    # For asyncpg, SSL is passed differently
+    host = database_url.host or ""
+    is_cloud = "localhost" not in host and "127.0.0.1" not in host and host != "db"
+    async_connect_args = {"ssl": "require"} if is_cloud else {}
+    async_engine = create_async_engine(async_url, echo=False, connect_args=async_connect_args)
     AsyncSessionLocal = async_sessionmaker(
         async_engine, class_=AsyncSession, expire_on_commit=False
     )
-    logger.info("Database async engine initialized successfully")
+    logger.info(f"Database async engine initialized (SSL: {is_cloud})")
 except Exception as e:
     logger.error(f"CRITICAL: Failed to initialize async database engine: {e}")
     raise

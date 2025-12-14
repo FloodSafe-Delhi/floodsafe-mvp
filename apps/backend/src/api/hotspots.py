@@ -2,18 +2,111 @@
 Backend API wrapper for waterlogging hotspot predictions.
 
 Proxies requests to the ML service with caching.
+Falls back to static data when ML service is disabled.
 """
 
 from fastapi import APIRouter, HTTPException, Query
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
+from pathlib import Path
 import httpx
 import logging
+import json
+import os
 
 from ..core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# Path to static hotspot data (for when ML service is disabled)
+def _get_static_hotspots_path() -> Optional[Path]:
+    """Get path to static hotspots data file."""
+    # Check backend's data directory first
+    backend_data = Path(__file__).resolve().parent.parent.parent / "data" / "delhi_waterlogging_hotspots.json"
+    if backend_data.exists():
+        return backend_data
+
+    # Fallback to ml-service data
+    ml_data = Path(__file__).resolve().parent.parent.parent.parent / "ml-service" / "data" / "delhi_waterlogging_hotspots.json"
+    if ml_data.exists():
+        return ml_data
+
+    return None
+
+
+def _load_static_hotspots() -> Dict[str, Any]:
+    """
+    Load static hotspot data when ML service is disabled.
+    Returns GeoJSON FeatureCollection with baseline risk levels.
+    """
+    data_path = _get_static_hotspots_path()
+    if not data_path:
+        raise HTTPException(
+            status_code=503,
+            detail="Hotspot data file not found. Deploy with data files or enable ML service.",
+        )
+
+    try:
+        with open(data_path, 'r', encoding='utf-8') as f:
+            raw_data = json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading static hotspots: {e}")
+        raise HTTPException(status_code=500, detail=f"Error loading hotspot data: {e}")
+
+    # Convert to GeoJSON FeatureCollection format
+    features = []
+    for hotspot in raw_data:
+        # Assign baseline risk based on historical_severity
+        severity = hotspot.get("historical_severity", "moderate").lower()
+        if severity == "high":
+            risk_prob = 0.6
+            risk_level = "high"
+            risk_color = "#f97316"  # orange
+        elif severity == "critical":
+            risk_prob = 0.8
+            risk_level = "extreme"
+            risk_color = "#ef4444"  # red
+        else:  # moderate
+            risk_prob = 0.4
+            risk_level = "moderate"
+            risk_color = "#eab308"  # yellow
+
+        feature = {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [hotspot["longitude"], hotspot["latitude"]]
+            },
+            "properties": {
+                "id": hotspot.get("id", 0),
+                "name": hotspot.get("name", "Unknown"),
+                "zone": hotspot.get("zone", "Unknown"),
+                "risk_probability": risk_prob,
+                "risk_level": risk_level,
+                "risk_color": risk_color,
+                "fhi": None,  # No live FHI without ML service
+                "fhi_color": None,
+                "historical_severity": severity,
+                "elevation_m": hotspot.get("elevation_m"),
+                "static_data": True,  # Flag indicating this is static data
+            }
+        }
+        features.append(feature)
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": {
+            "total_hotspots": len(features),
+            "source": "static",
+            "ml_service_enabled": False,
+            "fhi_available": False,
+            "generated_at": datetime.now().isoformat(),
+            "note": "Live FHI calculations unavailable. Showing baseline risk from historical data."
+        }
+    }
 
 # Simple in-memory cache
 _hotspots_cache: Dict[str, Dict[str, Any]] = {}
@@ -40,13 +133,13 @@ async def get_all_hotspots(
     - Point features for each hotspot
     - Properties: id, name, zone, risk_probability, risk_level, risk_color
 
-    Risk is dynamically adjusted based on current rainfall.
+    Risk is dynamically adjusted based on current rainfall when ML service is enabled.
+    Falls back to static baseline data when ML service is disabled.
     """
+    # If ML service is disabled, return static data
     if not settings.ML_SERVICE_ENABLED:
-        raise HTTPException(
-            status_code=503,
-            detail="ML service is not enabled",
-        )
+        logger.info("ML service disabled, serving static hotspot data")
+        return _load_static_hotspots()
 
     # Check cache (skip cache in test mode to ensure fresh test values)
     cache_key = f"hotspots_all_{include_rainfall}"
@@ -194,9 +287,14 @@ async def get_risk_at_point(
 async def hotspots_health():
     """Check hotspots service health."""
     if not settings.ML_SERVICE_ENABLED:
+        # Check if static data is available
+        static_path = _get_static_hotspots_path()
         return {
-            "status": "disabled",
+            "status": "static_fallback",
             "ml_service_enabled": False,
+            "static_data_available": static_path is not None,
+            "static_data_path": str(static_path) if static_path else None,
+            "note": "Serving baseline hotspot data. Live FHI requires ML service.",
         }
 
     try:

@@ -17,9 +17,25 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Path to processed historical floods data
-# Use environment variable if set, otherwise use relative path
-_default_data_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-service" / "data"
-DATA_DIR = Path(os.environ.get("ML_SERVICE_DATA_DIR", str(_default_data_dir)))
+# Priority: 1) ML_SERVICE_DATA_DIR env var, 2) backend/data/, 3) ml-service/data/
+def _get_data_dir() -> Path:
+    """Get data directory with fallback options for different deployment environments."""
+    # Check environment variable first
+    env_dir = os.environ.get("ML_SERVICE_DATA_DIR")
+    if env_dir:
+        return Path(env_dir)
+
+    # Check backend's own data directory (for Railway/production)
+    backend_data_dir = Path(__file__).resolve().parent.parent.parent / "data"
+    if backend_data_dir.exists() and (backend_data_dir / "delhi_historical_floods.json").exists():
+        return backend_data_dir
+
+    # Fallback to ml-service data directory (for local development)
+    ml_service_data_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-service" / "data"
+    return ml_service_data_dir
+
+
+DATA_DIR = _get_data_dir()
 
 # Security: Validate city parameter pattern (alphanumeric + spaces only, max 50 chars)
 CITY_PATTERN = re.compile(r'^[a-zA-Z\s]{1,50}$')

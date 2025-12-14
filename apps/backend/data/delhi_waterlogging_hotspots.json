@@ -1,0 +1,575 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2025-12-12",
+    "source": "MCD Delhi Waterlogging Reports + User Research",
+    "total_hotspots": 62,
+    "zones": {
+      "ring_road": 13,
+      "rohtak_road_west": 9,
+      "central_north": 11,
+      "south_east": 19,
+      "rural_outlying": 10
+    }
+  },
+  "hotspots": [
+    {
+      "id": 1,
+      "name": "Modi Mill Underpass",
+      "lat": 28.5758,
+      "lng": 77.2206,
+      "description": "Severe flooding during monsoon, history of vehicle stranding",
+      "zone": "ring_road",
+      "severity_history": "high"
+    },
+    {
+      "id": 2,
+      "name": "Minto Bridge",
+      "lat": 28.6365,
+      "lng": 77.2224,
+      "description": "Historic waterlogging zone, multiple deaths reported over years",
+      "zone": "central_north",
+      "severity_history": "extreme"
+    },
+    {
+      "id": 3,
+      "name": "Dhaula Kuan Underpass",
+      "lat": 28.5919,
+      "lng": 77.1571,
+      "description": "Major intersection flooding, traffic disruption",
+      "zone": "ring_road",
+      "severity_history": "high"
+    },
+    {
+      "id": 4,
+      "name": "IP Flyover",
+      "lat": 28.6333,
+      "lng": 77.2489,
+      "description": "Ring Road underpass flooding",
+      "zone": "ring_road",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 5,
+      "name": "Majnu Ka Tila",
+      "lat": 28.6967,
+      "lng": 77.2283,
+      "description": "Near Yamuna, flood-prone during river rise",
+      "zone": "central_north",
+      "severity_history": "high"
+    },
+    {
+      "id": 6,
+      "name": "Zakhira Flyover",
+      "lat": 28.6750,
+      "lng": 77.1550,
+      "description": "Underpass waterlogging",
+      "zone": "rohtak_road_west",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 7,
+      "name": "Mundka",
+      "lat": 28.6847,
+      "lng": 77.0350,
+      "description": "Western Delhi flooding, poor drainage",
+      "zone": "rohtak_road_west",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 8,
+      "name": "Peeragarhi Chowk",
+      "lat": 28.6756,
+      "lng": 77.0892,
+      "description": "Major junction waterlogging",
+      "zone": "rohtak_road_west",
+      "severity_history": "high"
+    },
+    {
+      "id": 9,
+      "name": "Punjabi Bagh Underpass",
+      "lat": 28.6632,
+      "lng": 77.1229,
+      "description": "Underpass flooding during heavy rain",
+      "zone": "rohtak_road_west",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 10,
+      "name": "Ashram Chowk",
+      "lat": 28.5683,
+      "lng": 77.2499,
+      "description": "Major intersection, drainage issues",
+      "zone": "south_east",
+      "severity_history": "high"
+    },
+    {
+      "id": 11,
+      "name": "Pul Prahladpur",
+      "lat": 28.5025,
+      "lng": 77.2917,
+      "description": "Chronic waterlogging, multiple incidents",
+      "zone": "south_east",
+      "severity_history": "extreme"
+    },
+    {
+      "id": 12,
+      "name": "Nehru Place",
+      "lat": 28.5507,
+      "lng": 77.2539,
+      "description": "Commercial area flooding",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 13,
+      "name": "GK-1 Underpass",
+      "lat": 28.5499,
+      "lng": 77.2267,
+      "description": "Greater Kailash underpass flooding",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 14,
+      "name": "Dwarka Underpass (Sector 8)",
+      "lat": 28.5880,
+      "lng": 77.0670,
+      "description": "Chronic flooding in Dwarka sector",
+      "zone": "rural_outlying",
+      "severity_history": "high"
+    },
+    {
+      "id": 15,
+      "name": "Najafgarh Drain Area",
+      "lat": 28.6178,
+      "lng": 76.9825,
+      "description": "Near main drain, flood spillover",
+      "zone": "rural_outlying",
+      "severity_history": "extreme"
+    },
+    {
+      "id": 16,
+      "name": "Singhu Border",
+      "lat": 28.8042,
+      "lng": 77.1575,
+      "description": "Northern outskirts flooding",
+      "zone": "rural_outlying",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 17,
+      "name": "Tilak Bridge",
+      "lat": 28.6375,
+      "lng": 77.2400,
+      "description": "Railway underpass flooding",
+      "zone": "central_north",
+      "severity_history": "high"
+    },
+    {
+      "id": 18,
+      "name": "Azad Market",
+      "lat": 28.6622,
+      "lng": 77.2067,
+      "description": "Old Delhi market area flooding",
+      "zone": "central_north",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 19,
+      "name": "Model Town",
+      "lat": 28.7167,
+      "lng": 77.1917,
+      "description": "North Delhi residential flooding",
+      "zone": "central_north",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 20,
+      "name": "Ghazipur",
+      "lat": 28.6235,
+      "lng": 77.3235,
+      "description": "Eastern Delhi near landfill",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 21,
+      "name": "ITO Underpass",
+      "lat": 28.6289,
+      "lng": 77.2422,
+      "description": "Major junction waterlogging",
+      "zone": "ring_road",
+      "severity_history": "high"
+    },
+    {
+      "id": 22,
+      "name": "Kashmere Gate ISBT",
+      "lat": 28.6667,
+      "lng": 77.2283,
+      "description": "Bus terminal area flooding",
+      "zone": "central_north",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 23,
+      "name": "Anand Vihar",
+      "lat": 28.6467,
+      "lng": 77.3156,
+      "description": "Eastern terminal flooding",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 24,
+      "name": "Lajpat Nagar",
+      "lat": 28.5661,
+      "lng": 77.2397,
+      "description": "Market area waterlogging",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 25,
+      "name": "Defence Colony Underpass",
+      "lat": 28.5733,
+      "lng": 77.2336,
+      "description": "Underpass flooding",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 26,
+      "name": "Sarai Kale Khan",
+      "lat": 28.5897,
+      "lng": 77.2619,
+      "description": "Near Yamuna, chronic flooding",
+      "zone": "ring_road",
+      "severity_history": "high"
+    },
+    {
+      "id": 27,
+      "name": "Okhla Underpass",
+      "lat": 28.5300,
+      "lng": 77.2683,
+      "description": "Industrial area flooding",
+      "zone": "south_east",
+      "severity_history": "high"
+    },
+    {
+      "id": 28,
+      "name": "Badarpur Border",
+      "lat": 28.5014,
+      "lng": 77.3025,
+      "description": "Faridabad border waterlogging",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 29,
+      "name": "Vikaspuri",
+      "lat": 28.6486,
+      "lng": 77.0706,
+      "description": "West Delhi residential flooding",
+      "zone": "rohtak_road_west",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 30,
+      "name": "Uttam Nagar",
+      "lat": 28.6167,
+      "lng": 77.0500,
+      "description": "Dense area poor drainage",
+      "zone": "rohtak_road_west",
+      "severity_history": "high"
+    },
+    {
+      "id": 31,
+      "name": "Janakpuri District Centre",
+      "lat": 28.6219,
+      "lng": 77.0869,
+      "description": "Commercial hub flooding",
+      "zone": "rohtak_road_west",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 32,
+      "name": "Rohini Sector 3",
+      "lat": 28.7333,
+      "lng": 77.1167,
+      "description": "North-west Delhi flooding",
+      "zone": "central_north",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 33,
+      "name": "Pitampura TV Tower",
+      "lat": 28.6997,
+      "lng": 77.1356,
+      "description": "Underpass waterlogging",
+      "zone": "central_north",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 34,
+      "name": "Wazirabad",
+      "lat": 28.7275,
+      "lng": 77.2367,
+      "description": "Near Yamuna barrage",
+      "zone": "central_north",
+      "severity_history": "high"
+    },
+    {
+      "id": 35,
+      "name": "AIIMS Flyover",
+      "lat": 28.5678,
+      "lng": 77.2100,
+      "description": "Underpass flooding near hospital",
+      "zone": "ring_road",
+      "severity_history": "high"
+    },
+    {
+      "id": 36,
+      "name": "Hauz Khas",
+      "lat": 28.5494,
+      "lng": 77.2001,
+      "description": "South Delhi residential",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 37,
+      "name": "Mehrauli",
+      "lat": 28.5205,
+      "lng": 77.1856,
+      "description": "Historical area drainage issues",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 38,
+      "name": "Vasant Kunj",
+      "lat": 28.5269,
+      "lng": 77.1567,
+      "description": "South-west residential flooding",
+      "zone": "rural_outlying",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 39,
+      "name": "Kapashera Border",
+      "lat": 28.5200,
+      "lng": 77.0800,
+      "description": "Gurgaon border waterlogging",
+      "zone": "rural_outlying",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 40,
+      "name": "Narela",
+      "lat": 28.8500,
+      "lng": 77.0917,
+      "description": "Northern outskirts",
+      "zone": "rural_outlying",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 41,
+      "name": "Bawana Industrial Area",
+      "lat": 28.7917,
+      "lng": 77.0583,
+      "description": "Industrial zone drainage",
+      "zone": "rural_outlying",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 42,
+      "name": "RK Puram Sector 12",
+      "lat": 28.5569,
+      "lng": 77.1856,
+      "description": "Government colony flooding",
+      "zone": "ring_road",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 43,
+      "name": "Sarojini Nagar",
+      "lat": 28.5778,
+      "lng": 77.1992,
+      "description": "Market area waterlogging",
+      "zone": "ring_road",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 44,
+      "name": "Pragati Maidan Underpass",
+      "lat": 28.6167,
+      "lng": 77.2500,
+      "description": "Exhibition ground underpass",
+      "zone": "ring_road",
+      "severity_history": "high"
+    },
+    {
+      "id": 45,
+      "name": "Connaught Place Inner Circle",
+      "lat": 28.6315,
+      "lng": 77.2167,
+      "description": "Central Delhi commercial",
+      "zone": "central_north",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 46,
+      "name": "Rajiv Chowk",
+      "lat": 28.6333,
+      "lng": 77.2192,
+      "description": "Metro station area flooding",
+      "zone": "central_north",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 47,
+      "name": "Moolchand Underpass",
+      "lat": 28.5667,
+      "lng": 77.2375,
+      "description": "Hospital area underpass",
+      "zone": "south_east",
+      "severity_history": "high"
+    },
+    {
+      "id": 48,
+      "name": "Chirag Delhi",
+      "lat": 28.5356,
+      "lng": 77.2167,
+      "description": "South Delhi residential",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 49,
+      "name": "Malviya Nagar",
+      "lat": 28.5333,
+      "lng": 77.2094,
+      "description": "Market area flooding",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 50,
+      "name": "Saket Metro Station",
+      "lat": 28.5250,
+      "lng": 77.2133,
+      "description": "Metro station area",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 51,
+      "name": "Kalkaji",
+      "lat": 28.5383,
+      "lng": 77.2556,
+      "description": "Temple area flooding",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 52,
+      "name": "Govindpuri",
+      "lat": 28.5392,
+      "lng": 77.2667,
+      "description": "Dense residential area",
+      "zone": "south_east",
+      "severity_history": "high"
+    },
+    {
+      "id": 53,
+      "name": "Tughlaqabad",
+      "lat": 28.5106,
+      "lng": 77.2589,
+      "description": "Historical area drainage",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 54,
+      "name": "Sangam Vihar",
+      "lat": 28.5028,
+      "lng": 77.2333,
+      "description": "Unauthorized colony flooding",
+      "zone": "south_east",
+      "severity_history": "extreme"
+    },
+    {
+      "id": 55,
+      "name": "Palam",
+      "lat": 28.5833,
+      "lng": 77.1000,
+      "description": "Near airport flooding",
+      "zone": "rural_outlying",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 56,
+      "name": "Dwarka Sector 21",
+      "lat": 28.5522,
+      "lng": 77.0589,
+      "description": "Metro terminal area",
+      "zone": "rural_outlying",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 57,
+      "name": "Najafgarh Road",
+      "lat": 28.6500,
+      "lng": 77.0833,
+      "description": "Main road waterlogging",
+      "zone": "rohtak_road_west",
+      "severity_history": "high"
+    },
+    {
+      "id": 58,
+      "name": "Mayur Vihar Phase 1",
+      "lat": 28.6056,
+      "lng": 77.2933,
+      "description": "East Delhi residential",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 59,
+      "name": "Patparganj",
+      "lat": 28.6222,
+      "lng": 77.2889,
+      "description": "Industrial area flooding",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 60,
+      "name": "Preet Vihar",
+      "lat": 28.6406,
+      "lng": 77.2939,
+      "description": "East Delhi market area",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 61,
+      "name": "Laxmi Nagar",
+      "lat": 28.6328,
+      "lng": 77.2756,
+      "description": "Commercial area waterlogging",
+      "zone": "south_east",
+      "severity_history": "moderate"
+    },
+    {
+      "id": 62,
+      "name": "Shahdara",
+      "lat": 28.6667,
+      "lng": 77.2917,
+      "description": "Trans-Yamuna flooding",
+      "zone": "south_east",
+      "severity_history": "high"
+    }
+  ]
+}

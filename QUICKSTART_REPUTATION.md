@@ -111,6 +111,6 @@ See `REPUTATION_SYSTEM.md` for:
 **Quick Links**:
 - API Docs: http://localhost:8000/docs
 - Backend: http://localhost:8000
-- Frontend: http://localhost:5173
+- Frontend: http://localhost:5175
 
 **Status**: ✅ Ready to Use!

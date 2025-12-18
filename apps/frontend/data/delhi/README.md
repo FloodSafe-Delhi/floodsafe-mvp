@@ -345,7 +345,7 @@ apps/frontend/public/
    npm run dev
    ```
 
-2. **Open the app**: http://localhost:5173
+2. **Open the app**: http://localhost:5175
 
 3. **Navigate to Flood Atlas**
 

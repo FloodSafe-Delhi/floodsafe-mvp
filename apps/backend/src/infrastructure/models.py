@@ -22,6 +22,10 @@ class User(Base):
     phone_verified = Column(Boolean, default=False)
     auth_provider = Column(String, default='local')  # 'google', 'phone', 'local'
 
+    # Email/Password authentication
+    password_hash = Column(String, nullable=True)  # NULL for OAuth/Phone users
+    email_verified = Column(Boolean, default=False)
+
     # Gamification
     points = Column(Integer, default=0)
     level = Column(Integer, default=1)
@@ -128,6 +132,9 @@ class Report(Base):
     # Safe routing fields (auto-populated by database trigger)
     risk_polygon = Column(Geometry('POLYGON', srid=4326), nullable=True)
     risk_radius_meters = Column(Integer, default=100)
+
+    # Archive field - reports auto-archive after 3 days, or can be manually archived
+    archived_at = Column(DateTime, nullable=True)  # NULL = not archived, set = archived timestamp
 
     @hybrid_property
     def latitude(self):

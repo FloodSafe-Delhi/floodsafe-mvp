@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { AlertCircle, Loader2, Shield, MapPin, Bell, Phone, ArrowRight, ArrowLeft, Check, FileEdit } from 'lucide-react';
+import { AlertCircle, Loader2, Shield, MapPin, Bell, Phone, ArrowRight, ArrowLeft, Check, FileEdit, Mail, Eye, EyeOff } from 'lucide-react';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -45,14 +45,20 @@ declare global {
 }
 
 export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
-    const { loginWithGoogle, isLoading, error, clearError } = useAuth();
+    const { loginWithGoogle, registerWithEmail, loginWithEmail, isLoading, error, clearError } = useAuth();
 
-    const [authMethod, setAuthMethod] = useState<'google' | 'phone'>('google');
+    const [authMethod, setAuthMethod] = useState<'email' | 'google' | 'phone'>('email');
     const [activeFeature, setActiveFeature] = useState<'report' | 'routes' | 'alerts'>('report');
     const [localError, setLocalError] = useState<string | null>(null);
     const [scriptStatus, setScriptStatus] = useState<'loading' | 'ready' | 'error'>('loading');
     const googleButtonRef = useRef<HTMLDivElement>(null);
     const initAttempted = useRef(false);
+
+    // Email state
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [isSignUp, setIsSignUp] = useState(false);
 
     // Phone state
     const [phoneNumber, setPhoneNumber] = useState('');
@@ -162,21 +168,33 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     useEffect(() => {
         if (authMethod === 'google' && scriptStatus === 'ready' && googleButtonRef.current) {
             const timer = setTimeout(() => {
-                if (googleButtonRef.current && window.google) {
-                    googleButtonRef.current.innerHTML = '';
-                    window.google.accounts.id.renderButton(googleButtonRef.current, {
-                        theme: 'outline',
-                        size: 'large',
-                        width: 260,
-                        text: 'signin_with',
-                        shape: 'rectangular',
-                        logo_alignment: 'left',
-                    });
+                if (googleButtonRef.current && window.google?.accounts?.id) {
+                    try {
+                        // Must call initialize() before renderButton()
+                        window.google.accounts.id.initialize({
+                            client_id: GOOGLE_CLIENT_ID,
+                            callback: handleGoogleCallback,
+                            auto_select: false,
+                            context: 'signin',
+                        });
+
+                        googleButtonRef.current.innerHTML = '';
+                        window.google.accounts.id.renderButton(googleButtonRef.current, {
+                            theme: 'outline',
+                            size: 'large',
+                            width: 260,
+                            text: 'signin_with',
+                            shape: 'rectangular',
+                            logo_alignment: 'left',
+                        });
+                    } catch (err) {
+                        console.error('Google Sign-In render error:', err);
+                    }
                 }
-            }, 50);
+            }, 100);
             return () => clearTimeout(timer);
         }
-    }, [authMethod, scriptStatus]);
+    }, [authMethod, scriptStatus, handleGoogleCallback]);
 
     useEffect(() => {
         if (countdown > 0) {
@@ -184,6 +202,36 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             return () => clearTimeout(timer);
         }
     }, [countdown]);
+
+    // Email form handler
+    const handleEmailSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLocalError(null);
+
+        // Basic validation
+        if (!email || !email.includes('@')) {
+            setLocalError('Please enter a valid email address');
+            return;
+        }
+        if (password.length < 8) {
+            setLocalError('Password must be at least 8 characters');
+            return;
+        }
+
+        try {
+            if (isSignUp) {
+                await registerWithEmail(email, password);
+            } else {
+                await loginWithEmail(email, password);
+            }
+            onLoginSuccess?.();
+        } catch (err) {
+            // Error is already set in context, but we can add local handling
+            if (err instanceof Error) {
+                setLocalError(err.message);
+            }
+        }
+    };
 
     const handlePhoneSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -287,11 +335,23 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                             Sign in to get started
                         </p>
 
-                        {/* Auth toggle - centered pill buttons, same size as above */}
-                        <div className="flex justify-center gap-3 mb-6">
+                        {/* Auth toggle - centered pill buttons */}
+                        <div className="flex justify-center gap-2 mb-6">
+                            <button
+                                onClick={() => setAuthMethod('email')}
+                                className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                                    authMethod === 'email'
+                                        ? 'bg-blue-600 text-white shadow-md'
+                                        : 'text-gray-600 hover:bg-gray-200'
+                                }`}
+                                style={authMethod !== 'email' ? { backgroundColor: '#f3f4f6' } : undefined}
+                            >
+                                <Mail className="w-4 h-4" />
+                                Email
+                            </button>
                             <button
                                 onClick={() => setAuthMethod('google')}
-                                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-full text-sm font-medium transition-all duration-200 ${
+                                className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
                                     authMethod === 'google'
                                         ? 'bg-blue-600 text-white shadow-md'
                                         : 'text-gray-600 hover:bg-gray-200'
@@ -308,7 +368,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                             </button>
                             <button
                                 onClick={() => setAuthMethod('phone')}
-                                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-full text-sm font-medium transition-all duration-200 ${
+                                className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
                                     authMethod === 'phone'
                                         ? 'bg-blue-600 text-white shadow-md'
                                         : 'text-gray-600 hover:bg-gray-200'
@@ -325,6 +385,110 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                             <div className="mb-5 p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-2">
                                 <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                                 <p className="text-sm text-red-600">{displayError}</p>
+                            </div>
+                        )}
+
+                        {/* Email Panel */}
+                        {authMethod === 'email' && (
+                            <div className="mt-2">
+                                <form onSubmit={handleEmailSubmit} className="space-y-4">
+                                    {/* Sign In / Sign Up toggle */}
+                                    <div className="flex justify-center mb-4">
+                                        <div className="inline-flex bg-gray-100 rounded-lg p-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsSignUp(false)}
+                                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                                                    !isSignUp
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                            >
+                                                Sign In
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsSignUp(true)}
+                                                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                                                    isSignUp
+                                                        ? 'bg-white text-gray-900 shadow-sm'
+                                                        : 'text-gray-500 hover:text-gray-700'
+                                                }`}
+                                            >
+                                                Sign Up
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Email input */}
+                                    <div>
+                                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1.5">
+                                            Email address
+                                        </label>
+                                        <input
+                                            id="email"
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            placeholder="you@example.com"
+                                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all"
+                                            autoComplete="email"
+                                        />
+                                    </div>
+
+                                    {/* Password input */}
+                                    <div>
+                                        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1.5">
+                                            Password
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                id="password"
+                                                type={showPassword ? 'text' : 'password'}
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                placeholder={isSignUp ? 'Min 8 characters' : 'Your password'}
+                                                className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all"
+                                                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                                            >
+                                                {showPassword ? (
+                                                    <EyeOff className="w-5 h-5" />
+                                                ) : (
+                                                    <Eye className="w-5 h-5" />
+                                                )}
+                                            </button>
+                                        </div>
+                                        {isSignUp && (
+                                            <p className="text-xs text-gray-500 mt-1.5">
+                                                Password must be at least 8 characters
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Submit button */}
+                                    <button
+                                        type="submit"
+                                        disabled={isLoading || !email || password.length < 8}
+                                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-blue-500/20"
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                {isSignUp ? 'Creating account...' : 'Signing in...'}
+                                            </>
+                                        ) : (
+                                            <>
+                                                {isSignUp ? 'Create Account' : 'Sign In'}
+                                                <ArrowRight className="w-4 h-4" />
+                                            </>
+                                        )}
+                                    </button>
+                                </form>
                             </div>
                         )}
 

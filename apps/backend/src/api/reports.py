@@ -1,8 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
 from typing import Optional, List
 from uuid import UUID
 from PIL import Image
+from datetime import datetime, timedelta
 import io
 import logging
 import json
@@ -20,6 +22,23 @@ from geoalchemy2.functions import ST_DWithin, ST_MakePoint
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Reports auto-archive after 3 days
+REPORT_ARCHIVE_DAYS = 3
+
+
+def get_active_reports_filter():
+    """
+    Filter for active (non-archived) reports.
+    A report is archived if:
+    - It was explicitly archived (archived_at is not NULL), OR
+    - It's older than 3 days (auto-archive)
+    """
+    archive_cutoff = datetime.utcnow() - timedelta(days=REPORT_ARCHIVE_DAYS)
+    return and_(
+        or_(models.Report.archived_at == None, models.Report.archived_at == None),  # Not explicitly archived
+        models.Report.timestamp > archive_cutoff  # Not auto-archived (less than 3 days old)
+    )
 
 # Location verification tolerance in meters (matches frontend)
 LOCATION_VERIFICATION_TOLERANCE_METERS = 100
@@ -39,10 +58,15 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 @router.get("/", response_model=List[ReportResponse])
 def list_reports(db: Session = Depends(get_db)):
     """
-    List all flood reports.
+    List all active (non-archived) flood reports.
+    Reports are auto-archived after 3 days.
     """
     try:
-        reports = db.query(models.Report).order_by(models.Report.timestamp.desc()).all()
+        archive_cutoff = datetime.utcnow() - timedelta(days=REPORT_ARCHIVE_DAYS)
+        reports = db.query(models.Report).filter(
+            models.Report.archived_at == None,  # Not explicitly archived
+            models.Report.timestamp > archive_cutoff  # Not auto-archived
+        ).order_by(models.Report.timestamp.desc()).all()
         return reports
     except Exception as e:
         logger.error(f"Error listing reports: {e}")
@@ -54,12 +78,16 @@ def get_user_reports(
     user_id: UUID,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    include_archived: bool = Query(False, description="Include archived reports"),
     db: Session = Depends(get_db)
 ):
     """
     Get all reports submitted by a specific user.
     Returns reports ordered by timestamp (most recent first).
     Used for the "My Reports" section in user profile.
+
+    By default, only active reports are returned.
+    Set include_archived=true to include all reports.
     """
     try:
         # Verify user exists
@@ -67,10 +95,18 @@ def get_user_reports(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Get user's reports with pagination
-        reports = db.query(models.Report).filter(
-            models.Report.user_id == user_id
-        ).order_by(
+        # Build query
+        query = db.query(models.Report).filter(models.Report.user_id == user_id)
+
+        # Filter out archived unless explicitly requested
+        if not include_archived:
+            archive_cutoff = datetime.utcnow() - timedelta(days=REPORT_ARCHIVE_DAYS)
+            query = query.filter(
+                models.Report.archived_at == None,
+                models.Report.timestamp > archive_cutoff
+            )
+
+        reports = query.order_by(
             models.Report.timestamp.desc()
         ).offset(offset).limit(limit).all()
 
@@ -90,7 +126,7 @@ def get_location_details(
     db: Session = Depends(get_db)
 ):
     """
-    Get all reports and user information at a specific location.
+    Get all active (non-archived) reports and user information at a specific location.
     This is used when user clicks "Locate" on an alert to see details.
 
     Returns:
@@ -101,15 +137,18 @@ def get_location_details(
     try:
         # Create a point for the query location
         query_point = ST_MakePoint(longitude, latitude)
+        archive_cutoff = datetime.utcnow() - timedelta(days=REPORT_ARCHIVE_DAYS)
 
-        # Find all reports within radius
+        # Find all active reports within radius (exclude archived)
         nearby_reports = db.query(models.Report).filter(
             ST_DWithin(
                 models.Report.location,
                 query_point,
                 radius_meters,
                 True  # Use spheroid for accurate distance
-            )
+            ),
+            models.Report.archived_at == None,  # Not explicitly archived
+            models.Report.timestamp > archive_cutoff  # Not auto-archived
         ).order_by(models.Report.timestamp.desc()).all()
 
         # Get unique user IDs from these reports
@@ -363,16 +402,17 @@ def get_hyperlocal_status(
     Get hyperlocal area status for a specific location.
 
     Returns:
-    - All reports within radius
+    - All active (non-archived) reports within radius from last 24 hours
     - Aggregate status (safe/caution/warning/critical)
     - Area summary statistics
     - Sensor data summary
     """
-    from datetime import timedelta
     from sqlalchemy import text
 
     try:
-        # 1. Find reports in radius using PostGIS
+        # 1. Find active reports in radius using PostGIS
+        # Note: 24-hour filter is more restrictive than 3-day archive, so archived_at check is redundant
+        # but we include it for safety in case REPORT_ARCHIVE_DAYS changes
         query = text("""
             SELECT
                 id, description, verified, water_depth, vehicle_passability,
@@ -386,6 +426,7 @@ def get_hyperlocal_status(
                 :radius
             )
             AND timestamp > NOW() - INTERVAL '24 hours'
+            AND archived_at IS NULL
             ORDER BY timestamp DESC
         """)
 
@@ -587,3 +628,94 @@ def downvote_report(report_id: UUID, db: Session = Depends(get_db)):
         logger.error(f"Error downvoting report: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to downvote report")
+
+
+@router.get("/user/{user_id}/archived", response_model=List[ReportResponse])
+def get_user_archived_reports(
+    user_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    """
+    Get archived reports for a specific user.
+    A report is archived if:
+    - It was explicitly archived (archived_at is set), OR
+    - It's older than 3 days (auto-archived)
+
+    Only the report owner can view their archived reports.
+    """
+    try:
+        # Verify user exists
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        archive_cutoff = datetime.utcnow() - timedelta(days=REPORT_ARCHIVE_DAYS)
+
+        # Get archived reports: explicitly archived OR older than 3 days
+        reports = db.query(models.Report).filter(
+            models.Report.user_id == user_id,
+            or_(
+                models.Report.archived_at != None,  # Explicitly archived
+                models.Report.timestamp <= archive_cutoff  # Auto-archived (3+ days old)
+            )
+        ).order_by(
+            models.Report.timestamp.desc()
+        ).offset(offset).limit(limit).all()
+
+        return reports
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching archived reports for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch archived reports")
+
+
+@router.get("/user/{user_id}/stats")
+def get_user_report_stats(
+    user_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    Get report statistics for a user including active and archived counts.
+    """
+    try:
+        # Verify user exists
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        archive_cutoff = datetime.utcnow() - timedelta(days=REPORT_ARCHIVE_DAYS)
+
+        # Count active reports
+        active_count = db.query(models.Report).filter(
+            models.Report.user_id == user_id,
+            models.Report.archived_at == None,
+            models.Report.timestamp > archive_cutoff
+        ).count()
+
+        # Count archived reports
+        archived_count = db.query(models.Report).filter(
+            models.Report.user_id == user_id,
+            or_(
+                models.Report.archived_at != None,
+                models.Report.timestamp <= archive_cutoff
+            )
+        ).count()
+
+        # Total reports
+        total_count = active_count + archived_count
+
+        return {
+            "user_id": str(user_id),
+            "active_reports": active_count,
+            "archived_reports": archived_count,
+            "total_reports": total_count,
+            "archive_days": REPORT_ARCHIVE_DAYS
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching report stats for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch report stats")

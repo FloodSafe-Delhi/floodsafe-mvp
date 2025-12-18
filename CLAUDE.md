@@ -37,8 +37,8 @@
 # Full stack (Docker)
 docker-compose up
 
-# Local dev (requires DB running)
-docker-compose up -d db  # Start only database
+# Local dev (requires DB + ML service)
+docker-compose up -d db ml-service  # Start database and ML service
 
 # Frontend dev
 cd apps/frontend && npm run dev
@@ -173,11 +173,26 @@ patterns: Watch areas, PostGIS ST_DWithin, notification badges
 status: COMPLETE
 ```
 
-### @auth
+### @auth (COMPLETE)
 ```yaml
-files: [AuthContext.tsx, token-storage.ts, auth.py, auth_service.py]
-patterns: JWT, Firebase, refresh tokens
-warning: HIGH-RISK - extra review required
+files:
+  Backend:
+  - apps/backend/src/api/auth.py - /register/email, /login/email endpoints
+  - apps/backend/src/domain/services/auth_service.py - register_email_user, authenticate_email_user
+  - apps/backend/src/domain/services/security.py - hash_password, verify_password (bcrypt)
+  - apps/backend/src/infrastructure/models.py - password_hash column
+
+  Frontend:
+  - apps/frontend/src/contexts/AuthContext.tsx - registerWithEmail, loginWithEmail
+  - apps/frontend/src/components/screens/LoginScreen.tsx - Email/Google/Phone tabs
+
+auth_methods:
+  - Email/Password: bcrypt hashing, 8+ char minimum
+  - Google OAuth: Firebase integration
+  - Phone OTP: Firebase SMS
+
+migration: python -m apps.backend.src.scripts.migrate_add_password_auth
+status: COMPLETE - All 3 auth methods working
 ```
 
 ### @onboarding (COMPLETE)
@@ -313,6 +328,25 @@ features:
 status: COMPLETE - Hotspot-aware routing with HARD AVOID strategy
 ```
 
+### @e2e-testing (COMPLETE)
+```yaml
+files:
+  - apps/frontend/scripts/e2e-full-test.ts - Playwright E2E test suite
+
+test_coverage:
+  - Account creation via API + database verification
+  - Login flow via UI (email/password)
+  - Onboarding wizard (5 steps)
+  - HomeScreen features (risk banner, cards, map)
+  - Report submission (4-step wizard)
+  - Profile and Watch Areas
+  - Flood Atlas navigation
+
+run: cd apps/frontend && npx tsx scripts/e2e-full-test.ts
+output: 21 screenshots (e2e-1-*.png to e2e-21-*.png)
+status: COMPLETE
+```
+
 ---
 
 ## Safety Rules
@@ -350,6 +384,18 @@ python apps/backend/verify_hotspot_spatial.py  # Verify 62 unique locations
 
 # Visual testing (Playwright)
 cd apps/frontend && npm run screenshot  # Requires auth
+
+# E2E Full Test (creates account, tests all flows)
+cd apps/frontend && npx tsx scripts/e2e-full-test.ts
+```
+
+### Test Accounts
+```yaml
+# E2E Test Account (auto-created by e2e-full-test.ts)
+email: e2e_test_<timestamp>@floodsafe.test
+password: TestPassword123!
+city: Delhi
+watch_area: Connaught Place
 ```
 
 ### Before Marking Complete
@@ -370,7 +416,8 @@ cd apps/frontend && npm run screenshot  # Requires auth
 - [x] Alert mechanism MVP
 - [x] Onboarding system
 - [x] HomeScreen live data
-- [x] Authentication
+- [x] Authentication (Email/Password + Google + Phone)
+- [x] E2E Testing Suite (Playwright)
 
 ### Tier 2: ML/AI Foundation (IN PROGRESS)
 - [x] Attention LSTM model (96.2% accuracy)

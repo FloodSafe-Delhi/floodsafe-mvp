@@ -252,7 +252,7 @@ This script verifies:
    ```
 
 4. **Access the frontend:**
-   - Navigate to http://localhost:5173
+   - Navigate to http://localhost:5175
    - Click on Profile tab (bottom nav on mobile, sidebar on desktop)
 
 5. **Test features:**
@@ -317,7 +317,7 @@ This script verifies:
 
 ### CORS Configuration
 Frontend can access backend from multiple ports during development:
-- localhost:5173-5175 (Vite dev server)
+- localhost:5175 (Vite dev server)
 - localhost:3000 (alternative React port)
 - localhost:8000 (API documentation)
 

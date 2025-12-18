@@ -30,34 +30,54 @@ export function FloodAtlasScreen({
     const [floodZones, setFloodZones] = useState<GeoJSON.FeatureCollection | undefined>(undefined);
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
-    // Geolocation - get user's current location
+    // Geolocation - get user's current location with retry mechanism
     useEffect(() => {
-        if ('geolocation' in navigator) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
-                    setUserLocation(loc);
-                    setNavigationOrigin(loc);
-                },
-                (error) => {
-                    console.error('Geolocation error:', error);
-                    // Fallback to default city center
-                    const fallbackCoords = city === 'bangalore'
-                        ? { lat: 12.9716, lng: 77.5946 }
-                        : { lat: 28.6139, lng: 77.2090 };
-                    setUserLocation(fallbackCoords);
-                    setNavigationOrigin(fallbackCoords);
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
-        } else {
+        if (!('geolocation' in navigator)) {
             // Browser doesn't support geolocation - use default
             const fallbackCoords = city === 'bangalore'
                 ? { lat: 12.9716, lng: 77.5946 }
                 : { lat: 28.6139, lng: 77.2090 };
             setUserLocation(fallbackCoords);
             setNavigationOrigin(fallbackCoords);
+            return;
         }
+
+        const setLocationFromPosition = (position: GeolocationPosition) => {
+            const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
+            setUserLocation(loc);
+            setNavigationOrigin(loc);
+        };
+
+        const useFallback = () => {
+            const fallbackCoords = city === 'bangalore'
+                ? { lat: 12.9716, lng: 77.5946 }
+                : { lat: 28.6139, lng: 77.2090 };
+            setUserLocation(fallbackCoords);
+            setNavigationOrigin(fallbackCoords);
+        };
+
+        // Try with coarse location first (faster), then retry with high accuracy if needed
+        navigator.geolocation.getCurrentPosition(
+            setLocationFromPosition,
+            (error) => {
+                if (error.code === error.TIMEOUT) {
+                    // Timeout: Retry with lower accuracy and longer timeout
+                    console.warn('Geolocation timeout, retrying with lower accuracy...');
+                    navigator.geolocation.getCurrentPosition(
+                        setLocationFromPosition,
+                        (retryError) => {
+                            console.warn('Geolocation retry failed:', retryError);
+                            useFallback();
+                        },
+                        { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
+                    );
+                } else {
+                    console.warn('Geolocation error:', error.message);
+                    useFallback();
+                }
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        );
     }, [city]);
 
     // Handle initial destination from HomeScreen (when user clicks "Alt Routes" on an alert)

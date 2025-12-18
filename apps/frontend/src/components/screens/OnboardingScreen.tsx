@@ -9,7 +9,7 @@
  * 5. Completion (review & confirm)
  */
 
-import { useReducer, useEffect, useState } from 'react';
+import { useReducer, useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCityContext } from '../../contexts/CityContext';
 import {
@@ -21,7 +21,7 @@ import {
     useGeocode
 } from '../../lib/api/hooks';
 import type { OnboardingFormState, OnboardingAction, WatchAreaCreate, DailyRouteCreate, GeocodingResult } from '../../types';
-import { CITIES } from '../../lib/map/cityConfigs';
+import { CITIES, isWithinCityBounds } from '../../lib/map/cityConfigs';
 
 // UI Components
 import { Card } from '../ui/card';
@@ -30,8 +30,25 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Progress } from '../ui/progress';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
-import { MapPin, User, Bell, Route, CheckCircle, Trash2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { MapPin, User, Bell, Route, CheckCircle, Trash2, ChevronLeft, ChevronRight, Loader2, Navigation } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Debounce hook for search
+function useDebounce<T>(value: T, delay: number): T {
+    const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+
+    return debouncedValue;
+}
 
 // Initial state
 const initialState: OnboardingFormState = {
@@ -466,12 +483,19 @@ interface Step3WatchAreasProps {
     userId: string;
 }
 
-function Step3WatchAreas({ watchAreas, existingWatchAreas, city: _city, onAdd, onRemove, error, userId }: Step3WatchAreasProps) {
+function Step3WatchAreas({ watchAreas, existingWatchAreas, city, onAdd, onRemove, error, userId }: Step3WatchAreasProps) {
     const [name, setName] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+    const [isGettingLocation, setIsGettingLocation] = useState(false);
 
-    // Use geocoding for location search
-    const { data: searchResults = [] } = useGeocode(searchQuery, searchQuery.length >= 3);
+    // 100ms debounce for responsive search
+    const debouncedSearchQuery = useDebounce(searchQuery, 100);
+
+    // Use geocoding for location search with debounced query
+    const { data: searchResults = [], isLoading: isSearching } = useGeocode(
+        debouncedSearchQuery,
+        debouncedSearchQuery.length >= 3
+    );
 
     const handleAddFromSearch = (result: GeocodingResult) => {
         onAdd({
@@ -484,6 +508,88 @@ function Step3WatchAreas({ watchAreas, existingWatchAreas, city: _city, onAdd, o
         setName('');
         setSearchQuery('');
     };
+
+    // "Use My Location" handler
+    const handleMyLocation = useCallback(() => {
+        if (!city) {
+            toast.error('Please select a city first');
+            return;
+        }
+
+        if (!('geolocation' in navigator)) {
+            toast.error('Geolocation is not supported by your browser');
+            return;
+        }
+
+        setIsGettingLocation(true);
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { longitude, latitude } = position.coords;
+
+                // Validate location is within selected city bounds
+                if (!isWithinCityBounds(longitude, latitude, city)) {
+                    const cityName = city === 'delhi' ? 'Delhi' : 'Bangalore';
+                    toast.error(`Your location is outside ${cityName} bounds`);
+                    setIsGettingLocation(false);
+                    return;
+                }
+
+                // Reverse geocode to get location name
+                try {
+                    const response = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?` +
+                        `lat=${latitude}&lon=${longitude}&format=json`,
+                        { headers: { 'User-Agent': 'FloodSafe-MVP/1.0' } }
+                    );
+                    const data = await response.json();
+                    const locationName = data.address?.suburb ||
+                        data.address?.neighbourhood ||
+                        data.address?.road ||
+                        'My Location';
+
+                    onAdd({
+                        user_id: userId,
+                        name: name || locationName,
+                        latitude,
+                        longitude,
+                        radius: 1000,
+                    });
+                    setName('');
+                    toast.success(`Added "${name || locationName}" as watch area`);
+                } catch {
+                    // If reverse geocoding fails, still add with generic name
+                    onAdd({
+                        user_id: userId,
+                        name: name || 'My Location',
+                        latitude,
+                        longitude,
+                        radius: 1000,
+                    });
+                    setName('');
+                    toast.success('Added your current location');
+                }
+
+                setIsGettingLocation(false);
+            },
+            (err) => {
+                console.error('Geolocation error:', err);
+                if (err.code === 1) {
+                    toast.error('Location permission denied. Please enable location access.');
+                } else if (err.code === 2) {
+                    toast.error('Unable to determine your location. Please try again.');
+                } else {
+                    toast.error('Location request timed out. Please try again.');
+                }
+                setIsGettingLocation(false);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
+    }, [city, name, userId, onAdd]);
 
     const totalAreas = watchAreas.length + existingWatchAreas.length;
 
@@ -503,11 +609,41 @@ function Step3WatchAreas({ watchAreas, existingWatchAreas, city: _city, onAdd, o
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Area name (e.g., Home, Office)"
                 />
-                <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search for a location..."
-                />
+                <div className="relative">
+                    <Input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search for a location..."
+                        className="pr-10"
+                    />
+                    {isSearching && searchQuery.length >= 3 && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                        </div>
+                    )}
+                </div>
+
+                {/* Use My Location button */}
+                <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleMyLocation}
+                    disabled={isGettingLocation || !city}
+                >
+                    {isGettingLocation ? (
+                        <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Getting location...
+                        </>
+                    ) : (
+                        <>
+                            <Navigation className="w-4 h-4 mr-2" />
+                            Use My Current Location
+                        </>
+                    )}
+                </Button>
+
                 {searchResults.length > 0 && (
                     <div className="border rounded-lg divide-y max-h-40 overflow-y-auto">
                         {searchResults.map((result, i) => (

@@ -80,6 +80,13 @@ export default function MapComponent({
     const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
     const [showHistoricalPanel, setShowHistoricalPanel] = useState(false);
 
+    // User location tracking state
+    const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [isTrackingLocation, setIsTrackingLocation] = useState(false);
+    const geolocationWatchId = useRef<number | null>(null);
+    const alertedHotspotsRef = useRef<Set<string>>(new Set());
+    const animationFrameRef = useRef<number | null>(null);
+
     // Check if predictions are available for current city
     // Currently, ML predictions are only available for Delhi
     const isDelhiCity = city === 'delhi';
@@ -93,9 +100,13 @@ export default function MapComponent({
     });
 
     // Fetch waterlogging hotspots (only for Delhi)
-    const { data: hotspotsData, error: hotspotsError } = useHotspots(isDelhiCity);
+    const { data: hotspotsData, error: hotspotsError } = useHotspots({
+        enabled: isDelhiCity,
+        includeRainfall: false  // Faster initial load, FHI calculation already includes weather
+    });
 
     const [isChangingCity, setIsChangingCity] = useState(false);
+    const [mapStyleReady, setMapStyleReady] = useState(false);
     const availableCities = showCitySelector ? getAvailableCities() : [];
     const currentCityConfig = getCityConfig(city);
 
@@ -106,6 +117,22 @@ export default function MapComponent({
         // Give the map time to reinitialize
         setTimeout(() => setIsChangingCity(false), 500);
     };
+
+    // Proximity alert configuration
+    const PROXIMITY_ALERT_RADIUS_METERS = 500; // Alert when within 500m of hotspot
+    const HIGH_RISK_LEVELS = ['high', 'extreme']; // FHI levels that trigger alerts
+
+    // Haversine distance calculation (in meters)
+    const calculateDistance = useCallback((lat1: number, lng1: number, lat2: number, lng2: number): number => {
+        const R = 6371000; // Earth's radius in meters
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }, []);
 
     // Show "Coming Soon" message when switching to non-Delhi city with predictions enabled
     useEffect(() => {
@@ -129,6 +156,229 @@ export default function MapComponent({
             });
         }
     }, [hotspotsError, isDelhiCity]);
+
+    // Start continuous location tracking when component mounts
+    useEffect(() => {
+        if (!('geolocation' in navigator)) {
+            console.warn('Geolocation not supported');
+            return;
+        }
+
+        // Start watching position
+        const watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                setUserLocation({ lat: latitude, lng: longitude });
+                setIsTrackingLocation(true);
+            },
+            (error) => {
+                console.warn('Geolocation error:', error.message);
+                setIsTrackingLocation(false);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 5000 // Cache position for 5 seconds
+            }
+        );
+
+        geolocationWatchId.current = watchId;
+
+        // Cleanup on unmount
+        return () => {
+            if (geolocationWatchId.current !== null) {
+                navigator.geolocation.clearWatch(geolocationWatchId.current);
+                geolocationWatchId.current = null;
+            }
+        };
+    }, []);
+
+    // Add/update user location layer on map
+    useEffect(() => {
+        if (!map || !isLoaded || !userLocation) return;
+
+        try {
+            if (!map.isStyleLoaded()) return;
+
+            const userLocationGeoJSON: GeoJSON.FeatureCollection = {
+                type: 'FeatureCollection',
+                features: [{
+                    type: 'Feature',
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [userLocation.lng, userLocation.lat]
+                    },
+                    properties: {}
+                }]
+            };
+
+            const existingSource = map.getSource('user-location') as maplibregl.GeoJSONSource;
+            if (existingSource) {
+                // Update existing source
+                existingSource.setData(userLocationGeoJSON);
+            } else {
+                // Create source and layers
+                map.addSource('user-location', {
+                    type: 'geojson',
+                    data: userLocationGeoJSON
+                });
+
+                // Outer pulsing ring (animated via CSS)
+                map.addLayer({
+                    id: 'user-location-pulse',
+                    type: 'circle',
+                    source: 'user-location',
+                    paint: {
+                        'circle-radius': 20,
+                        'circle-color': '#3b82f6',
+                        'circle-opacity': 0.3,
+                        'circle-stroke-width': 0
+                    }
+                });
+
+                // Middle ring
+                map.addLayer({
+                    id: 'user-location-ring',
+                    type: 'circle',
+                    source: 'user-location',
+                    paint: {
+                        'circle-radius': 12,
+                        'circle-color': '#3b82f6',
+                        'circle-opacity': 0.2,
+                        'circle-stroke-width': 2,
+                        'circle-stroke-color': '#3b82f6',
+                        'circle-stroke-opacity': 0.5
+                    }
+                });
+
+                // Inner solid dot
+                map.addLayer({
+                    id: 'user-location-dot',
+                    type: 'circle',
+                    source: 'user-location',
+                    paint: {
+                        'circle-radius': 8,
+                        'circle-color': '#3b82f6',
+                        'circle-opacity': 1,
+                        'circle-stroke-width': 3,
+                        'circle-stroke-color': '#ffffff'
+                    }
+                });
+
+                // Start pulsing animation
+                let pulseRadius = 15;
+                let pulseOpacity = 0.4;
+                let growing = true;
+
+                const animatePulse = () => {
+                    // Guard: Check map is still valid and layer exists
+                    if (!map || !map.getStyle || typeof map.getLayer !== 'function') {
+                        animationFrameRef.current = null;
+                        return;
+                    }
+
+                    try {
+                        if (!map.getLayer('user-location-pulse')) {
+                            animationFrameRef.current = null;
+                            return;
+                        }
+
+                        if (growing) {
+                            pulseRadius += 0.5;
+                            pulseOpacity -= 0.015;
+                            if (pulseRadius >= 30) growing = false;
+                        } else {
+                            pulseRadius -= 0.5;
+                            pulseOpacity += 0.015;
+                            if (pulseRadius <= 15) growing = true;
+                        }
+
+                        map.setPaintProperty('user-location-pulse', 'circle-radius', pulseRadius);
+                        map.setPaintProperty('user-location-pulse', 'circle-opacity', Math.max(0.1, Math.min(0.4, pulseOpacity)));
+
+                        animationFrameRef.current = requestAnimationFrame(animatePulse);
+                    } catch {
+                        // Layer might be removed or map transitioning, stop animation
+                        animationFrameRef.current = null;
+                        return;
+                    }
+                };
+
+                // Cancel any previous animation before starting new one
+                if (animationFrameRef.current) {
+                    cancelAnimationFrame(animationFrameRef.current);
+                }
+                animationFrameRef.current = requestAnimationFrame(animatePulse);
+            }
+        } catch (error) {
+            console.warn('Could not update user location layer:', error);
+        }
+
+        // Cleanup: Cancel animation frame on unmount or when dependencies change
+        return () => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+                animationFrameRef.current = null;
+            }
+        };
+    }, [map, isLoaded, userLocation]);
+
+    // Check proximity to high-risk hotspots and show alerts
+    useEffect(() => {
+        if (!userLocation || !hotspotsData?.features || !isDelhiCity) return;
+
+        hotspotsData.features.forEach((feature) => {
+            const props = feature.properties;
+            const hotspotId = String(props?.id || props?.name || '');
+            const fhiLevel = props?.fhi_level?.toLowerCase() || '';
+            const hotspotName = props?.name || 'Unknown hotspot';
+
+            // Skip if not high risk or already alerted
+            if (!HIGH_RISK_LEVELS.includes(fhiLevel)) return;
+            if (alertedHotspotsRef.current.has(hotspotId)) return;
+
+            // Get hotspot coordinates
+            if (feature.geometry.type !== 'Point') return;
+            const [hotspotLng, hotspotLat] = feature.geometry.coordinates;
+
+            // Calculate distance
+            const distance = calculateDistance(
+                userLocation.lat,
+                userLocation.lng,
+                hotspotLat,
+                hotspotLng
+            );
+
+            // Alert if within proximity threshold
+            if (distance <= PROXIMITY_ALERT_RADIUS_METERS) {
+                alertedHotspotsRef.current.add(hotspotId);
+
+                const distanceText = distance < 100
+                    ? 'very close'
+                    : `${Math.round(distance)}m away`;
+
+                const fhiColor = props?.fhi_color || (fhiLevel === 'extreme' ? '#ef4444' : '#f97316');
+
+                toast.warning(
+                    `Flood Risk Alert: ${hotspotName}`,
+                    {
+                        description: `You are ${distanceText} from a ${fhiLevel.toUpperCase()} flood risk area. Exercise caution.`,
+                        duration: 8000,
+                        icon: '🚨',
+                        style: {
+                            borderLeft: `4px solid ${fhiColor}`,
+                        },
+                    }
+                );
+            }
+        });
+    }, [userLocation, hotspotsData, isDelhiCity, calculateDistance, PROXIMITY_ALERT_RADIUS_METERS, HIGH_RISK_LEVELS]);
+
+    // Reset alerted hotspots when city changes or user moves far away
+    useEffect(() => {
+        // Clear alerts when switching cities
+        alertedHotspotsRef.current.clear();
+    }, [city]);
 
     // Force resize when the component mounts or className changes
     useEffect(() => {
@@ -180,26 +430,63 @@ export default function MapComponent({
         };
     }, [map, isLoaded]);
 
+    // Track when map style is fully ready (solves timing issues with hotspots)
     useEffect(() => {
-        if (!map || !isLoaded) return;
+        if (!map || !isLoaded) {
+            setMapStyleReady(false);
+            return;
+        }
 
-        // Verify map is fully initialized and functional
-        // Check isStyleLoaded() to prevent race condition with sourceCaches
-        try {
-            if (!map.isStyleLoaded()) {
-                console.log('Map style not fully loaded yet, waiting...');
-                // Subscribe to styledata event once
-                const onStyleData = () => {
-                    map.off('styledata', onStyleData);
-                    // Re-trigger this effect by forcing a re-render
-                    // The effect will run again when the style is ready
-                };
-                map.on('styledata', onStyleData);
-                return;
+        const checkStyleReady = () => {
+            try {
+                if (map.isStyleLoaded() && map.getStyle()?.sources) {
+                    console.log('✅ Map style fully ready');
+                    setMapStyleReady(true);
+                    return true;
+                }
+            } catch {
+                return false;
             }
+            return false;
+        };
+
+        // Check immediately
+        if (checkStyleReady()) return;
+
+        // Otherwise wait for style to load
+        console.log('⏳ Waiting for map style to be ready...');
+        const onStyleLoad = () => {
+            if (checkStyleReady()) {
+                map.off('styledata', onStyleLoad);
+                map.off('load', onStyleLoad);
+            }
+        };
+
+        map.on('styledata', onStyleLoad);
+        map.on('load', onStyleLoad);
+
+        // Also poll as backup (some edge cases miss events)
+        const pollInterval = setInterval(() => {
+            if (checkStyleReady()) {
+                clearInterval(pollInterval);
+            }
+        }, 200);
+
+        return () => {
+            map.off('styledata', onStyleLoad);
+            map.off('load', onStyleLoad);
+            clearInterval(pollInterval);
+        };
+    }, [map, isLoaded]);
+
+    useEffect(() => {
+        if (!map || !isLoaded || !mapStyleReady) return;
+
+        // Map style is confirmed ready at this point
+        try {
             const style = map.getStyle();
             if (!style || !style.sources) {
-                console.log('Map not fully initialized yet, skipping layer update');
+                console.log('Map style check failed, skipping layer update');
                 return;
             }
         } catch (e) {
@@ -411,27 +698,33 @@ export default function MapComponent({
 
         // 2c. Add Waterlogging Hotspots Layer (62 Delhi locations with ML risk)
         if (hotspotsData && isDelhiCity) {
-            const hotspotsGeoJSON = {
-                type: 'FeatureCollection' as const,
-                features: hotspotsData.features
-            };
+            // Wrap in try-catch to handle race conditions during city switch
+            try {
+                // mapStyleReady is already checked at effect level, no need to re-check here
+                const hotspotsGeoJSON = {
+                    type: 'FeatureCollection' as const,
+                    features: hotspotsData.features
+                };
 
-            const existingSource = map.getSource('hotspots') as maplibregl.GeoJSONSource;
-            if (existingSource) {
-                // Update existing source with new data
-                existingSource.setData(hotspotsGeoJSON);
-            } else {
-                // Create source and layers for first time
-                map.addSource('hotspots', {
-                    type: 'geojson',
-                    data: hotspotsGeoJSON
-                });
+                const existingSource = map.getSource('hotspots') as maplibregl.GeoJSONSource;
+                if (existingSource) {
+                    // Update existing source with new data
+                    existingSource.setData(hotspotsGeoJSON);
+                } else {
+                    // Create source and layers for first time
+                    map.addSource('hotspots', {
+                        type: 'geojson',
+                        data: hotspotsGeoJSON
+                    });
 
                 // Add halo/glow effect for hotspots - FHI color primary, fallback to ML risk
                 map.addLayer({
                     id: 'hotspots-halo',
                     type: 'circle',
                     source: 'hotspots',
+                    layout: {
+                        'visibility': 'visible'
+                    },
                     paint: {
                         'circle-radius': 18,
                         'circle-color': ['coalesce', ['get', 'fhi_color'], ['get', 'risk_color']],
@@ -445,6 +738,9 @@ export default function MapComponent({
                     id: 'hotspots-layer',
                     type: 'circle',
                     source: 'hotspots',
+                    layout: {
+                        'visibility': 'visible'
+                    },
                     paint: {
                         'circle-radius': 8,
                         'circle-color': ['coalesce', ['get', 'fhi_color'], ['get', 'risk_color']],
@@ -553,6 +849,10 @@ export default function MapComponent({
                 map.on('mouseleave', 'hotspots-layer', () => {
                     map.getCanvas().style.cursor = '';
                 });
+            }
+            } catch (e) {
+                // Handle race condition during city switch (sourceCaches undefined)
+                console.warn('Hotspots layer update skipped - map transitioning:', e);
             }
         }
 
@@ -848,7 +1148,7 @@ export default function MapComponent({
             console.error('Error updating map layers:', error);
         }
 
-    }, [map, isLoaded, sensors, reports, hotspotsData, isDelhiCity, navigationRoutes, selectedRouteId, navigationOrigin, navigationDestination, nearbyMetros, floodZones, onMetroClick]);
+    }, [map, isLoaded, mapStyleReady, sensors, reports, hotspotsData, isDelhiCity, navigationRoutes, selectedRouteId, navigationOrigin, navigationDestination, nearbyMetros, floodZones, onMetroClick]);
 
     // Auto-zoom map to fit routes when calculated
     useEffect(() => {
@@ -898,84 +1198,8 @@ export default function MapComponent({
         }
     }, [map, isLoaded, navigationRoutes, navigationOrigin, navigationDestination]);
 
-    // 5. Add ML Prediction Heatmap Layer
-    useEffect(() => {
-        if (!map || !isLoaded) return;
-
-        // Verify map is functional - check isStyleLoaded() to prevent sourceCaches race
-        try {
-            if (!map.isStyleLoaded() || !map.getStyle()?.sources) return;
-        } catch {
-            return;
-        }
-
-        try {
-            // Create predictions source and heatmap layer if not exists
-            if (!map.getSource('predictions')) {
-            map.addSource('predictions', {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] }
-            });
-
-            // Add heatmap layer for flood predictions
-            // Insert before other layers so it appears as a background
-            map.addLayer({
-                id: 'predictions-heatmap',
-                type: 'heatmap',
-                source: 'predictions',
-                paint: {
-                    // Weight based on flood probability
-                    'heatmap-weight': ['get', 'flood_probability'],
-                    // Intensity of heatmap
-                    'heatmap-intensity': 1.2,
-                    // Color gradient from green (low risk) to red (high risk)
-                    'heatmap-color': [
-                        'interpolate',
-                        ['linear'],
-                        ['heatmap-density'],
-                        0.0, 'rgba(34, 197, 94, 0)',     // Green - transparent (low)
-                        0.2, 'rgba(34, 197, 94, 0.3)',  // Green - light
-                        0.4, 'rgba(234, 179, 8, 0.5)',  // Yellow (moderate)
-                        0.6, 'rgba(249, 115, 22, 0.7)', // Orange (high)
-                        0.8, 'rgba(239, 68, 68, 0.85)', // Red (extreme)
-                        1.0, 'rgba(127, 29, 29, 0.95)'  // Dark Red (critical)
-                    ],
-                    // Radius in pixels
-                    'heatmap-radius': [
-                        'interpolate',
-                        ['linear'],
-                        ['zoom'],
-                        8, 20,   // At zoom 8, radius = 20px
-                        12, 40,  // At zoom 12, radius = 40px
-                        16, 60   // At zoom 16, radius = 60px
-                    ],
-                    // Overall opacity
-                    'heatmap-opacity': 0.7
-                }
-            }, 'sensors-layer'); // Insert below sensors layer
-        }
-
-        // Update predictions data when available
-        if (predictionGrid?.features) {
-            const source = map.getSource('predictions') as maplibregl.GeoJSONSource;
-            if (source) {
-                source.setData({
-                    type: 'FeatureCollection',
-                    features: predictionGrid.features.map(f => ({
-                        type: 'Feature' as const,
-                        geometry: f.geometry,
-                        properties: {
-                            flood_probability: f.properties.flood_probability,
-                            risk_level: f.properties.risk_level
-                        }
-                    }))
-                });
-            }
-        }
-        } catch (error) {
-            console.error('Error updating prediction heatmap:', error);
-        }
-    }, [map, isLoaded, predictionGrid]);
+    // ML Prediction Heatmap Layer removed - not needed for current implementation
+    // Hotspots layer provides better visual feedback for flood risk areas
 
     // Toggle layer visibility
     useEffect(() => {
@@ -1062,39 +1286,78 @@ export default function MapComponent({
     const handleMyLocation = () => {
         if (!map) return;
 
+        // Use tracked location if available (faster response)
+        if (userLocation) {
+            const { lat, lng } = userLocation;
+
+            // Check if user is within current city bounds
+            const isWithinBounds = isWithinCityBounds(lng, lat, city);
+            const cityConfig = getCityConfig(city);
+
+            if (!isWithinBounds) {
+                toast.warning(`Outside ${cityConfig.displayName}`, {
+                    description: 'Your location is outside the flood monitoring area',
+                    duration: 4000,
+                });
+            }
+
+            map.flyTo({
+                center: [lng, lat],
+                zoom: 15,
+                duration: 1500
+            });
+
+            toast.success('Location found', {
+                description: isTrackingLocation ? 'Live tracking active' : 'Showing last known position',
+                duration: 2000,
+            });
+            return;
+        }
+
+        // Fallback: Request location if not tracking yet
         if ('geolocation' in navigator) {
+            toast.loading('Finding your location...', { id: 'location-search' });
+
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     const { longitude, latitude } = position.coords;
+                    setUserLocation({ lat: latitude, lng: longitude });
 
                     // Check if user is within current city bounds
                     const isWithinBounds = isWithinCityBounds(longitude, latitude, city);
                     const cityConfig = getCityConfig(city);
 
                     if (!isWithinBounds) {
-                        // User is outside current city - show warning but still fly to their location
-                        console.warn(`User location is outside ${cityConfig.displayName} bounds`);
-                        alert(`Your location is outside the ${cityConfig.displayName} flood monitoring area. Showing your location anyway.`);
+                        toast.warning(`Outside ${cityConfig.displayName}`, {
+                            description: 'Your location is outside the flood monitoring area',
+                            duration: 4000,
+                        });
                     }
 
                     map.flyTo({
                         center: [longitude, latitude],
-                        zoom: 14,
-                        duration: 2000
+                        zoom: 15,
+                        duration: 1500
                     });
 
-                    // Add a marker at user's location
-                    new maplibregl.Marker({ color: '#3b82f6' })
-                        .setLngLat([longitude, latitude])
-                        .addTo(map);
+                    toast.dismiss('location-search');
+                    toast.success('Location found', { duration: 2000 });
                 },
                 (error) => {
                     console.error('Error getting location:', error);
-                    alert('Unable to get your location. Please enable location permissions.');
-                }
+                    toast.dismiss('location-search');
+                    toast.error('Unable to get location', {
+                        description: 'Please enable location permissions in your browser',
+                        duration: 5000,
+                    });
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
             );
         } else {
-            alert('Geolocation is not supported by your browser.');
+            toast.error('Geolocation not supported', {
+                description: 'Your browser does not support location services',
+                duration: 5000,
+            });
         }
     };
 
@@ -1318,7 +1581,7 @@ export default function MapComponent({
                         <Button
                             size="icon"
                             onClick={() => setLayersVisible(prev => ({ ...prev, hotspots: !prev.hotspots }))}
-                            className={`${layersVisible.hotspots ? '!bg-cyan-500 !hover:bg-cyan-600 !text-white' : '!bg-white !hover:bg-gray-100 !text-gray-800 border-2 border-gray-300'} shadow-xl rounded-full w-11 h-11 !opacity-100`}
+                            className={`${layersVisible.hotspots ? '!bg-green-500 !hover:bg-green-600 !text-white' : '!bg-white !hover:bg-gray-100 !text-gray-800 border-2 border-gray-300'} shadow-xl rounded-full w-11 h-11 !opacity-100`}
                             title="Toggle waterlogging hotspots (62 Delhi locations)"
                         >
                             <Droplets className="h-5 w-5" />

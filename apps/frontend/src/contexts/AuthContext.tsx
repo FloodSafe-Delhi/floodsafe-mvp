@@ -51,6 +51,10 @@ interface AuthContextType {
     isLoading: boolean;
     error: string | null;
 
+    // Email/Password Auth
+    registerWithEmail: (email: string, password: string, username?: string) => Promise<void>;
+    loginWithEmail: (email: string, password: string) => Promise<void>;
+
     // Google Auth
     loginWithGoogle: (idToken: string) => Promise<void>;
 
@@ -201,6 +205,82 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         return () => clearInterval(interval);
     }, [isAuthenticated, refreshSession]);
+
+    // Email/Password - Register
+    const registerWithEmail = useCallback(async (email: string, password: string, username?: string) => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/register/email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email,
+                    password,
+                    username: username || undefined,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Registration failed');
+            }
+
+            const tokens = await response.json();
+            TokenStorage.setTokens(tokens.access_token, tokens.refresh_token);
+
+            // Fetch user profile
+            const userData = await fetchUser();
+            if (userData) {
+                setUser(userData);
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Registration failed';
+            setError(message);
+            throw err;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [fetchUser]);
+
+    // Email/Password - Login
+    const loginWithEmail = useCallback(async (email: string, password: string) => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/login/email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.detail || 'Invalid email or password');
+            }
+
+            const tokens = await response.json();
+            TokenStorage.setTokens(tokens.access_token, tokens.refresh_token);
+
+            // Fetch user profile
+            const userData = await fetchUser();
+            if (userData) {
+                setUser(userData);
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Login failed';
+            setError(message);
+            throw err;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [fetchUser]);
 
     // Google authentication
     const loginWithGoogle = useCallback(async (idToken: string) => {
@@ -356,6 +436,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isAuthenticated,
         isLoading,
         error,
+        registerWithEmail,
+        loginWithEmail,
         loginWithGoogle,
         isFirebaseReady,
         sendPhoneOTP,

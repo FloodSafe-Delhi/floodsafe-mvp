@@ -299,6 +299,9 @@ class ReportResponse(BaseModel):
     # Photo location verification
     location_verified: bool = True
 
+    # Archive field - NULL means active, timestamp means archived
+    archived_at: Optional[datetime] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 

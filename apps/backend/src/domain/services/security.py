@@ -151,3 +151,40 @@ def get_token_expiry(token: str) -> Optional[datetime]:
         return None
     except JWTError:
         return None
+
+
+# =============================================================================
+# Password Hashing (bcrypt)
+# =============================================================================
+import bcrypt
+
+
+def hash_password(password: str) -> str:
+    """
+    Hash a password using bcrypt with salt.
+
+    Args:
+        password: The plaintext password to hash
+
+    Returns:
+        The bcrypt hash string (includes salt)
+    """
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """
+    Verify a password against its bcrypt hash.
+
+    Args:
+        password: The plaintext password to verify
+        password_hash: The bcrypt hash to check against
+
+    Returns:
+        True if password matches, False otherwise
+    """
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+    except Exception:
+        return False

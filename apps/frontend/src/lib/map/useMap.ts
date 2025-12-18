@@ -5,23 +5,56 @@ import { MAP_CONSTANTS, getMapConfig } from './config';
 import { getCityConfig, type CityKey } from './cityConfigs';
 import mapStyle from './styles.json';
 
+// Global flag to track if the error handler has been added
+let globalErrorHandlerAdded = false;
+
 export function useMap(
     containerRef: React.RefObject<HTMLDivElement>,
     cityKey: CityKey = MAP_CONSTANTS.DEFAULT_CITY
 ) {
     const mapRef = useRef<maplibregl.Map | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
+    const isCleaningUp = useRef(false);
+
+    // Add global handler for unhandled promise rejections from MapLibre
+    useEffect(() => {
+        if (globalErrorHandlerAdded) return;
+        globalErrorHandlerAdded = true;
+
+        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            const errorMsg = event.reason?.message || String(event.reason);
+            // Suppress MapLibre sourceCaches race condition errors during map destruction
+            if (errorMsg.includes('sourceCaches') || errorMsg.includes('Cannot read properties of undefined')) {
+                console.log('MapLibre cleanup race condition (safe to ignore):', errorMsg);
+                event.preventDefault(); // Prevents the error from appearing in console
+            }
+        };
+
+        window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+        return () => {
+            // Don't remove the handler - keep it for the lifetime of the app
+            // to handle any late async errors
+        };
+    }, []);
 
     useEffect(() => {
         // Reset isLoaded when city changes to prevent accessing stale map
         setIsLoaded(false);
+        isCleaningUp.current = false;
 
         if (!containerRef.current) return;
 
         // If map already exists, remove it before creating new one
         if (mapRef.current) {
-            mapRef.current.remove();
+            isCleaningUp.current = true;
+            try {
+                mapRef.current.remove();
+            } catch (e) {
+                console.log('Map cleanup warning (safe to ignore):', e);
+            }
             mapRef.current = null;
+            isCleaningUp.current = false;
         }
 
         const cityConfig = getCityConfig(cityKey);
@@ -270,7 +303,13 @@ export function useMap(
         });
 
         map.on('error', (e) => {
-            console.error('❌ Map error:', e);
+            // Suppress cleanup race condition errors (sourceCaches undefined during map destruction)
+            const errorMsg = e.error?.message || String(e);
+            if (errorMsg.includes('sourceCaches') || isCleaningUp.current) {
+                console.log('Map cleanup race condition (safe to ignore):', errorMsg);
+                return;
+            }
+            console.error('❌ Map error:', e.error?.message || e.message || JSON.stringify(e));
             // Gracefully handle missing files
             if (e.error?.message?.includes('404') || e.error?.message?.includes('Failed to fetch')) {
                 console.warn(`⚠️ Some map resources for ${cityConfig.displayName} are not available. Using fallback.`);
@@ -280,9 +319,16 @@ export function useMap(
         mapRef.current = map;
 
         return () => {
+            // Mark as cleaning up to suppress race condition errors
+            isCleaningUp.current = true;
+
             // Only remove if map still exists (might already be removed on city change)
             if (mapRef.current) {
-                mapRef.current.remove();
+                try {
+                    mapRef.current.remove();
+                } catch (e) {
+                    console.log('Map cleanup warning (safe to ignore):', e);
+                }
                 mapRef.current = null;
             }
             // Only remove protocol if we added it

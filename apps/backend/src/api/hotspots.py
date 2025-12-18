@@ -179,7 +179,8 @@ async def get_all_hotspots(
             params["test_fhi_override"] = test_fhi_override
             logger.info(f"Using test FHI override: {test_fhi_override}")
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # Increased timeout for parallel FHI calculation (62 hotspots)
+        async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.get(
                 f"{settings.ML_SERVICE_URL}/api/v1/hotspots/all",
                 params=params,

@@ -9,9 +9,10 @@ This module provides endpoints for:
 
 import json
 import logging
+import asyncio
 from pathlib import Path
-from datetime import datetime
-from typing import List, Dict, Optional
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -28,6 +29,14 @@ hotspot_model = None
 feature_extractor = None
 hotspots_data: List[Dict] = []
 predictions_cache: Dict[str, Dict] = {}  # Pre-computed ML predictions
+
+# Response-level cache for /all endpoint (5 minute TTL)
+_hotspots_response_cache: Dict[str, any] = {
+    "data": None,
+    "timestamp": None,
+    "ttl": timedelta(minutes=5),
+    "cache_key": None,
+}
 
 
 class HotspotRiskResponse(BaseModel):
@@ -134,6 +143,50 @@ def _haversine_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> f
     return R * c
 
 
+async def _calculate_single_hotspot_fhi(
+    hotspot: Dict,
+    idx: int,
+    semaphore: asyncio.Semaphore,
+    timeout_seconds: float = 10.0,
+) -> Tuple[int, Dict]:
+    """
+    Calculate FHI for a single hotspot with timeout and semaphore limiting.
+
+    Returns (idx, fhi_data) tuple for later mapping.
+    """
+    async with semaphore:
+        try:
+            fhi_result = await asyncio.wait_for(
+                calculate_fhi_for_location(
+                    lat=hotspot["lat"],
+                    lng=hotspot["lng"]
+                ),
+                timeout=timeout_seconds
+            )
+            return (idx, {
+                "fhi_score": fhi_result["fhi_score"],
+                "fhi_level": fhi_result["fhi_level"],
+                "fhi_color": fhi_result["fhi_color"],
+                "elevation_m": fhi_result["elevation_m"],
+            })
+        except asyncio.TimeoutError:
+            logger.warning(f"FHI calculation timed out for hotspot {hotspot['id']} ({hotspot['name']})")
+            return (idx, {
+                "fhi_score": 0.15,
+                "fhi_level": "low",
+                "fhi_color": "#22c55e",
+                "elevation_m": 220.0,
+            })
+        except Exception as e:
+            logger.warning(f"FHI calculation failed for hotspot {hotspot['id']}: {e}")
+            return (idx, {
+                "fhi_score": 0.25,
+                "fhi_level": "unknown",
+                "fhi_color": "#9ca3af",
+                "elevation_m": 220.0,
+            })
+
+
 @router.get("/all", response_model=AllHotspotsResponse)
 async def get_all_hotspots(
     include_rainfall: bool = Query(False, description="Include current rainfall factor (slow, uses GEE)"),
@@ -147,14 +200,32 @@ async def get_all_hotspots(
     Risk is calculated as:
     - Base susceptibility from XGBoost model (or historical severity)
     - Dynamic adjustment based on current rainfall (if available)
+
+    Performance optimizations:
+    - Response-level caching (5 minute TTL)
+    - Parallel FHI calculations with asyncio.gather()
+    - Semaphore limiting (max 10 concurrent API calls)
     """
-    global hotspots_data, hotspot_model
+    global hotspots_data, hotspot_model, _hotspots_response_cache
 
     if not hotspots_data:
         raise HTTPException(
             status_code=503,
             detail="Hotspots data not loaded. Service is initializing.",
         )
+
+    # Check response cache (only for non-test, FHI-enabled requests)
+    cache_key = f"fhi={include_fhi}:rain={include_rainfall}:test={test_fhi_override}"
+    if (
+        not test_fhi_override
+        and _hotspots_response_cache["data"]
+        and _hotspots_response_cache["cache_key"] == cache_key
+        and _hotspots_response_cache["timestamp"]
+        and datetime.now() - _hotspots_response_cache["timestamp"] < _hotspots_response_cache["ttl"]
+    ):
+        cache_age = (datetime.now() - _hotspots_response_cache["timestamp"]).total_seconds()
+        logger.info(f"Returning cached hotspots response (age: {cache_age:.1f}s)")
+        return _hotspots_response_cache["data"]
 
     features = []
     current_rainfall = 0.0
@@ -184,6 +255,36 @@ async def get_all_hotspots(
         "extreme": {"fhi_score": 0.85, "fhi_level": "extreme", "fhi_color": "#ef4444"},
     }
 
+    # Pre-calculate FHI for all hotspots in PARALLEL if needed
+    fhi_results: Dict[int, Dict] = {}
+
+    if include_fhi and not test_fhi_override:
+        # Use semaphore to limit concurrent API calls (Open-Meteo rate limiting)
+        semaphore = asyncio.Semaphore(10)  # Max 10 concurrent requests
+
+        logger.info(f"Starting parallel FHI calculation for {len(hotspots_data)} hotspots...")
+        start_time = datetime.now()
+
+        # Launch all FHI calculations in parallel
+        tasks = [
+            _calculate_single_hotspot_fhi(hotspot, idx, semaphore)
+            for idx, hotspot in enumerate(hotspots_data)
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"FHI calculation exception: {result}")
+                continue
+            idx, fhi_data = result
+            fhi_results[idx] = fhi_data
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+        logger.info(f"Parallel FHI calculation completed: {len(fhi_results)}/{len(hotspots_data)} in {elapsed:.2f}s")
+
+    # Build features with pre-calculated FHI data
     for idx, hotspot in enumerate(hotspots_data):
         # Base susceptibility from pre-computed ML predictions
         # Priority: 1) Pre-computed cache, 2) Historical severity fallback
@@ -210,14 +311,13 @@ async def get_all_hotspots(
 
         risk_level, risk_color = _get_risk_level_and_color(risk_probability)
 
-        # Calculate FHI if requested
+        # Get FHI data (pre-calculated or from test override)
         fhi_data = {}
         if include_fhi:
-            # Check for test override
             if test_fhi_override:
+                # Test override mode
                 if test_fhi_override.lower() == "mixed":
                     # Mixed mode: ~30% high, ~20% extreme, rest low
-                    # Use deterministic pattern based on hotspot index
                     if idx % 5 == 0:  # 20% extreme
                         fhi_data = {**TEST_FHI_VALUES["extreme"], "elevation_m": 220.0}
                     elif idx % 3 == 0:  # ~30% high (minus the extreme ones)
@@ -226,32 +326,14 @@ async def get_all_hotspots(
                         fhi_data = {"fhi_score": 0.15, "fhi_level": "low", "fhi_color": "#22c55e", "elevation_m": 220.0}
                 elif test_fhi_override.lower() in TEST_FHI_VALUES:
                     fhi_data = {**TEST_FHI_VALUES[test_fhi_override.lower()], "elevation_m": 220.0}
-                else:
-                    # Invalid test mode, fall through to normal calculation
-                    test_fhi_override = None
-
-            # Normal FHI calculation (if not using test override)
-            if not test_fhi_override:
-                try:
-                    fhi_result = await calculate_fhi_for_location(
-                        lat=hotspot["lat"],
-                        lng=hotspot["lng"]
-                    )
-                    fhi_data = {
-                        "fhi_score": fhi_result["fhi_score"],
-                        "fhi_level": fhi_result["fhi_level"],
-                        "fhi_color": fhi_result["fhi_color"],
-                        "elevation_m": fhi_result["elevation_m"],
-                    }
-                except Exception as e:
-                    logger.warning(f"FHI calculation failed for hotspot {hotspot['id']}: {e}")
-                    # Add default FHI values on error
-                    fhi_data = {
-                        "fhi_score": 0.25,
-                        "fhi_level": "unknown",
-                        "fhi_color": "#9ca3af",
-                        "elevation_m": 220.0,
-                    }
+            else:
+                # Use pre-calculated FHI from parallel execution
+                fhi_data = fhi_results.get(idx, {
+                    "fhi_score": 0.25,
+                    "fhi_level": "unknown",
+                    "fhi_color": "#9ca3af",
+                    "elevation_m": 220.0,
+                })
 
         # Create GeoJSON feature
         properties = {
@@ -278,7 +360,7 @@ async def get_all_hotspots(
             "properties": properties,
         })
 
-    return AllHotspotsResponse(
+    response = AllHotspotsResponse(
         type="FeatureCollection",
         features=features,
         metadata={
@@ -289,6 +371,7 @@ async def get_all_hotspots(
             "cached_predictions_count": len(predictions_cache),
             "model_available": hotspot_model is not None and hotspot_model.is_trained,
             "fhi_enabled": include_fhi,
+            "fhi_parallel": True,  # New: indicates parallel calculation
             "test_mode": test_fhi_override.lower() if test_fhi_override else None,
             "test_mode_note": "FHI values are simulated for testing HARD AVOID routing" if test_fhi_override else None,
             "risk_thresholds": {
@@ -308,6 +391,15 @@ async def get_all_hotspots(
             } if include_fhi else None,
         },
     )
+
+    # Cache the response (only for non-test mode)
+    if not test_fhi_override:
+        _hotspots_response_cache["data"] = response
+        _hotspots_response_cache["timestamp"] = datetime.now()
+        _hotspots_response_cache["cache_key"] = cache_key
+        logger.info(f"Cached hotspots response (key: {cache_key})")
+
+    return response
 
 
 @router.get("/hotspot/{hotspot_id}", response_model=HotspotRiskResponse)

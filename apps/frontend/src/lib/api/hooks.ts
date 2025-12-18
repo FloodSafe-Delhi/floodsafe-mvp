@@ -33,6 +33,8 @@ export interface Report {
     downvotes?: number;
     quality_score?: number;
     verified_at?: string;
+    // Archive field - null means active, timestamp means archived
+    archived_at?: string | null;
 }
 
 export interface ReportCreate {
@@ -84,6 +86,43 @@ export function useUserReports(userId: string | undefined, limit: number = 50) {
         },
         enabled: !!userId, // Only run if userId is provided
         staleTime: 30000, // Consider fresh for 30 seconds
+    });
+}
+
+/**
+ * Fetch user's archived reports (reports older than 3 days or explicitly archived)
+ */
+export function useArchivedReports(userId: string | undefined, limit: number = 50) {
+    return useQuery({
+        queryKey: ['reports', 'archived', userId, limit],
+        queryFn: async () => {
+            const data = await fetchJson<unknown>(`/reports/user/${userId}/archived?limit=${limit}`);
+            return validateReports(data);
+        },
+        enabled: !!userId,
+        staleTime: 60000, // Archived reports don't change often
+    });
+}
+
+/**
+ * Report statistics including active and archived counts
+ */
+export interface ReportStats {
+    user_id: string;
+    active_reports: number;
+    archived_reports: number;
+    total_reports: number;
+    archive_days: number;
+}
+
+export function useReportStats(userId: string | undefined) {
+    return useQuery({
+        queryKey: ['reports', 'stats', userId],
+        queryFn: async () => {
+            return fetchJson<ReportStats>(`/reports/user/${userId}/stats`);
+        },
+        enabled: !!userId,
+        staleTime: 30000,
     });
 }
 
@@ -944,10 +983,15 @@ export interface HotspotsResponse {
  * - XGBoost model prediction (if trained)
  * - Current rainfall from CHIRPS (if available)
  *
- * @param includeRainfall - Whether to include current rainfall factor (default: true)
+ * @param options.includeRainfall - Whether to include current rainfall factor (default: false for faster loads)
+ * @param options.enabled - Whether to enable the query (use to gate fetch for Delhi only)
  * @returns GeoJSON FeatureCollection with hotspot risk data
  */
-export function useHotspots(includeRainfall: boolean = true) {
+export function useHotspots(options: {
+    includeRainfall?: boolean;
+    enabled?: boolean;
+} = {}) {
+    const { includeRainfall = false, enabled = true } = options;
     return useQuery({
         queryKey: ['hotspots', includeRainfall],
         queryFn: async (): Promise<HotspotsResponse> => {
@@ -963,6 +1007,7 @@ export function useHotspots(includeRainfall: boolean = true) {
         gcTime: 60 * 60 * 1000, // 1 hour
         refetchOnWindowFocus: false,
         retry: 2,
+        enabled, // Gate the fetch based on city
     });
 }
 

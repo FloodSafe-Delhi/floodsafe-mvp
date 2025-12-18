@@ -24,7 +24,10 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_started
+      ml-service:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://user:password@db:5432/floodsafe
       ML_SERVICE_URL: http://ml-service:8002
@@ -69,6 +72,12 @@ services:
       DATA_CACHE_DIR: /app/cache
     depends_on:
       - db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/api/v1/predictions/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
 volumes:
   postgres_data:

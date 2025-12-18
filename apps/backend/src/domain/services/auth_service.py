@@ -243,6 +243,102 @@ class AuthService:
         return user
 
     # =========================================================================
+    # Email/Password Authentication
+    # =========================================================================
+
+    def register_email_user(
+        self,
+        email: str,
+        password: str,
+        username: Optional[str],
+        db: Session
+    ) -> User:
+        """
+        Register a new user with email and password.
+
+        Args:
+            email: User's email address
+            password: Plaintext password (will be hashed)
+            username: Optional username (generated if not provided)
+            db: Database session
+
+        Returns:
+            Created User instance
+
+        Raises:
+            ValueError: If email is already registered
+        """
+        from .security import hash_password
+
+        # Normalize email
+        email = email.lower().strip()
+
+        # Check if email already exists
+        existing = db.query(User).filter(User.email == email).first()
+        if existing:
+            raise ValueError("Email already registered")
+
+        # Generate username if not provided
+        if not username:
+            username = self._generate_unique_username(email.split('@')[0], db)
+
+        # Create user with hashed password
+        user = User(
+            username=username,
+            email=email,
+            password_hash=hash_password(password),
+            auth_provider="local",
+            # Initialize onboarding state for new users
+            profile_complete=False,
+            onboarding_step=1,
+            city_preference=None,
+            email_verified=False,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        return user
+
+    def authenticate_email_user(
+        self,
+        email: str,
+        password: str,
+        db: Session
+    ) -> Optional[User]:
+        """
+        Authenticate a user with email and password.
+
+        Args:
+            email: User's email address
+            password: Plaintext password to verify
+            db: Database session
+
+        Returns:
+            User instance if authentication successful, None otherwise
+        """
+        from .security import verify_password
+
+        # Normalize email
+        email = email.lower().strip()
+
+        # Find user by email
+        user = db.query(User).filter(User.email == email).first()
+
+        if not user:
+            return None
+
+        # User must have a password_hash (not OAuth/Phone only user)
+        if not user.password_hash:
+            return None
+
+        # Verify password
+        if not verify_password(password, user.password_hash):
+            return None
+
+        return user
+
+    # =========================================================================
     # Token Management
     # =========================================================================
 

@@ -77,33 +77,53 @@ export function HomeScreen({
     // User's current location from geolocation API
     const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
-    // Get user's GPS location
+    // Get user's GPS location with retry mechanism
     useEffect(() => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    setUserLocation({
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude
-                    });
-                },
-                (error) => {
-                    console.warn('Geolocation error:', error);
-                    // Fallback to default location based on city preference
-                    const fallbackCoords = user?.city_preference === 'bangalore'
-                        ? { latitude: 12.9716, longitude: 77.5946 }
-                        : { latitude: 28.6139, longitude: 77.2090 };
-                    setUserLocation(fallbackCoords);
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
-        } else {
+        if (!navigator.geolocation) {
             // Browser doesn't support geolocation - use default
             const fallbackCoords = user?.city_preference === 'bangalore'
                 ? { latitude: 12.9716, longitude: 77.5946 }
                 : { latitude: 28.6139, longitude: 77.2090 };
             setUserLocation(fallbackCoords);
+            return;
         }
+
+        const setLocationFromPosition = (position: GeolocationPosition) => {
+            setUserLocation({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+            });
+        };
+
+        const useFallback = () => {
+            const fallbackCoords = user?.city_preference === 'bangalore'
+                ? { latitude: 12.9716, longitude: 77.5946 }
+                : { latitude: 28.6139, longitude: 77.2090 };
+            setUserLocation(fallbackCoords);
+        };
+
+        // Try with coarse location first (faster), then retry if needed
+        navigator.geolocation.getCurrentPosition(
+            setLocationFromPosition,
+            (error) => {
+                if (error.code === error.TIMEOUT) {
+                    // Timeout: Retry with lower accuracy and longer timeout
+                    console.warn('Geolocation timeout, retrying with lower accuracy...');
+                    navigator.geolocation.getCurrentPosition(
+                        setLocationFromPosition,
+                        (retryError) => {
+                            console.warn('Geolocation retry failed:', retryError);
+                            useFallback();
+                        },
+                        { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
+                    );
+                } else {
+                    console.warn('Geolocation error:', error.message);
+                    useFallback();
+                }
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+        );
     }, [user?.city_preference]);
 
     const { data: sensors, refetch: refetchSensors } = useSensors();

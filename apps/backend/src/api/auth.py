@@ -153,6 +153,93 @@ async def phone_auth(
 
 
 # =============================================================================
+# Email/Password Authentication Endpoints
+# =============================================================================
+
+class EmailRegisterRequest(BaseModel):
+    """Request for email/password registration"""
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, max_length=128, description="Password (min 8 chars)")
+    username: Optional[str] = Field(None, min_length=3, max_length=50, description="Optional username")
+
+
+class EmailLoginRequest(BaseModel):
+    """Request for email/password login"""
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., description="Password")
+
+
+@router.post("/register/email", response_model=TokenResponse, tags=["authentication"])
+async def register_email(
+    request: EmailRegisterRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Register a new user with email and password.
+
+    Creates a new user account and returns JWT tokens.
+    Password must be at least 8 characters.
+
+    Returns access and refresh tokens for authenticated requests.
+    """
+    # Basic email validation
+    email = request.email.lower().strip()
+    if '@' not in email or '.' not in email.split('@')[1]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid email format"
+        )
+
+    try:
+        user = auth_service.register_email_user(
+            email=email,
+            password=request.password,
+            username=request.username,
+            db=db
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+    # Create tokens
+    tokens = auth_service.create_tokens(user, db)
+
+    return TokenResponse(**tokens)
+
+
+@router.post("/login/email", response_model=TokenResponse, tags=["authentication"])
+async def login_email(
+    request: EmailLoginRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Authenticate with email and password.
+
+    Exchange email/password credentials for JWT tokens.
+
+    Returns access and refresh tokens for authenticated requests.
+    """
+    user = auth_service.authenticate_email_user(
+        email=request.email,
+        password=request.password,
+        db=db
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
+
+    # Create tokens
+    tokens = auth_service.create_tokens(user, db)
+
+    return TokenResponse(**tokens)
+
+
+# =============================================================================
 # Token Management Endpoints
 # =============================================================================
 

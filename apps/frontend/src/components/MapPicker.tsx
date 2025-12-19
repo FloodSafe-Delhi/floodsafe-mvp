@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import maplibregl from 'maplibre-gl';
 import { useCurrentCity } from '../contexts/CityContext';
 import { getCityConfig, isWithinCityBounds } from '../lib/map/cityConfigs';
 import type { MapPickerProps, LocationWithAddress, GeocodingResult } from '../types';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
+// Sheet removed - using custom fixed panel to avoid z-index stacking issues
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
 import { Plus, Minus, Navigation, MapPin, Check, X, AlertCircle } from 'lucide-react';
@@ -59,8 +60,18 @@ function MapContent({ initialLocation, onLocationSelect, onClose }: MapContentPr
     // Debounce coordinates to avoid excessive API calls
     const debouncedCoords = useDebounce(selectedCoords, 500);
 
+    // Set to true to disable map API for layout testing
+    const DISABLE_MAP_FOR_LAYOUT_TESTING = false;
+
     // Initialize map with OpenStreetMap tiles (no PMTiles conflict)
     useEffect(() => {
+        if (DISABLE_MAP_FOR_LAYOUT_TESTING) {
+            // Skip map initialization, just set loaded state for layout testing
+            setIsLoaded(true);
+            setSelectedCoords(cityConfig.center);
+            return;
+        }
+
         if (!mapContainer.current || mapRef.current) return;
 
         const targetCoords = initialLocation
@@ -309,19 +320,29 @@ function MapContent({ initialLocation, onLocationSelect, onClose }: MapContentPr
     }, []);
 
     return (
-        <>
-            <SheetHeader className="px-4 pt-4 pb-2">
-                <SheetTitle className="flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-red-500" />
-                    Select Location on Map
-                </SheetTitle>
-                <SheetDescription>
-                    Click or drag the marker to select a location in {cityConfig.displayName}
-                </SheetDescription>
-            </SheetHeader>
+        <div className="flex flex-col h-full">
+            {/* Header - Fixed height */}
+            <div className="shrink-0 px-4 pt-4 pb-2 border-b flex items-center justify-between bg-white">
+                <div>
+                    <h2 className="flex items-center gap-2 font-semibold text-gray-900">
+                        <MapPin className="h-5 w-5 text-red-500" />
+                        Select Location on Map
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                        Click or drag the marker to select a location in {cityConfig.displayName}
+                    </p>
+                </div>
+                <button
+                    onClick={onClose}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                    aria-label="Close"
+                >
+                    <X className="h-5 w-5" />
+                </button>
+            </div>
 
-            {/* Map Container */}
-            <div className="flex-1 relative">
+            {/* Map Container - Flexible height, takes remaining space */}
+            <div className="flex-1 relative min-h-[200px] bg-gray-100">
                 <div
                     ref={mapContainer}
                     className="w-full h-full"
@@ -391,9 +412,9 @@ function MapContent({ initialLocation, onLocationSelect, onClose }: MapContentPr
                 )}
             </div>
 
-            {/* Location Info & Actions */}
-            <div className="px-4 py-4 border-t bg-white space-y-4">
-                <div className="space-y-2">
+            {/* Footer - Fixed height at bottom */}
+            <div className="shrink-0 px-4 py-4 border-t bg-white space-y-3">
+                <div className="space-y-1">
                     <p className="text-sm font-medium text-gray-700">Selected Location:</p>
                     {isGeocoding ? (
                         <Skeleton className="h-6 w-full" />
@@ -431,26 +452,36 @@ function MapContent({ initialLocation, onLocationSelect, onClose }: MapContentPr
                     </Button>
                 </div>
             </div>
-        </>
+        </div>
     );
 }
 
-// Main component - handles Sheet open/close and conditionally renders MapContent
+// Main component - handles open/close and conditionally renders MapContent
 export default function MapPicker({ isOpen, onClose, initialLocation, onLocationSelect }: MapPickerProps) {
-    return (
-        <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <SheetContent
-                side="bottom"
-                className="h-[90vh] p-0 flex flex-col"
+    if (!isOpen) return null;
+
+    // Use Portal to render at document.body
+    // Position BETWEEN TopNav (56px) and BottomNav (80px) to avoid z-index conflicts
+    // Using inline styles because Tailwind JIT may not generate arbitrary values
+    return createPortal(
+        <>
+            {/* Overlay - positioned between nav bars */}
+            <div
+                style={{ position: 'fixed', top: 56, left: 0, right: 0, bottom: 80, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60 }}
+                onClick={onClose}
+            />
+            {/* Side Panel - fits between TopNav and BottomNav */}
+            <div
+                style={{ position: 'fixed', top: 56, left: 0, bottom: 80, width: 350, maxWidth: '90vw', zIndex: 61 }}
+                className="bg-white shadow-xl flex flex-col rounded-br-lg"
             >
-                {isOpen && (
-                    <MapContent
-                        initialLocation={initialLocation}
-                        onLocationSelect={onLocationSelect}
-                        onClose={onClose}
-                    />
-                )}
-            </SheetContent>
-        </Sheet>
+                <MapContent
+                    initialLocation={initialLocation}
+                    onLocationSelect={onLocationSelect}
+                    onClose={onClose}
+                />
+            </div>
+        </>,
+        document.body
     );
 }

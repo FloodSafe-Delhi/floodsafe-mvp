@@ -124,6 +124,15 @@ queryClient.invalidateQueries({ queryKey: ['reports'] });
 #### GeoJSON Coordinates
 Always `[longitude, latitude]` order (not lat/lng).
 
+#### CSS Stacking Context & Fixed Positioning
+**CRITICAL**: When using `position: fixed` for modals/overlays:
+1. **Transform creates new stacking context**: If ANY parent has `transform`, `filter`, or `perspective`, fixed positioning becomes relative to that parent, not viewport
+2. **Z-index is relative within stacking contexts**: A z-index of 9999 inside a stacking context can still appear behind elements outside it
+3. **Radix UI components (Sheet, Dialog)**: Use Portal to render at document root, avoiding stacking issues. If removing Portal, ensure no parent transforms exist
+4. **Debug tip**: Use JS to check `element.getBoundingClientRect()` - if `top` is way off viewport (e.g., 1178px when viewport is 739px), a parent transform is likely the cause
+
+**Solution**: Render fixed overlays via Portal to document root, or use custom divs without Radix context dependencies.
+
 ---
 
 ## Development Philosophy

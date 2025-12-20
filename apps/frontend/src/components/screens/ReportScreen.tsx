@@ -17,7 +17,6 @@ import { useUserReady } from '../../contexts/UserContext';
 import { toast } from 'sonner';
 import MapPicker from '../MapPicker';
 import PhotoCapture from '../PhotoCapture';
-import { useAdaptiveScrollPadding } from '../../hooks/useAdaptiveScrollPadding';
 
 interface ReportScreenProps {
     onBack: () => void;
@@ -98,9 +97,6 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const reportMutation = useReportMutation();
     const { userId } = useUserReady();
-
-    // Adaptive scroll padding for dynamic viewport handling
-    const bottomPadding = useAdaptiveScrollPadding(scrollContainerRef);
 
     const totalSteps = 4;
     const progressValue = (step / totalSteps) * 100;
@@ -607,10 +603,10 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     return (
         <div
             ref={scrollContainerRef}
-            className="h-[calc(100dvh-56px)] overflow-y-auto bg-gray-50 overscroll-contain"
+            className="min-h-full bg-gray-50 overflow-y-auto pb-4"
             style={{ WebkitOverflowScrolling: 'touch' }}
         >
-            {/* Header */}
+                {/* Header */}
             <div className="bg-white shadow-sm sticky top-0 z-40">
                 <div className="flex items-center justify-between px-4 h-14">
                     <button
@@ -648,7 +644,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
             </div>
 
             {/* Form Content */}
-            <div className="p-4 space-y-4" style={{ paddingBottom: `${bottomPadding}px` }}>
+            <div className="p-4 space-y-4 pb-4">
                 {/* Step 1: Location */}
                 {step === 1 && (
                     <div className="space-y-4">
@@ -750,7 +746,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                             </div>
                         </Card>
 
-                        <Card className="p-4">
+                        <Card className="p-4 overflow-hidden">
                             <div className="space-y-4">
                                 <div>
                                     <div className="flex items-center justify-between mb-2">
@@ -1174,10 +1170,10 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                 )}
             </div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons - scrollable, after form content */}
             <div
                 data-action-buttons
-                className="fixed bottom-16 left-0 right-0 bg-white border-t p-4 space-y-2 safe-area-bottom"
+                className="bg-white border-t p-4 space-y-2 mx-4 mb-4 rounded-lg shadow-sm"
             >
                 {step < totalSteps ? (
                     <>

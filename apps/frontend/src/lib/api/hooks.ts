@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, uploadFile } from './client';
-import { User, GeocodingResult, DailyRoute, DailyRouteCreate, WatchArea, WatchAreaCreate, RouteCalculationRequest, RouteCalculationResponse, MetroStation, RouteOption, RouteComparisonRequest, RouteComparisonResponse } from '../../types';
+import { User, GeocodingResult, DailyRoute, DailyRouteCreate, WatchArea, WatchAreaCreate, RouteCalculationRequest, RouteCalculationResponse, MetroStation, RouteOption, RouteComparisonRequest, RouteComparisonResponse, EnhancedRouteComparisonResponse, FastestRouteOption, SafestRouteOption, WatchAreaRiskAssessment } from '../../types';
 import { validateUsers, validateSensors, validateReports } from './validators';
 
 // Types
@@ -23,6 +23,7 @@ export interface Report {
     verified: boolean;
     verification_score: number;
     upvotes: number;
+    downvotes: number;  // Required field now
     timestamp: string;
     // OTP/Phone verification fields
     phone_verified?: boolean;
@@ -30,11 +31,13 @@ export interface Report {
     vehicle_passability?: string;
     iot_validation_score?: number;
     // Gamification fields
-    downvotes?: number;
     quality_score?: number;
     verified_at?: string;
     // Archive field - null means active, timestamp means archived
     archived_at?: string | null;
+    // Community feedback fields
+    comment_count?: number;
+    user_vote?: 'upvote' | 'downvote' | null;  // User's current vote on this report
 }
 
 export interface ReportCreate {
@@ -1064,6 +1067,294 @@ export function useRefreshExternalAlerts(city: string) {
         }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['unified-alerts', city] });
+        },
+    });
+}
+
+// ============================================================================
+// ENHANCED SAFE ROUTE MAPPING HOOKS (3-Route Comparison + Live Navigation)
+// ============================================================================
+
+/**
+ * Compare fastest, metro, and safest routes with FHI-based hotspot analysis
+ * Enhanced version of useCompareRoutes with 3-way comparison
+ */
+export function useEnhancedCompareRoutes() {
+    return useMutation({
+        mutationFn: async (request: RouteComparisonRequest): Promise<EnhancedRouteComparisonResponse> => {
+            return fetchJson<EnhancedRouteComparisonResponse>(
+                '/routes/compare-enhanced',
+                { method: 'POST', body: JSON.stringify(request) }
+            );
+        },
+        retry: 1,
+    });
+}
+
+/**
+ * Recalculate route during live navigation
+ * No retry for real-time navigation updates
+ */
+interface RecalculateRouteRequest {
+    current_position: { lat: number; lng: number };
+    destination: { lat: number; lng: number };
+    route_type: 'fastest' | 'safest';
+    city: string;
+    mode?: string;
+}
+
+export function useRecalculateRoute() {
+    return useMutation({
+        mutationFn: async (request: RecalculateRouteRequest) => {
+            return fetchJson<{ route: FastestRouteOption | SafestRouteOption; recalculated_at: string }>(
+                '/routes/recalculate',
+                { method: 'POST', body: JSON.stringify(request) }
+            );
+        },
+        retry: 0, // No retry for live navigation
+    });
+}
+
+/**
+ * Fetch FHI-based risk assessment for all user's watch areas
+ * Auto-refreshes every 5 minutes to keep risk levels current
+ */
+export function useWatchAreaRisks(userId: string | undefined) {
+    return useQuery({
+        queryKey: ['watch-area-risks', userId],
+        queryFn: async (): Promise<WatchAreaRiskAssessment[]> => {
+            if (!userId) return [];
+            return fetchJson<WatchAreaRiskAssessment[]>(
+                `/watch-areas/user/${userId}/risk-assessment`
+            );
+        },
+        enabled: !!userId,
+        refetchInterval: 5 * 60 * 1000, // 5 minutes
+        staleTime: 2 * 60 * 1000, // 2 minutes
+    });
+}
+
+
+// ============================================================================
+// GAMIFICATION HOOKS
+// ============================================================================
+
+export interface BadgeInfo {
+    key: string;
+    name: string;
+    description: string | null;
+    icon: string;
+    category: string;
+    points_reward: number;
+}
+
+export interface EarnedBadge {
+    badge: BadgeInfo;
+    earned_at: string | null;
+}
+
+export interface BadgeProgress {
+    badge: BadgeInfo;
+    current_value: number;
+    required_value: number;
+    progress_percent: number;
+}
+
+export interface BadgesWithProgress {
+    earned: EarnedBadge[];
+    in_progress: BadgeProgress[];
+}
+
+export interface ReputationSummary {
+    user_id: string;
+    points: number;
+    level: number;
+    reputation_score: number;
+    accuracy_rate: number;
+    streak_days: number;
+    next_level_points: number;
+    badges_earned: number;
+    total_badges: number;
+}
+
+export interface ReputationHistoryEntry {
+    action: string;
+    points_change: number;
+    new_total: number;
+    reason: string | null;
+    created_at: string | null;
+}
+
+/**
+ * Fetch current user's badges with progress on locked ones.
+ * Requires authentication.
+ */
+export function useMyBadges() {
+    return useQuery<BadgesWithProgress>({
+        queryKey: ['gamification', 'badges', 'me'],
+        queryFn: () => fetchJson('/gamification/me/badges'),
+        staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+}
+
+/**
+ * Fetch current user's reputation summary.
+ * Requires authentication.
+ */
+export function useMyReputation() {
+    return useQuery<ReputationSummary>({
+        queryKey: ['gamification', 'reputation', 'me'],
+        queryFn: () => fetchJson('/gamification/me/reputation'),
+        staleTime: 5 * 60 * 1000,
+    });
+}
+
+/**
+ * Fetch current user's reputation history (point changes).
+ * Requires authentication.
+ */
+export function useMyReputationHistory(limit = 20, offset = 0) {
+    return useQuery<ReputationHistoryEntry[]>({
+        queryKey: ['gamification', 'reputation', 'history', limit, offset],
+        queryFn: () => fetchJson(`/gamification/me/reputation/history?limit=${limit}&offset=${offset}`),
+        staleTime: 5 * 60 * 1000,
+    });
+}
+
+/**
+ * Fetch all available badges (public endpoint).
+ * Useful for displaying badge catalog.
+ */
+export function useBadgesCatalog() {
+    return useQuery<BadgeInfo[]>({
+        queryKey: ['gamification', 'badges', 'catalog'],
+        queryFn: () => fetchJson('/gamification/badges/catalog'),
+        staleTime: 24 * 60 * 60 * 1000, // 24 hours - badges rarely change
+    });
+}
+
+// ============================================================================
+// COMMUNITY FEEDBACK HOOKS (Voting and Comments)
+// ============================================================================
+
+export interface VoteResponse {
+    message: string;
+    report_id: string;
+    upvotes: number;
+    downvotes: number;
+    user_vote: 'upvote' | 'downvote' | null;
+}
+
+export interface Comment {
+    id: string;
+    report_id: string;
+    user_id: string;
+    username: string;
+    content: string;
+    created_at: string;
+}
+
+/**
+ * Upvote a report (requires authentication).
+ * Toggle behavior: upvote again to remove vote.
+ * Switching from downvote changes vote type.
+ */
+export function useUpvoteReport() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (reportId: string): Promise<VoteResponse> => {
+            return fetchJson(`/reports/${reportId}/upvote`, { method: 'POST' });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['reports'] });
+        },
+    });
+}
+
+/**
+ * Downvote a report (requires authentication).
+ * Toggle behavior: downvote again to remove vote.
+ * Switching from upvote changes vote type.
+ */
+export function useDownvoteReport() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (reportId: string): Promise<VoteResponse> => {
+            return fetchJson(`/reports/${reportId}/downvote`, { method: 'POST' });
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['reports'] });
+        },
+    });
+}
+
+/**
+ * Get comments for a specific report.
+ * Returns comments ordered by creation time (oldest first).
+ */
+export function useComments(reportId: string | undefined) {
+    return useQuery({
+        queryKey: ['comments', reportId],
+        queryFn: async (): Promise<Comment[]> => {
+            if (!reportId) return [];
+            return fetchJson(`/reports/${reportId}/comments`);
+        },
+        enabled: !!reportId,
+        staleTime: 30 * 1000, // 30 seconds - comments update frequently
+    });
+}
+
+/**
+ * Get comment count for a report (lightweight endpoint).
+ */
+export function useCommentCount(reportId: string | undefined) {
+    return useQuery({
+        queryKey: ['comments', 'count', reportId],
+        queryFn: async (): Promise<{ report_id: string; count: number }> => {
+            if (!reportId) return { report_id: '', count: 0 };
+            return fetchJson(`/reports/${reportId}/comments/count`);
+        },
+        enabled: !!reportId,
+        staleTime: 60 * 1000, // 1 minute
+    });
+}
+
+/**
+ * Add a comment to a report (requires authentication).
+ * Max 500 characters per comment.
+ * Rate limited to 5 comments per minute.
+ */
+export function useAddComment() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ reportId, content }: { reportId: string; content: string }): Promise<Comment> => {
+            return fetchJson(`/reports/${reportId}/comments`, {
+                method: 'POST',
+                body: JSON.stringify({ content }),
+            });
+        },
+        onSuccess: (_, { reportId }) => {
+            queryClient.invalidateQueries({ queryKey: ['comments', reportId] });
+            queryClient.invalidateQueries({ queryKey: ['comments', 'count', reportId] });
+            queryClient.invalidateQueries({ queryKey: ['reports'] });
+        },
+    });
+}
+
+/**
+ * Delete a comment (requires authentication).
+ * Only the comment author or admin can delete.
+ */
+export function useDeleteComment() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ commentId, reportId }: { commentId: string; reportId: string }): Promise<void> => {
+            await fetchJson(`/comments/${commentId}`, { method: 'DELETE' });
+        },
+        onSuccess: (_, { reportId }) => {
+            queryClient.invalidateQueries({ queryKey: ['comments', reportId] });
+            queryClient.invalidateQueries({ queryKey: ['comments', 'count', reportId] });
+            queryClient.invalidateQueries({ queryKey: ['reports'] });
         },
     });
 }

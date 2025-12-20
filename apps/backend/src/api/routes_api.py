@@ -163,3 +163,77 @@ async def compare_routes(
 async def health_check():
     """Health check endpoint for routing service"""
     return {"status": "ok", "service": "routing"}
+
+
+@router.post("/compare-enhanced")
+async def compare_routes_enhanced(
+    request: RouteComparisonRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Enhanced route comparison with 3 options:
+    - Fastest (may pass through floods, includes traffic level)
+    - Metro (walking + metro, avoids roads)
+    - Safest (FloodSafe routing, avoids all hotspots)
+    """
+    service = RoutingService(db)
+
+    try:
+        result = await service.compare_routes_enhanced(
+            origin=(request.origin.lng, request.origin.lat),
+            destination=(request.destination.lng, request.destination.lat),
+            city_code=request.city,
+            mode=request.mode,
+            test_fhi_override=request.test_fhi_override,
+        )
+        return result
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Enhanced route comparison failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class RecalculateRouteRequest(BaseModel):
+    """Request for route recalculation during live navigation"""
+    current_position: LocationPoint
+    destination: LocationPoint
+    route_type: str  # 'fastest' | 'safest'
+    city: str = 'DEL'
+    mode: str = 'driving'
+
+
+@router.post("/recalculate")
+async def recalculate_route(
+    request: RecalculateRouteRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Fast route recalculation for live navigation when user deviates.
+    Returns single route of specified type with turn-by-turn.
+    """
+    service = RoutingService(db)
+    origin = (request.current_position.lng, request.current_position.lat)
+    dest = (request.destination.lng, request.destination.lat)
+
+    try:
+        from datetime import datetime
+
+        if request.route_type == 'safest':
+            result = await service._calculate_safest_route(
+                origin, dest, request.mode, [],
+                await service._get_hotspots_for_routing(request.city, None),
+                None
+            )
+        else:
+            result = await service._calculate_fastest_route(
+                origin, dest, request.mode, [],
+                await service._get_hotspots_for_routing(request.city, None)
+            )
+
+        return {'route': result, 'recalculated_at': datetime.utcnow().isoformat()}
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Route recalculation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -16,7 +16,7 @@ export function TopNav({ onNotificationClick, onProfileClick, notificationCount:
     const notificationCount = data?.count ?? fallbackCount;
 
     return (
-        <header className="fixed top-0 left-0 right-0 h-14 bg-white border-b z-50 px-4 flex items-center justify-between">
+        <header className="fixed top-0 left-0 right-0 h-14 bg-white border-b z-50 px-4 pl-safe pr-safe flex items-center justify-between">
             <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
                     FS

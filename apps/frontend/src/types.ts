@@ -585,3 +585,119 @@ export interface UnifiedAlertsResponse {
     total: number;
     city: string;
 }
+
+// ============================================================================
+// ENHANCED ROUTE TYPES (3-Route Comparison + Live Navigation)
+// ============================================================================
+
+export type TrafficLevel = 'low' | 'moderate' | 'heavy' | 'severe';
+
+// Turn instruction for navigation
+export interface TurnInstruction {
+    instruction: string;
+    distance_meters: number;
+    duration_seconds: number;
+    maneuver_type: string;
+    maneuver_modifier: string;
+    street_name: string;
+    coordinates: [number, number];
+}
+
+// Fastest route option (driving-traffic)
+export interface FastestRouteOption {
+    id: string;
+    type: 'fastest';
+    geometry: GeoJSON.LineString;
+    coordinates: [number, number][];
+    distance_meters: number;
+    duration_seconds: number;
+    hotspot_count: number;
+    traffic_level: TrafficLevel;
+    safety_score: number;
+    is_recommended: boolean;
+    warnings: string[];
+    instructions: TurnInstruction[];
+}
+
+// Metro segment (walking or metro)
+export interface MetroSegment {
+    type: 'walking' | 'metro';
+    geometry?: GeoJSON.LineString;
+    coordinates?: [number, number][];
+    duration_seconds: number;
+    distance_meters?: number;
+    line?: string;
+    line_color?: string;
+    from_station?: string;
+    to_station?: string;
+    stops?: number;
+    instructions?: TurnInstruction[];
+}
+
+// Metro route option
+export interface MetroRouteOption {
+    id: string;
+    type: 'metro';
+    segments: MetroSegment[];
+    total_duration_seconds: number;
+    total_distance_meters: number;
+    metro_line: string;
+    metro_color: string;
+    affected_stations: string[];
+    is_recommended: boolean;
+}
+
+// Safest route option (FloodSafe routing)
+export interface SafestRouteOption {
+    id: string;
+    type: 'safest';
+    geometry: GeoJSON.LineString;
+    coordinates: [number, number][];
+    distance_meters: number;
+    duration_seconds: number;
+    hotspot_count: number;
+    safety_score: number;
+    detour_km: number;
+    detour_minutes: number;
+    is_recommended: boolean;
+    hotspots_avoided: string[];
+    instructions: TurnInstruction[];
+}
+
+// Enhanced routes container
+export interface EnhancedRoutes {
+    fastest: FastestRouteOption | null;
+    metro: MetroRouteOption | null;
+    safest: SafestRouteOption | null;
+}
+
+// Route recommendation
+export interface RouteRecommendation {
+    route_type: 'fastest' | 'metro' | 'safest';
+    reason: string;
+}
+
+// Enhanced comparison response
+export interface EnhancedRouteComparisonResponse {
+    routes: EnhancedRoutes;
+    recommendation: RouteRecommendation;
+    hotspot_analysis: HotspotAnalysis | null;
+    flood_zones: GeoJSON.FeatureCollection;
+}
+
+// Watch area risk assessment
+export interface WatchAreaRiskAssessment {
+    watch_area_id: string;
+    watch_area_name: string;
+    latitude: number;
+    longitude: number;
+    radius: number;
+    average_fhi: number;
+    max_fhi: number;
+    max_fhi_level: 'low' | 'moderate' | 'high' | 'extreme';
+    is_at_risk: boolean;
+    risk_flag_reason: string | null;
+    nearby_hotspots_count: number;
+    critical_hotspots_count: number;
+    last_calculated: string;
+}

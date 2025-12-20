@@ -28,7 +28,7 @@ export function ResponsiveLayout({
             </div>
 
             {/* Content - Full width, no sidebar */}
-            <main className="flex-1 pt-14 md:pt-0 relative">
+            <main className="flex-1 pt-14 pb-16 md:pt-0 relative">
                 {children}
             </main>
 

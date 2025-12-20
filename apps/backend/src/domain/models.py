@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from datetime import datetime
 from uuid import UUID, uuid4
+from enum import Enum
 
 # ============================================================================
 # BASE MODELS (Full entity representations matching infrastructure layer)
@@ -288,6 +289,8 @@ class ReportResponse(BaseModel):
     verified: bool
     verification_score: int
     upvotes: int
+    downvotes: int = 0  # Community feedback
+    comment_count: int = 0  # Number of comments on this report
     timestamp: datetime
 
     # Community reporting fields (phone_number excluded for privacy)
@@ -301,6 +304,43 @@ class ReportResponse(BaseModel):
 
     # Archive field - NULL means active, timestamp means archived
     archived_at: Optional[datetime] = None
+
+    # User's vote status (populated when user is authenticated)
+    user_vote: Optional[str] = None  # 'upvote', 'downvote', or None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ============================================================================
+# COMMUNITY FEEDBACK DTOs (Voting and Comments)
+# ============================================================================
+
+class VoteResponse(BaseModel):
+    """Response DTO for vote actions"""
+    message: str
+    report_id: UUID
+    upvotes: int
+    downvotes: int
+    user_vote: Optional[str] = None  # 'upvote', 'downvote', or None (if toggled off)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommentCreate(BaseModel):
+    """Request DTO for creating a comment"""
+    content: str = Field(..., min_length=1, max_length=500)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommentResponse(BaseModel):
+    """Response DTO for a comment"""
+    id: UUID
+    report_id: UUID
+    user_id: UUID
+    username: str
+    content: str
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -574,6 +614,117 @@ class RouteComparisonResponse(BaseModel):
     hotspot_analysis: Optional[HotspotAnalysis] = None
 
     # Flood zones GeoJSON for map display
+    flood_zones: dict = {}
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# =============================================================================
+# ENHANCED ROUTING MODELS (3-Route Comparison System)
+# =============================================================================
+
+class TrafficLevel(str, Enum):
+    """Traffic congestion level from Mapbox annotations"""
+    LOW = "low"
+    MODERATE = "moderate"
+    HEAVY = "heavy"
+    SEVERE = "severe"
+
+
+class RouteType(str, Enum):
+    """Route type identifier"""
+    FASTEST = "fastest"
+    METRO = "metro"
+    SAFEST = "safest"
+
+
+class TurnInstruction(BaseModel):
+    """Turn-by-turn navigation instruction"""
+    instruction: str
+    distance_meters: int
+    duration_seconds: int
+    maneuver_type: str  # "turn", "depart", "arrive", "continue"
+    maneuver_modifier: str  # "left", "right", "straight", "slight left"
+    street_name: Optional[str] = None
+    coordinates: Tuple[float, float]  # [lng, lat]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FastestRouteOption(BaseModel):
+    """Fastest route with traffic analysis"""
+    id: str
+    type: str = "fastest"
+    geometry: dict  # GeoJSON LineString
+    coordinates: List[Tuple[float, float]]  # Decoded for deviation check
+    distance_meters: int
+    duration_seconds: int
+    hotspot_count: int = 0
+    traffic_level: str = "moderate"
+    safety_score: int = 100
+    is_recommended: bool = False
+    warnings: List[str] = []
+    instructions: List[TurnInstruction] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MetroSegment(BaseModel):
+    """Single segment of metro route (walking or metro ride)"""
+    type: str  # "walking" | "metro"
+    geometry: Optional[dict] = None
+    coordinates: Optional[List[Tuple[float, float]]] = None
+    duration_seconds: int
+    distance_meters: Optional[int] = None
+    line: Optional[str] = None
+    line_color: Optional[str] = None
+    from_station: Optional[str] = None
+    to_station: Optional[str] = None
+    stops: Optional[int] = None
+    instructions: List[TurnInstruction] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MetroRouteOption(BaseModel):
+    """Metro-based route with walking segments"""
+    id: str
+    type: str = "metro"
+    segments: List[MetroSegment]
+    total_duration_seconds: int
+    total_distance_meters: int
+    metro_line: str
+    metro_color: str
+    affected_stations: List[str] = []
+    is_recommended: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SafestRouteOption(BaseModel):
+    """Safest route avoiding hotspots"""
+    id: str
+    type: str = "safest"
+    geometry: dict
+    coordinates: List[Tuple[float, float]]
+    distance_meters: int
+    duration_seconds: int
+    hotspot_count: int = 0
+    safety_score: int = 100
+    detour_km: float = 0.0
+    detour_minutes: int = 0
+    is_recommended: bool = False
+    hotspots_avoided: List[str] = []
+    instructions: List[TurnInstruction] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EnhancedRouteComparisonResponse(BaseModel):
+    """Enhanced 3-route comparison response"""
+    routes: dict  # {fastest, metro, safest}
+    recommendation: dict  # {route_type, reason}
+    hotspot_analysis: Optional[dict] = None
     flood_zones: dict = {}
 
     model_config = ConfigDict(from_attributes=True)

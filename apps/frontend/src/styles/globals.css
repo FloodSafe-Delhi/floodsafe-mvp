@@ -134,49 +134,49 @@
  */
 @layer base {
   :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
-    h1 {
+    :is(h1) {
       font-size: var(--text-2xl);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
     }
 
-    h2 {
+    :is(h2) {
       font-size: var(--text-xl);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
     }
 
-    h3 {
+    :is(h3) {
       font-size: var(--text-lg);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
     }
 
-    h4 {
+    :is(h4) {
       font-size: var(--text-base);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
     }
 
-    p {
+    :is(p) {
       font-size: var(--text-base);
       font-weight: var(--font-weight-normal);
       line-height: 1.5;
     }
 
-    label {
+    :is(label) {
       font-size: var(--text-base);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
     }
 
-    button {
+    :is(button) {
       font-size: var(--text-base);
       font-weight: var(--font-weight-medium);
       line-height: 1.5;
     }
 
-    input {
+    :is(input) {
       font-size: var(--text-base);
       font-weight: var(--font-weight-normal);
       line-height: 1.5;
@@ -270,6 +270,20 @@ html {
 :root {
   --vh: 1vh;
   --sab: env(safe-area-inset-bottom, 0px);
+
+  /* App layout dimensions - single source of truth */
+  --app-header-height: 56px;    /* TopNav h-14 */
+  --app-footer-height: 64px;    /* BottomNav h-16 */
+  --app-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Computed values for consistent layout */
+  --app-chrome-height: calc(var(--app-header-height) + var(--app-footer-height));
+  --app-content-height: calc(100dvh - var(--app-chrome-height));
+
+  /* HomeScreen layout tokens */
+  --home-spacing: 0.75rem;          /* 12px consistent spacing */
+  --home-section-gap: 0.75rem;      /* Gap between sections */
+  --home-card-radius: 0.75rem;      /* Consistent card rounding */
 }
 
 /* Fallback for browsers that don't support dvh */
@@ -277,6 +291,10 @@ html {
   .h-\[calc\(100dvh-56px\)\] {
     height: calc(100vh - 56px);
     height: calc(var(--vh, 1vh) * 100 - 56px);
+  }
+  .h-\[calc\(100dvh-120px\)\] {
+    height: calc(100vh - 120px);
+    height: calc(var(--vh, 1vh) * 100 - 120px);
   }
 }
 
@@ -293,4 +311,25 @@ html {
 
 .pb-safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Horizontal safe area utilities for notched devices in landscape */
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.px-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* 320px device support (iPhone SE, older devices) */
+@media (max-width: 320px) {
+  .hide-on-xs {
+    display: none;
+  }
 }

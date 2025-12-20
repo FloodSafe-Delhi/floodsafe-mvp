@@ -4,15 +4,89 @@ from sqlalchemy import and_
 from uuid import UUID
 from datetime import datetime, timedelta
 from typing import List
+from pydantic import BaseModel, Field
 import logging
 
 from ..infrastructure.database import get_db
 from ..infrastructure import models
 from ..domain.models import UserCreate, UserUpdate, UserResponse
+from .deps import get_current_user, get_current_admin_user
 from geoalchemy2.functions import ST_DWithin, ST_MakePoint
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# SECURE PROFILE ENDPOINTS (use JWT, not URL param)
+# ============================================================================
+
+@router.get("/me/profile", response_model=UserResponse)
+async def get_my_profile(
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Get authenticated user's full profile.
+    Requires authentication via Bearer token.
+    """
+    return current_user
+
+
+@router.patch("/me/profile", response_model=UserResponse)
+async def update_my_profile(
+    user_update: UserUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update authenticated user's profile.
+    Users can only update their own profile.
+    Role changes are ignored (users cannot change their own role).
+    """
+    try:
+        # Get update data, excluding unset fields
+        update_data = user_update.model_dump(exclude_unset=True)
+
+        # SECURITY: Remove role from updates - users cannot change their own role
+        if "role" in update_data:
+            del update_data["role"]
+
+        # Check for unique constraints if username or email is being updated
+        if "username" in update_data:
+            existing = db.query(models.User).filter(
+                models.User.username == update_data["username"],
+                models.User.id != current_user.id
+            ).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="Username already taken")
+
+        if "email" in update_data:
+            existing = db.query(models.User).filter(
+                models.User.email == update_data["email"],
+                models.User.id != current_user.id
+            ).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Apply updates
+        for field, value in update_data.items():
+            setattr(current_user, field, value)
+
+        db.commit()
+        db.refresh(current_user)
+
+        return current_user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating profile: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update profile")
+
+
+# ============================================================================
+# USER CRUD ENDPOINTS
+# ============================================================================
 
 @router.post("/", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
@@ -158,19 +232,36 @@ def get_leaderboard(limit: int = 10, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Failed to fetch leaderboard")
 
 @router.patch("/{user_id}", response_model=UserResponse)
-def update_user(user_id: UUID, user_update: UserUpdate, db: Session = Depends(get_db)):
+def update_user(
+    user_id: UUID,
+    user_update: UserUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Update user profile and preferences.
-    Allows updating: username, email, phone, profile photo, language, notification preferences.
+    Requires authentication. Users can only update their own profile.
+    Admins can update any user's profile.
     """
     try:
-        # Find the user
+        # SECURITY: Authorization check - users can only update their own profile
+        if str(current_user.id) != str(user_id) and current_user.role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail="Can only update your own profile"
+            )
+
+        # Find the user to update
         user = db.query(models.User).filter(models.User.id == user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
         # Update only the fields that are provided (not None)
         update_data = user_update.model_dump(exclude_unset=True)
+
+        # SECURITY: Non-admins cannot change role
+        if "role" in update_data and current_user.role != "admin":
+            del update_data["role"]
 
         # Check for unique constraints if username or email is being updated
         if "username" in update_data:
@@ -203,3 +294,74 @@ def update_user(user_id: UUID, user_update: UserUpdate, db: Session = Depends(ge
         logger.error(f"Error updating user {user_id}: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to update user")
+
+
+# ============================================================================
+# ADMIN ROLE MANAGEMENT
+# ============================================================================
+
+class RoleUpdateRequest(BaseModel):
+    """Request body for updating a user's role."""
+    new_role: str = Field(..., pattern="^(user|verified_reporter|moderator|admin)$")
+    reason: str = Field(..., min_length=10, max_length=500)
+
+
+@router.patch("/{user_id}/role", response_model=UserResponse)
+def update_user_role(
+    user_id: UUID,
+    role_update: RoleUpdateRequest,
+    admin: models.User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update a user's role. Admin only.
+    Creates audit trail entry in role_history table.
+    """
+    try:
+        # Find the target user
+        target_user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Prevent admins from changing their own role (safety measure)
+        if target_user.id == admin.id:
+            raise HTTPException(status_code=400, detail="Cannot change your own role")
+
+        old_role = target_user.role
+        new_role = role_update.new_role
+
+        # No-op if role is the same
+        if old_role == new_role:
+            return target_user
+
+        # Create audit trail entry
+        role_history = models.RoleHistory(
+            user_id=user_id,
+            old_role=old_role,
+            new_role=new_role,
+            changed_by=admin.id,
+            reason=role_update.reason
+        )
+        db.add(role_history)
+
+        # Update role
+        target_user.role = new_role
+
+        # Set timestamps for role transitions
+        if new_role == "verified_reporter" and not target_user.verified_reporter_since:
+            target_user.verified_reporter_since = datetime.utcnow()
+        elif new_role == "moderator" and not target_user.moderator_since:
+            target_user.moderator_since = datetime.utcnow()
+
+        db.commit()
+        db.refresh(target_user)
+
+        logger.info(f"Admin {admin.id} changed user {user_id} role: {old_role} -> {new_role}")
+        return target_user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user role: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update user role")

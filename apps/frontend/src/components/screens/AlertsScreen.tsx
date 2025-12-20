@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Bell, RefreshCw, Loader2, AlertCircle, Cloud, Newspaper, MessageCircle, Users } from 'lucide-react';
 import { AlertCard } from '../AlertCard';
+import { ReportCard } from '../ReportCard';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { useUnifiedAlerts, useRefreshExternalAlerts } from '../../lib/api/hooks';
+import { useUnifiedAlerts, useRefreshExternalAlerts, useReports } from '../../lib/api/hooks';
 import { useCurrentCity } from '../../contexts/CityContext';
 import type { AlertSourceFilter } from '../../types';
 import { toast } from 'sonner';
@@ -58,6 +59,9 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
     const { data, isLoading, error, refetch } = useUnifiedAlerts(city, sourceFilter);
     const refreshMutation = useRefreshExternalAlerts(city);
 
+    // Fetch community reports when community filter is active
+    const { data: communityReports, isLoading: reportsLoading } = useReports();
+
     // Handle manual refresh
     const handleRefresh = async () => {
         try {
@@ -74,8 +78,11 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
 
     // Get count for each filter
     const getFilterCount = (filter: AlertSourceFilter): number => {
+        if (filter === 'community') {
+            return communityReports?.length || 0;
+        }
         if (!data) return 0;
-        if (filter === 'all') return data.total;
+        if (filter === 'all') return data.total + (communityReports?.length || 0);
 
         // Map filters to source types
         const sourceMapping: Record<AlertSourceFilter, string[]> = {
@@ -93,7 +100,7 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
     // Loading state
     if (isLoading) {
         return (
-            <div className="pb-16 min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="pb-4 min-h-full bg-gray-50 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                     <p className="text-gray-600">Loading alerts...</p>
@@ -105,7 +112,7 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
     // Error state
     if (error) {
         return (
-            <div className="pb-16 min-h-screen bg-gray-50 p-4">
+            <div className="pb-4 min-h-full bg-gray-50 p-4">
                 <div className="flex flex-col items-center justify-center py-16">
                     <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
                     <h2 className="text-xl font-semibold mb-2">Failed to Load Alerts</h2>
@@ -129,7 +136,7 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
         .join(' • ');
 
     return (
-        <div className="pb-16 min-h-screen bg-gray-50">
+        <div className="pb-4 min-h-full bg-gray-50">
             {/* Header */}
             <div className="bg-white shadow-sm sticky top-14 z-40">
                 <div className="flex items-center justify-between px-4 h-14">
@@ -184,37 +191,66 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
                 )}
             </div>
 
-            {/* Alerts List */}
+            {/* Content based on filter */}
             <div className="p-4 space-y-3">
-                {alerts.length > 0 ? (
-                    alerts.map((alert) => (
-                        <AlertCard
-                            key={alert.id}
-                            alert={alert}
-                            onViewOnMap={onNavigateToMap}
-                        />
-                    ))
-                ) : (
-                    <div className="text-center py-16">
-                        <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
-                            <Bell className="w-8 h-8 text-blue-600" />
+                {sourceFilter === 'community' ? (
+                    // Community Reports Section
+                    reportsLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
                         </div>
-                        <h2 className="text-xl font-medium mb-2">No Alerts</h2>
-                        <p className="text-gray-600">
-                            {sourceFilter === 'all'
-                                ? 'No active alerts in your area'
-                                : `No ${getFilterLabel(sourceFilter).toLowerCase()} alerts available`}
-                        </p>
-                        <Button
-                            variant="outline"
-                            className="mt-4"
-                            onClick={handleRefresh}
-                            disabled={refreshMutation.isPending}
-                        >
-                            <RefreshCw className={`w-4 h-4 mr-2 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-                            Check for Updates
-                        </Button>
-                    </div>
+                    ) : communityReports && communityReports.length > 0 ? (
+                        <>
+                            <p className="text-sm text-gray-500 mb-2">
+                                {communityReports.length} community report{communityReports.length !== 1 ? 's' : ''}
+                            </p>
+                            {communityReports.map((report) => (
+                                <ReportCard key={report.id} report={report} />
+                            ))}
+                        </>
+                    ) : (
+                        <div className="text-center py-16">
+                            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+                                <Users className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <h2 className="text-xl font-medium mb-2">No Community Reports</h2>
+                            <p className="text-gray-600">
+                                Be the first to report flooding in your area
+                            </p>
+                        </div>
+                    )
+                ) : (
+                    // Alerts Section (for all other filters)
+                    alerts.length > 0 ? (
+                        alerts.map((alert) => (
+                            <AlertCard
+                                key={alert.id}
+                                alert={alert}
+                                onViewOnMap={onNavigateToMap}
+                            />
+                        ))
+                    ) : (
+                        <div className="text-center py-16">
+                            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+                                <Bell className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <h2 className="text-xl font-medium mb-2">No Alerts</h2>
+                            <p className="text-gray-600">
+                                {sourceFilter === 'all'
+                                    ? 'No active alerts in your area'
+                                    : `No ${getFilterLabel(sourceFilter).toLowerCase()} alerts available`}
+                            </p>
+                            <Button
+                                variant="outline"
+                                className="mt-4"
+                                onClick={handleRefresh}
+                                disabled={refreshMutation.isPending}
+                            >
+                                <RefreshCw className={`w-4 h-4 mr-2 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+                                Check for Updates
+                            </Button>
+                        </div>
+                    )
                 )}
             </div>
         </div>

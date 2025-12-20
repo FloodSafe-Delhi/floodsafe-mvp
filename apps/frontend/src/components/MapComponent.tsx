@@ -656,7 +656,7 @@ export default function MapComponent({
                 };
 
                 const popupHTML = `
-                    <div class="p-3 min-w-[240px] max-w-[300px]">
+                    <div class="p-3 min-w-[200px]" style="max-width: min(300px, calc(100vw - 32px))">
                         <div class="flex items-center gap-2 mb-2">
                             <h3 class="font-bold text-sm">Community Report</h3>
                             ${props.verified ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded">✓ Verified</span>' : '<span class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded">Pending</span>'}
@@ -776,7 +776,7 @@ export default function MapComponent({
                     const primaryColor = fhiColor || riskColor;
 
                     const popupHTML = `
-                        <div class="p-3 min-w-[240px] max-w-[320px]">
+                        <div class="p-3 min-w-[200px]" style="max-width: min(320px, calc(100vw - 32px))">
                             <div class="flex items-center gap-2 mb-2">
                                 <div class="w-3 h-3 rounded-full" style="background-color: ${primaryColor}"></div>
                                 <h3 class="font-bold text-sm">Waterlogging Hotspot</h3>
@@ -1472,7 +1472,7 @@ export default function MapComponent({
                             onLocationSelect={handleSearchLocationSelect}
                             cityKey={city}
                             placeholder={`Search in ${currentCityConfig.displayName}...`}
-                            className="w-72"
+                            className="w-72 max-w-[calc(100vw-48px)]"
                         />
                     )}
                 </div>
@@ -1521,7 +1521,7 @@ export default function MapComponent({
             {showControls && isLoaded && (
                 <>
                     {/* Zoom Controls - Bottom Right */}
-                    <div className="absolute right-4 flex flex-col gap-2" style={{ bottom: '144px', zIndex: 60 }}>
+                    <div className="absolute right-4 flex flex-col gap-2" style={{ bottom: 'calc(144px + env(safe-area-inset-bottom, 0px))', zIndex: 60 }}>
                         <Button
                             size="icon"
                             onClick={handleZoomIn}
@@ -1589,7 +1589,7 @@ export default function MapComponent({
                     </div>
 
                     {/* Map Legend - Bottom Left */}
-                    <div className="absolute" style={{ bottom: '144px', left: '24px', zIndex: 60 }}>
+                    <div className="absolute" style={{ bottom: 'calc(144px + env(safe-area-inset-bottom, 0px))', left: '24px', zIndex: 60 }}>
                         <MapLegend className="max-w-xs" />
                     </div>
                 </>

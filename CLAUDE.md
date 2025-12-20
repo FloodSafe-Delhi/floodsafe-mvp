@@ -21,6 +21,8 @@
 
 6. **NO JARGON-LOADED UI** - Keep user interfaces simple and clear. Avoid technical terms. The close button should be a simple X, not buried in complex patterns.
 
+7. **FRONTEND DEV SERVER IS PORT 5175** - The frontend runs on `http://localhost:5175`, NOT 5173. Never confuse this.
+
 ---
 
 ## Quick Reference
@@ -102,6 +104,53 @@ cd apps/frontend && npm run screenshot
 - **Components**: `screens/` for pages, `ui/` for primitives
 - **Styling**: Tailwind CSS + Radix UI
 
+#### Frontend Layout Rules (MANDATORY)
+
+**1. Dynamic Sizing Over Hardcoded Values**
+- NEVER use hardcoded pixel values for heights/widths that depend on viewport or content
+- USE: `h-full`, `min-h-screen`, `flex-1`, `calc()`, CSS Grid with `fr` units
+- AVOID: `h-[500px]`, `w-[800px]` unless truly fixed design requirement
+- Components must adapt to their container, not assume fixed dimensions
+
+**2. Relative Positioning Awareness**
+- Before adding/modifying positioned elements, MAP the existing positioning context:
+  - What elements use `relative`, `absolute`, `fixed`, `sticky`?
+  - What are their parent containers?
+  - What z-index values exist in the hierarchy?
+- Document positioning decisions in comments when non-obvious
+
+**3. Overlap Prevention Checklist**
+Before any frontend change, verify:
+- [ ] New element doesn't overlap existing fixed/absolute elements
+- [ ] Z-index doesn't conflict with modals, navbars, or overlays
+- [ ] Mobile viewport doesn't cause content to overflow or hide
+- [ ] Scroll behavior remains correct (no double scrollbars)
+
+**4. Systematic Layout Thinking**
+- Think in layout hierarchy: Viewport → Page → Section → Component → Element
+- Each level should handle its own spacing/positioning
+- Parent components control layout flow, children fill allocated space
+- Test at multiple viewport sizes (mobile 375px, tablet 768px, desktop 1280px)
+
+**Anti-Pattern Examples:**
+```tsx
+// BAD: Hardcoded height breaks on different screens
+<div className="h-[calc(100vh-200px)]">  // Magic number 200px
+
+// GOOD: Flex layout adapts to available space
+<div className="flex flex-col h-full">
+  <header className="flex-shrink-0">...</header>
+  <main className="flex-1 overflow-auto">...</main>
+</div>
+
+// BAD: Absolute without understanding context
+<div className="absolute top-0">  // Where does this land?
+
+// GOOD: Clear positioning context
+<div className="relative">  {/* Positioning anchor */}
+  <div className="absolute top-0 right-0">  {/* Relative to parent */}
+```
+
 ### Common Gotchas (IMPORTANT)
 
 #### Timestamps (UTC)
@@ -172,6 +221,63 @@ Every feature must be approached with systems-level thinking:
 ```yaml
 files: [ReportScreen.tsx, ReportModal.tsx, reports.py, hooks.ts]
 patterns: FormData upload, EXIF extraction, PostGIS POINT
+status: COMPLETE
+```
+
+### @community (COMPLETE)
+```yaml
+files:
+  Backend:
+  - apps/backend/src/api/comments.py - Comments CRUD API
+  - apps/backend/src/api/reports.py - Vote endpoints with deduplication
+  - apps/backend/src/infrastructure/models.py - ReportVote, Comment models
+  - apps/backend/src/domain/models.py - CommentCreate, CommentResponse, VoteResponse DTOs
+
+  Frontend:
+  - apps/frontend/src/components/screens/AlertsScreen.tsx - Community filter shows ReportCard
+  - apps/frontend/src/components/ReportCard.tsx - Reusable report card with voting/comments
+  - apps/frontend/src/lib/api/hooks.ts - useUpvoteReport, useDownvoteReport, useComments, useAddComment
+
+ui_architecture: |
+  Community reports are integrated INTO the Alerts screen via filter tabs.
+  NOT a separate screen/tab. Filter tabs: All, Official, News, Social, Community.
+  When "Community" filter selected, shows ReportCard components with voting/comments.
+
+database_models:
+  ReportVote:
+    - Tracks user votes for deduplication
+    - Unique constraint on (user_id, report_id)
+    - vote_type: 'upvote' or 'downvote'
+  Comment:
+    - report_id, user_id, content (max 500 chars), created_at
+    - Index on (report_id, created_at) for efficient fetching
+
+api_endpoints:
+  Voting:
+    - POST /api/reports/{id}/upvote - Toggle upvote (auth required)
+    - POST /api/reports/{id}/downvote - Toggle downvote (auth required)
+    - Deduplication: Clicking same vote removes it, opposite vote switches
+  Comments:
+    - GET /api/reports/{id}/comments - List comments (oldest first)
+    - POST /api/reports/{id}/comments - Add comment (auth, rate limited 5/min)
+    - DELETE /api/comments/{id} - Delete own comment or admin
+    - GET /api/reports/{id}/comments/count - Lightweight count endpoint
+
+features:
+  - Vote deduplication via ReportVote table
+  - Vote toggle (click again to remove)
+  - Comment count displayed on report cards
+  - Real-time UI updates via query invalidation
+  - Rate limiting: max 5 comments per minute per user
+  - Community filter in AlertsScreen (NOT separate tab)
+
+comment_count_implementation: |
+  Comment counts are calculated dynamically in list_reports() using
+  get_comment_counts() helper which fetches counts for all reports in
+  a single efficient query. This avoids data consistency issues vs
+  storing count on Report model.
+
+migration: python -m apps.backend.src.scripts.migrate_add_community_features
 status: COMPLETE
 ```
 
@@ -250,7 +356,7 @@ files:
 
   Frontend:
   - apps/frontend/src/lib/api/hooks.ts - useHotspots hook (30min cache)
-  - apps/frontend/src/components/MapComponent.tsx:413-554 - Layer rendering
+  - apps/frontend/src/components/MapComponent.tsx:710-857 - Layer rendering
 
 architecture:
   FHI (Flood Hazard Index) - Multi-component live risk:
@@ -278,13 +384,27 @@ verification:
 status: COMPLETE - FHI-first coloring, spatial differentiation verified
 ```
 
-### @ml-predictions
+### @ml-predictions (NEEDS FIXING)
 ```yaml
 files:
-  - apps/ml-service/src/features/extractor.py - 81-dim feature extraction
+  ML Service:
+  - apps/ml-service/src/features/extractor.py - 40-dim feature extraction
+  - apps/ml-service/src/features/hotspot_features.py - 18-dim hotspot features
   - apps/ml-service/src/api/predictions.py - /forecast-grid endpoint
-  - apps/ml-service/src/models/lstm_model.py - Attention LSTM
+  - apps/ml-service/src/models/lstm_model.py - LSTM architecture (untrained)
+  - apps/ml-service/src/models/lightgbm_model.py - LightGBM code (untrained)
+  - apps/ml-service/data/grid_predictions_cache.json - Pre-computed fallback
+
+  Frontend:
   - apps/frontend/src/components/MapComponent.tsx - Heatmap layer
+
+feature_extractors:
+  Hotspot (18-dim): elevation, slope, TPI, TRI, TWI, SPI, rainfall stats, land cover, SAR, monsoon
+  General (40-dim): Dynamic World (9), WorldCover (6), Sentinel-2 (5), Terrain (6), Precip (8), Temporal (4), GloFAS (2)
+
+training_data:
+  - hotspot_training_data.npz: 486 samples × 18-dim (for XGBoost/RF)
+  - delhi_monsoon_5years_*.npz: 605 samples × 33-dim (dimension mismatch with 40-dim extractor)
 
 risk_levels:
   - 0.0-0.2: Low (green)
@@ -292,9 +412,20 @@ risk_levels:
   - 0.4-0.7: High (orange)
   - 0.7-1.0: Extreme (red)
 
+what_works:
+  - FHI formula (rule-based, not ML)
+  - Pre-computed heatmap cache
+  - Feature extraction pipelines
+
+what_needs_fixing:
+  - Dimension mismatch (extractor: 40-dim vs data: 33-dim)
+  - All models in _archive/ trained on wrong dimensions
+  - Data highly imbalanced (583 low / 18 moderate / 4 high-risk)
+  - No trained model weights exist
+
 status: |
-  COMPLETE: Attention LSTM (96.2%), heatmap UI
-  MISSING: LightGBM ensemble, Wavelet preprocessing
+  NEEDS FIXING - Architecture exists, models not trained
+  BLOCKER: Feature dimension alignment + retraining required
 ```
 
 ### @routing (COMPLETE)
@@ -354,6 +485,88 @@ test_coverage:
 run: cd apps/frontend && npx tsx scripts/e2e-full-test.ts
 output: 21 screenshots (e2e-1-*.png to e2e-21-*.png)
 status: COMPLETE
+```
+
+### @iot-ingestion (MVP)
+```yaml
+files:
+  - apps/iot-ingestion/src/main.py - High-throughput ingestion endpoint
+
+endpoints:
+  POST /ingest:
+    - Accepts sensor_id, water_level, timestamp
+    - Stores to readings table
+    - Updates sensor.last_ping
+    - NO FK validation (accepts any sensor_id for speed)
+
+architecture: |
+  Intentionally isolated from main backend for performance.
+  Raw SQL for speed, no ORM overhead.
+  No authentication on ingestion endpoint (MVP).
+
+limitations:
+  - Accepts readings from unregistered sensors
+  - No sensor pairing/registration workflow
+  - No authentication on ingest endpoint
+  - No rate limiting
+
+status: |
+  MVP COMPLETE - Works for high-throughput ingestion
+  MISSING: Sensor registration, auth, rate limiting
+```
+
+### @profiles (BASIC)
+```yaml
+files:
+  Backend:
+  - apps/backend/src/infrastructure/models.py:16 - User.role column
+  - apps/backend/src/api/deps.py:109-128 - Admin role check
+  - apps/backend/src/api/users.py - User management
+
+current_roles:
+  - user: Default role, can submit reports
+  - admin: Can access admin endpoints
+
+needed_roles:
+  - verified_reporter: Trusted users with higher credibility scores
+  - moderator: Can verify/reject reports
+
+limitations:
+  - No permission granularity
+  - No audit trail for role changes
+  - No moderator queue
+
+status: |
+  BASIC - Only admin/user implemented
+  NEXT: Add verified_reporter role with auto-elevated trust scores
+```
+
+### @photo-verification (GPS Only)
+```yaml
+files:
+  - apps/backend/src/api/reports.py:241-288 - EXIF GPS extraction
+  - apps/backend/src/domain/services/validation_service.py - IoT cross-validation
+
+current_verification:
+  1. Extract GPS from photo EXIF metadata (PIL)
+  2. Compare photo GPS to reported location
+  3. If distance > 100m, set location_verified=False
+  4. Cross-validate with nearby IoT sensors (1km radius)
+  5. Calculate iot_validation_score (0-100)
+
+what_does_NOT_exist:
+  - ML classification of flood vs non-flood images
+  - Water depth estimation from photos
+  - Fake/manipulated image detection
+  - Actual photo storage (uses mock URLs)
+
+photo_storage: |
+  MOCKED - reports.py:267: media_url = f"https://mock-storage.com/{image.filename}"
+  Photos are processed but NOT stored to S3/Blob
+
+status: |
+  PARTIAL - GPS verification works
+  MISSING: ML flood detection, severity estimation, real storage
 ```
 
 ---
@@ -428,17 +641,37 @@ watch_area: Connaught Place
 - [x] Authentication (Email/Password + Google + Phone)
 - [x] E2E Testing Suite (Playwright)
 
-### Tier 2: ML/AI Foundation (IN PROGRESS)
-- [x] Attention LSTM model (96.2% accuracy)
-- [x] 81-dim feature vector (AlphaEarth + GloFAS)
-- [x] Heatmap visualization
-- [x] Historical Floods Panel (Delhi NCR 1969-2023)
-- [x] Hotspots FHI (62 Delhi locations, live weather-based colors)
-- [x] Spatial differentiation verification
-- [ ] **LightGBM ensemble** - MISSING
-- [ ] **Wavelet preprocessing** - MISSING
-- [ ] **GNN spatial modeling** - Phase 2
+### Tier 2: ML/AI Foundation (NEEDS FIXING)
 
-### Tier 3: Scale (LATER)
+**What Works:**
+- [x] FHI rule-based risk calculation (not ML, but functional)
+- [x] Hotspot feature extractor (18-dim)
+- [x] General feature extractor (40-dim)
+- [x] Pre-computed heatmap cache
+- [x] Historical Floods Panel (Delhi NCR 1969-2023)
+- [x] Hotspots with live weather (FHI formula)
+- [x] Spatial differentiation verification
+
+**Training Data Exists:**
+- [x] hotspot_training_data.npz: 486 samples × 18-dim
+- [x] delhi_monsoon_5years_*.npz: 605 samples × 33-dim
+
+**What Needs Fixing:**
+- [ ] Feature dimension alignment (extractor: 40-dim vs data: 33-dim)
+- [ ] Train XGBoost/RF on 18-dim hotspot data
+- [ ] Train LSTM on aligned feature data
+- [ ] Data imbalance handling (only 4 high-risk events in 5 years)
+- [ ] Replace broken models in _archive/
+
+### Tier 3: Next Priorities
+- [ ] RF + XGBoost ensemble for hotspot predictions
+- [ ] Profile backend: Admin + Verified Reporter + User roles
+- [ ] Photo ML: Flood detection + severity estimation
+- [ ] IoT integration: Sensor registration, auth
+- [ ] Photo storage: Replace mock URLs with S3/Blob
+- [ ] UI cleanup
+
+### Tier 4: Scale (LATER)
 - Flood simulation
 - Multi-language (i18n)
+- GNN spatial modeling

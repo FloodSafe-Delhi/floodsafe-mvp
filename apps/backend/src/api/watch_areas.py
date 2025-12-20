@@ -2,10 +2,14 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from uuid import UUID
 import logging
+from typing import List, Optional
+from pydantic import BaseModel
+from datetime import datetime
 
 from ..infrastructure.database import get_db
 from ..infrastructure import models
 from ..domain.models import WatchAreaCreate, WatchAreaResponse
+from ..domain.services.watch_area_risk_service import WatchAreaRiskService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -143,3 +147,95 @@ def delete_watch_area(watch_area_id: UUID, db: Session = Depends(get_db)):
         logger.error(f"Error deleting watch area {watch_area_id}: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete watch area")
+
+
+# Pydantic models for risk assessment response
+class HotspotInWatchAreaResponse(BaseModel):
+    """Hotspot within a watch area."""
+    id: int
+    name: str
+    fhi_score: float
+    fhi_level: str
+    fhi_color: str
+    distance_meters: float
+
+
+class WatchAreaRiskAssessmentResponse(BaseModel):
+    """Risk assessment for a watch area."""
+    watch_area_id: UUID
+    watch_area_name: str
+    latitude: float
+    longitude: float
+    radius: float
+    nearby_hotspots: List[HotspotInWatchAreaResponse]
+    nearby_hotspots_count: int
+    critical_hotspots_count: int
+    average_fhi: float
+    max_fhi: float
+    max_fhi_level: str
+    is_at_risk: bool
+    risk_flag_reason: Optional[str]
+    last_calculated: datetime
+
+
+@router.get("/user/{user_id}/risk-assessment", response_model=List[WatchAreaRiskAssessmentResponse])
+async def get_user_watch_area_risks(user_id: UUID, db: Session = Depends(get_db)):
+    """
+    Get risk assessment for all user's watch areas based on nearby hotspots.
+
+    Analyzes each watch area for:
+    - Nearby hotspots within radius
+    - Average and maximum FHI scores
+    - Critical hotspots (HIGH/EXTREME)
+    - Risk flag if average FHI > 0.5 OR any HIGH/EXTREME hotspot present
+
+    Returns:
+        List of risk assessments, one per watch area
+    """
+    try:
+        # Verify user exists
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Calculate risk assessments
+        service = WatchAreaRiskService(db)
+        assessments = await service.calculate_risk_for_user_watch_areas(user_id)
+
+        # Convert dataclasses to Pydantic models
+        response = []
+        for assessment in assessments:
+            response.append(WatchAreaRiskAssessmentResponse(
+                watch_area_id=assessment.watch_area_id,
+                watch_area_name=assessment.watch_area_name,
+                latitude=assessment.latitude,
+                longitude=assessment.longitude,
+                radius=assessment.radius,
+                nearby_hotspots=[
+                    HotspotInWatchAreaResponse(
+                        id=h.id,
+                        name=h.name,
+                        fhi_score=h.fhi_score,
+                        fhi_level=h.fhi_level,
+                        fhi_color=h.fhi_color,
+                        distance_meters=h.distance_meters
+                    )
+                    for h in assessment.nearby_hotspots
+                ],
+                nearby_hotspots_count=assessment.nearby_hotspots_count,
+                critical_hotspots_count=assessment.critical_hotspots_count,
+                average_fhi=assessment.average_fhi,
+                max_fhi=assessment.max_fhi,
+                max_fhi_level=assessment.max_fhi_level,
+                is_at_risk=assessment.is_at_risk,
+                risk_flag_reason=assessment.risk_flag_reason,
+                last_calculated=assessment.last_calculated
+            ))
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error calculating watch area risks for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to calculate watch area risks")

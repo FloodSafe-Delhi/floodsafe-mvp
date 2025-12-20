@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Navigation, MapPin, Clock, Shield, Bike, Car, Footprints, Train, Bookmark, Star, Trash2, LocateFixed, GitCompare, X, Loader2 } from 'lucide-react';
+import { Navigation, MapPin, Clock, Shield, Bike, Car, Footprints, Train, Bookmark, Star, Trash2, LocateFixed, GitCompare, X, Loader2, Play } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { Button } from './ui/button';
 import SmartSearchBar from './SmartSearchBar';
-import { useCompareRoutes, useNearbyMetros, useSavedRoutes, useCreateSavedRoute, useDeleteSavedRoute, useIncrementRouteUsage } from '../lib/api/hooks';
-import { RouteOption, MetroStation, RouteComparisonResponse } from '../types';
+import { useEnhancedCompareRoutes, useNearbyMetros, useSavedRoutes, useCreateSavedRoute, useDeleteSavedRoute, useIncrementRouteUsage } from '../lib/api/hooks';
+import { RouteOption, MetroStation, EnhancedRouteComparisonResponse, FastestRouteOption, MetroRouteOption, SafestRouteOption } from '../types';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
-import { RouteComparisonCard } from './RouteComparisonCard';
+import { EnhancedRouteCard } from './EnhancedRouteCard';
+import { useNavigation } from '../contexts/NavigationContext';
 
 interface NavigationPanelProps {
     isOpen: boolean;
@@ -20,6 +21,17 @@ interface NavigationPanelProps {
     onOriginChange?: (origin: { lat: number; lng: number } | null) => void;
     onDestinationChange?: (destination: { lat: number; lng: number } | null) => void;
     initialDestination?: { lat: number; lng: number; name?: string } | null;
+}
+
+// Helper to convert TurnInstruction to RouteInstruction
+function convertTurnInstructionsToRouteInstructions(turns: any[]): any[] {
+    return turns.map((turn) => ({
+        text: turn.instruction,
+        distance_meters: turn.distance_meters,
+        duration_seconds: turn.duration_seconds,
+        maneuver: turn.maneuver_type,
+        location: turn.coordinates,
+    }));
 }
 
 export function NavigationPanel({
@@ -35,6 +47,7 @@ export function NavigationPanel({
     initialDestination,
 }: NavigationPanelProps) {
     const { user } = useAuth();
+    const { startNavigation } = useNavigation();
     const [origin, setOrigin] = useState<{ lat: number; lng: number; name: string } | null>(null);
     const [destination, setDestination] = useState<{ lat: number; lng: number; name: string } | null>(null);
     const [useCurrentLocation, setUseCurrentLocation] = useState(true);
@@ -42,8 +55,8 @@ export function NavigationPanel({
     const [_routes, setRoutes] = useState<RouteOption[]>([]);
     const [_selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
     const [avoidMLRisk, setAvoidMLRisk] = useState(false);
-    const [comparison, setComparison] = useState<RouteComparisonResponse | null>(null);
-    const [selectedRouteType, setSelectedRouteType] = useState<'normal' | 'floodsafe' | null>(null);
+    const [comparison, setComparison] = useState<EnhancedRouteComparisonResponse | null>(null);
+    const [selectedRouteType, setSelectedRouteType] = useState<'fastest' | 'metro' | 'safest' | null>(null);
 
     // Set origin from userLocation when using current location
     useEffect(() => {
@@ -77,7 +90,7 @@ export function NavigationPanel({
         onDestinationChange?.(destination ? { lat: destination.lat, lng: destination.lng } : null);
     }, [destination, onDestinationChange]);
 
-    const { mutate: compareRoutes, isPending: isCalculating } = useCompareRoutes();
+    const { mutate: compareRoutes, isPending: isCalculating } = useEnhancedCompareRoutes();
     const { data: metrosData } = useNearbyMetros(
         origin?.lat ?? null,
         origin?.lng ?? null,
@@ -138,11 +151,40 @@ export function NavigationPanel({
                     setComparison(data);
                     setSelectedRouteType(null);
 
-                    // Build routes array for map display from comparison
+                    // Build routes array for map display from enhanced comparison
                     const routesForMap: RouteOption[] = [];
-                    if (data.floodsafe_route) {
-                        routesForMap.push(data.floodsafe_route);
+
+                    // Add all available routes to map display
+                    if (data.routes.fastest) {
+                        routesForMap.push({
+                            id: data.routes.fastest.id,
+                            type: 'fast',
+                            city_code: city === 'bangalore' ? 'BLR' : 'DEL',
+                            geometry: data.routes.fastest.geometry,
+                            distance_meters: data.routes.fastest.distance_meters,
+                            duration_seconds: data.routes.fastest.duration_seconds,
+                            safety_score: data.routes.fastest.safety_score,
+                            risk_level: data.routes.fastest.safety_score >= 70 ? 'low' : data.routes.fastest.safety_score >= 40 ? 'medium' : 'high',
+                            flood_intersections: data.routes.fastest.hotspot_count,
+                            instructions: convertTurnInstructionsToRouteInstructions(data.routes.fastest.instructions),
+                        });
                     }
+
+                    if (data.routes.safest) {
+                        routesForMap.push({
+                            id: data.routes.safest.id,
+                            type: 'safe',
+                            city_code: city === 'bangalore' ? 'BLR' : 'DEL',
+                            geometry: data.routes.safest.geometry,
+                            distance_meters: data.routes.safest.distance_meters,
+                            duration_seconds: data.routes.safest.duration_seconds,
+                            safety_score: data.routes.safest.safety_score,
+                            risk_level: 'low',
+                            flood_intersections: data.routes.safest.hotspot_count,
+                            instructions: convertTurnInstructionsToRouteInstructions(data.routes.safest.instructions),
+                        });
+                    }
+
                     setRoutes(routesForMap);
 
                     // Pass routes and flood zones to parent
@@ -166,35 +208,86 @@ export function NavigationPanel({
         onRouteSelected(route);
     };
 
-    // Handle normal route selection from comparison card
-    const handleSelectNormalRoute = () => {
-        if (comparison?.normal_route) {
-            setSelectedRouteType('normal');
-            // Convert NormalRouteOption to RouteOption format for map display
-            const normalAsRouteOption: RouteOption = {
-                id: comparison.normal_route.id,
+    // Handle route selection from enhanced route cards
+    const handleSelectRoute = (type: 'fastest' | 'metro' | 'safest') => {
+        if (!comparison) return;
+
+        setSelectedRouteType(type);
+
+        if (type === 'fastest' && comparison.routes.fastest) {
+            const route: RouteOption = {
+                id: comparison.routes.fastest.id,
                 type: 'fast',
                 city_code: city === 'bangalore' ? 'BLR' : 'DEL',
-                geometry: comparison.normal_route.geometry,
-                distance_meters: comparison.normal_route.distance_meters,
-                duration_seconds: comparison.normal_route.duration_seconds,
-                safety_score: comparison.normal_route.safety_score,
-                risk_level: comparison.normal_route.safety_score >= 70 ? 'low' : comparison.normal_route.safety_score >= 40 ? 'medium' : 'high',
-                flood_intersections: comparison.normal_route.flood_intersections,
-                instructions: comparison.normal_route.instructions,
+                geometry: comparison.routes.fastest.geometry,
+                distance_meters: comparison.routes.fastest.distance_meters,
+                duration_seconds: comparison.routes.fastest.duration_seconds,
+                safety_score: comparison.routes.fastest.safety_score,
+                risk_level: comparison.routes.fastest.safety_score >= 70 ? 'low' : comparison.routes.fastest.safety_score >= 40 ? 'medium' : 'high',
+                flood_intersections: comparison.routes.fastest.hotspot_count,
+                instructions: convertTurnInstructionsToRouteInstructions(comparison.routes.fastest.instructions),
             };
-            onRouteSelected(normalAsRouteOption);
-            toast.info('Showing normal (fastest) route');
+            onRouteSelected(route);
+            toast.info('Showing fastest route');
+        } else if (type === 'metro' && comparison.routes.metro) {
+            // For metro, we'll need to handle segment coordinates
+            // For now, just show a toast
+            toast.info('Metro route selected - navigation not yet supported');
+        } else if (type === 'safest' && comparison.routes.safest) {
+            const route: RouteOption = {
+                id: comparison.routes.safest.id,
+                type: 'safe',
+                city_code: city === 'bangalore' ? 'BLR' : 'DEL',
+                geometry: comparison.routes.safest.geometry,
+                distance_meters: comparison.routes.safest.distance_meters,
+                duration_seconds: comparison.routes.safest.duration_seconds,
+                safety_score: comparison.routes.safest.safety_score,
+                risk_level: 'low',
+                flood_intersections: comparison.routes.safest.hotspot_count,
+                instructions: convertTurnInstructionsToRouteInstructions(comparison.routes.safest.instructions),
+            };
+            onRouteSelected(route);
+            toast.success('Showing safest route');
         }
     };
 
-    // Handle FloodSafe route selection from comparison card
-    const handleSelectFloodSafeRoute = () => {
-        if (comparison?.floodsafe_route) {
-            setSelectedRouteType('floodsafe');
-            onRouteSelected(comparison.floodsafe_route);
-            toast.success('Showing FloodSafe route');
+    // Handle Start Navigation button
+    const handleStartNavigation = () => {
+        if (!comparison || !selectedRouteType || !destination) {
+            toast.error('Please select a route first');
+            return;
         }
+
+        // Prepare route for navigation context
+        let routeToStart: FastestRouteOption | SafestRouteOption | null = null;
+        if (selectedRouteType === 'fastest' && comparison.routes.fastest) {
+            routeToStart = comparison.routes.fastest;
+        } else if (selectedRouteType === 'safest' && comparison.routes.safest) {
+            routeToStart = comparison.routes.safest;
+        } else if (selectedRouteType === 'metro') {
+            toast.error('Metro navigation not yet supported');
+            return;
+        }
+
+        if (!routeToStart) {
+            toast.error('Selected route not available');
+            return;
+        }
+
+        // Convert to NavigationContext format
+        startNavigation({
+            id: routeToStart.id,
+            type: selectedRouteType === 'fastest' ? 'fastest' : 'safest',
+            coordinates: routeToStart.coordinates,
+            instructions: routeToStart.instructions,
+            destination: { lat: destination.lat, lng: destination.lng },
+            totalDistanceMeters: routeToStart.distance_meters,
+            totalDurationSeconds: routeToStart.duration_seconds,
+        });
+
+        // Close panel after starting navigation
+        onClose();
+        toast.success('Navigation started');
     };
 
     const handleMetroSelect = (station: MetroStation) => {
@@ -303,23 +396,32 @@ export function NavigationPanel({
 
     return (
         <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <SheetContent side="bottom" className="h-[80vh] overflow-y-auto">
-                <SheetHeader className="relative pb-2 border-b">
-                    <SheetTitle className="flex items-center gap-2 pr-8">
+            <SheetContent
+                side="bottom"
+                className="p-0"
+                style={{
+                    maxHeight: '70vh',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))'
+                }}
+            >
+                {/* Header */}
+                <div
+                    className="px-4 py-3 border-b border-gray-200 bg-white"
+                    style={{ flexShrink: 0 }}
+                >
+                    <h2 className="flex items-center gap-2 font-semibold">
                         <Navigation className="h-5 w-5 text-blue-600" />
                         Plan Safe Route
-                    </SheetTitle>
-                    {/* Explicit close button for better visibility on bottom sheet */}
-                    <button
-                        onClick={onClose}
-                        className="absolute top-0 right-0 p-2 rounded-full hover:bg-gray-100 transition-colors"
-                        aria-label="Close navigation panel"
-                    >
-                        <X className="h-5 w-5 text-gray-500" />
-                    </button>
-                </SheetHeader>
+                    </h2>
+                </div>
 
-                <div className="mt-6 space-y-6">
+                {/* Scrollable Content */}
+                <div
+                    className="px-4 pt-4 pb-20 space-y-4"
+                    style={{ flex: 1, overflowY: 'auto' }}
+                >
                     {/* Starting Location */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -440,12 +542,24 @@ export function NavigationPanel({
                                 <GitCompare className="h-4 w-4" />
                                 Route Comparison
                             </h3>
-                            <RouteComparisonCard
-                                comparison={comparison}
-                                onSelectNormal={handleSelectNormalRoute}
-                                onSelectFloodSafe={handleSelectFloodSafeRoute}
-                                selectedRoute={selectedRouteType}
+                            <EnhancedRouteCard
+                                routes={comparison.routes}
+                                recommendation={comparison.recommendation}
+                                selectedType={selectedRouteType}
+                                onSelectRoute={handleSelectRoute}
                             />
+
+                            {/* Start Navigation Button */}
+                            {selectedRouteType && selectedRouteType !== 'metro' && (
+                                <Button
+                                    onClick={handleStartNavigation}
+                                    className="w-full bg-blue-600 hover:bg-blue-700"
+                                    size="lg"
+                                >
+                                    <Play className="h-4 w-4 mr-2" />
+                                    Start Navigation
+                                </Button>
+                            )}
                         </div>
                     )}
 

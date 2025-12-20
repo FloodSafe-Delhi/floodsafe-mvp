@@ -125,3 +125,45 @@ async def get_current_admin_user(
         )
 
     return current_user
+
+
+async def get_current_verified_user(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Dependency to verify user has verified_reporter, moderator, or admin role.
+    Raises 403 if not a verified user.
+
+    Usage:
+        @router.post("/trusted-action")
+        async def trusted_action(user: User = Depends(get_current_verified_user)):
+            ...
+    """
+    if current_user.role not in ["verified_reporter", "moderator", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verified reporter access required",
+        )
+
+    return current_user
+
+
+async def get_current_moderator(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Dependency to verify user has moderator or admin role.
+    Raises 403 if not a moderator.
+
+    Usage:
+        @router.post("/moderate/report")
+        async def moderate_report(user: User = Depends(get_current_moderator)):
+            ...
+    """
+    if current_user.role not in ["moderator", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Moderator access required",
+        )
+
+    return current_user

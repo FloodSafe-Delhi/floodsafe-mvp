@@ -60,6 +60,10 @@ class User(Base):
     profile_complete = Column(Boolean, default=False)
     onboarding_step = Column(Integer, nullable=True)  # 1-5, tracks current step if incomplete
 
+    # Role enhancement - timestamps for role transitions
+    verified_reporter_since = Column(DateTime, nullable=True)  # When became verified_reporter
+    moderator_since = Column(DateTime, nullable=True)  # When became moderator
+
     # Relationships
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     saved_routes = relationship("SavedRoute", back_populates="user", cascade="all, delete-orphan")
@@ -245,6 +249,19 @@ class ReputationHistory(Base):
     extra_metadata = Column(String, default="{}") # JSON string
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class RoleHistory(Base):
+    """Audit trail for role changes - tracks promotions/demotions with reason."""
+    __tablename__ = "role_history"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    old_role = Column(String(50), nullable=False)
+    new_role = Column(String(50), nullable=False)
+    changed_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # NULL for auto-promotion
+    reason = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Badge(Base):
     __tablename__ = "badges"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -303,6 +320,34 @@ class SavedRoute(Base):
 
     # Relationship
     user = relationship("User", back_populates="saved_routes")
+
+
+class ReportVote(Base):
+    """Track user votes on reports for deduplication - prevents multiple votes per user"""
+    __tablename__ = "report_votes"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False)
+    vote_type = Column(String(10), nullable=False)  # 'upvote' or 'downvote'
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('ix_report_votes_user_report', 'user_id', 'report_id', unique=True),
+    )
+
+
+class Comment(Base):
+    """Comments on flood reports for community discussion"""
+    __tablename__ = "comments"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    report_id = Column(UUID(as_uuid=True), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content = Column(String(500), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('ix_comments_report_created', 'report_id', 'created_at'),
+    )
 
 
 class ExternalAlert(Base):

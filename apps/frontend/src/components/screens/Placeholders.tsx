@@ -36,7 +36,7 @@ export function AlertsListScreen({ onAlertClick: _onAlertClick }: { onAlertClick
 
     if (isLoading) {
         return (
-            <div className="pb-16 min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="pb-4 min-h-full bg-gray-50 flex items-center justify-center">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
         );
@@ -44,7 +44,7 @@ export function AlertsListScreen({ onAlertClick: _onAlertClick }: { onAlertClick
 
     if (error) {
         return (
-            <div className="pb-16 min-h-screen bg-gray-50 p-4">
+            <div className="pb-4 min-h-full bg-gray-50 p-4">
                 <div className="text-center py-16 text-red-600">
                     Failed to load alerts. Please try again.
                 </div>
@@ -55,7 +55,7 @@ export function AlertsListScreen({ onAlertClick: _onAlertClick }: { onAlertClick
     const unreadCount = alerts?.filter((a: Alert) => !a.is_read).length || 0;
 
     return (
-        <div className="pb-16 min-h-screen bg-gray-50">
+        <div className="pb-4 min-h-full bg-gray-50">
             {/* Header */}
             <div className="bg-white shadow-sm sticky top-14 z-40">
                 <div className="flex items-center justify-between px-4 h-14">

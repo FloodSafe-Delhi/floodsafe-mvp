@@ -94,12 +94,12 @@ export default function SmartSearchBar({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Open dropdown when we have query or when focused (for trending)
+    // Open dropdown only when typing (not on mount)
     useEffect(() => {
-        if (debouncedQuery.length >= 2 || (query.length === 0 && showTrending)) {
+        if (debouncedQuery.length >= 2) {
             setIsOpen(true);
         }
-    }, [debouncedQuery, query, showTrending]);
+    }, [debouncedQuery]);
 
     // Reset selected index when results change
     useEffect(() => {
@@ -217,7 +217,12 @@ export default function SmartSearchBar({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    onFocus={() => setIsOpen(true)}
+                    onFocus={() => {
+                        // Only show dropdown if there's already a query
+                        if (query.length >= 2) {
+                            setIsOpen(true);
+                        }
+                    }}
                     placeholder={placeholder}
                     className="w-full pl-11 pr-11 py-3 text-sm font-normal bg-white border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-muted-foreground transition-all font-sans"
                     autoComplete="off"

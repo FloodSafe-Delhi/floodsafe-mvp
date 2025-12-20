@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 from typing import Optional, List
 from uuid import UUID
 from PIL import Image
@@ -11,8 +11,9 @@ import json
 
 from ..infrastructure.database import get_db
 from ..infrastructure import models
-from ..domain.models import ReportResponse, Report as ReportDomain, UserResponse
+from ..domain.models import ReportResponse, Report as ReportDomain, UserResponse, VoteResponse
 from ..domain.reputation_models import ReportVerificationRequest
+from .deps import get_current_user, get_current_user_optional
 from ..domain.services.reputation_service import ReputationService
 from ..core.utils import get_exif_data, get_lat_lon
 from math import radians, sin, cos, sqrt, atan2
@@ -55,11 +56,70 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
     return R * c
 
+
+def get_comment_counts(db: Session, report_ids: List[UUID]) -> dict:
+    """Get comment counts for a list of report IDs in a single query."""
+    if not report_ids:
+        return {}
+
+    counts = db.query(
+        models.Comment.report_id,
+        func.count(models.Comment.id).label('count')
+    ).filter(
+        models.Comment.report_id.in_(report_ids)
+    ).group_by(
+        models.Comment.report_id
+    ).all()
+
+    return {str(report_id): count for report_id, count in counts}
+
+
+def convert_report_to_response(report: models.Report, comment_count: int = 0) -> ReportResponse:
+    """Convert a Report ORM model to ReportResponse with comment count."""
+    # Extract lat/lon from geometry
+    latitude = None
+    longitude = None
+    if report.location:
+        from geoalchemy2.shape import to_shape
+        point = to_shape(report.location)
+        latitude = point.y
+        longitude = point.x
+
+    return ReportResponse(
+        id=report.id,
+        user_id=report.user_id,
+        description=report.description,
+        latitude=latitude,
+        longitude=longitude,
+        media_url=report.media_url,
+        media_type=report.media_type,
+        media_metadata=report.media_metadata,
+        timestamp=report.timestamp,
+        verified=report.verified,
+        verification_score=report.verification_score,
+        upvotes=report.upvotes,
+        downvotes=report.downvotes,
+        quality_score=report.quality_score,
+        verified_at=report.verified_at,
+        phone_number=report.phone_number,
+        phone_verified=report.phone_verified,
+        water_depth=report.water_depth,
+        vehicle_passability=report.vehicle_passability,
+        iot_validation_score=report.iot_validation_score,
+        nearby_sensor_ids=report.nearby_sensor_ids,
+        prophet_prediction_match=report.prophet_prediction_match,
+        location_verified=report.location_verified,
+        archived_at=report.archived_at,
+        comment_count=comment_count
+    )
+
+
 @router.get("/", response_model=List[ReportResponse])
 def list_reports(db: Session = Depends(get_db)):
     """
     List all active (non-archived) flood reports.
     Reports are auto-archived after 3 days.
+    Includes comment counts for each report.
     """
     try:
         archive_cutoff = datetime.utcnow() - timedelta(days=REPORT_ARCHIVE_DAYS)
@@ -67,7 +127,16 @@ def list_reports(db: Session = Depends(get_db)):
             models.Report.archived_at == None,  # Not explicitly archived
             models.Report.timestamp > archive_cutoff  # Not auto-archived
         ).order_by(models.Report.timestamp.desc()).all()
-        return reports
+
+        # Get comment counts for all reports in a single query
+        report_ids = [r.id for r in reports]
+        comment_counts = get_comment_counts(db, report_ids)
+
+        # Convert to responses with comment counts
+        return [
+            convert_report_to_response(r, comment_counts.get(str(r.id), 0))
+            for r in reports
+        ]
     except Exception as e:
         logger.error(f"Error listing reports: {e}")
         raise HTTPException(status_code=500, detail="Failed to list reports")
@@ -110,7 +179,14 @@ def get_user_reports(
             models.Report.timestamp.desc()
         ).offset(offset).limit(limit).all()
 
-        return reports
+        # Get comment counts
+        report_ids = [r.id for r in reports]
+        comment_counts = get_comment_counts(db, report_ids)
+
+        return [
+            convert_report_to_response(r, comment_counts.get(str(r.id), 0))
+            for r in reports
+        ]
     except HTTPException:
         raise
     except Exception as e:
@@ -567,31 +643,71 @@ def verify_report(
         raise HTTPException(status_code=500, detail="Failed to verify report")
 
 
-@router.post("/{report_id}/upvote")
-def upvote_report(report_id: UUID, db: Session = Depends(get_db)):
+@router.post("/{report_id}/upvote", response_model=VoteResponse)
+async def upvote_report(
+    report_id: UUID,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Upvote a report.
-    Awards small bonus to report owner.
+    Upvote a report (requires authentication).
+    - First upvote: adds vote, increments count
+    - Second upvote (toggle off): removes vote, decrements count
+    - Switching from downvote: changes vote type, adjusts counts
+    - Cannot upvote your own report
     """
     try:
         report = db.query(models.Report).filter(models.Report.id == report_id).first()
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
 
-        # Increment upvotes
-        report.upvotes += 1
+        # Prevent self-voting
+        if report.user_id == current_user.id:
+            raise HTTPException(status_code=400, detail="Cannot vote on your own report")
+
+        # Check for existing vote
+        existing_vote = db.query(models.ReportVote).filter(
+            models.ReportVote.user_id == current_user.id,
+            models.ReportVote.report_id == report_id
+        ).first()
+
+        user_vote = None
+        if existing_vote:
+            if existing_vote.vote_type == 'upvote':
+                # Toggle off - remove upvote
+                db.delete(existing_vote)
+                report.upvotes = max(0, report.upvotes - 1)
+                user_vote = None
+            else:
+                # Switch from downvote to upvote
+                existing_vote.vote_type = 'upvote'
+                report.upvotes += 1
+                report.downvotes = max(0, report.downvotes - 1)
+                user_vote = 'upvote'
+        else:
+            # New upvote
+            db.add(models.ReportVote(
+                user_id=current_user.id,
+                report_id=report_id,
+                vote_type='upvote'
+            ))
+            report.upvotes += 1
+            user_vote = 'upvote'
+
         db.commit()
 
-        # Award bonus to report owner
-        reputation_service = ReputationService(db)
-        result = reputation_service.process_report_upvote(report_id)
+        # Award bonus to report owner (only for new upvotes)
+        if user_vote == 'upvote' and not existing_vote:
+            reputation_service = ReputationService(db)
+            reputation_service.process_report_upvote(report_id)
 
-        return {
-            'message': 'Report upvoted',
-            'report_id': report_id,
-            'upvotes': report.upvotes,
-            **result
-        }
+        return VoteResponse(
+            message='Vote updated',
+            report_id=report_id,
+            upvotes=report.upvotes,
+            downvotes=report.downvotes,
+            user_vote=user_vote
+        )
 
     except HTTPException:
         raise
@@ -601,26 +717,66 @@ def upvote_report(report_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Failed to upvote report")
 
 
-@router.post("/{report_id}/downvote")
-def downvote_report(report_id: UUID, db: Session = Depends(get_db)):
+@router.post("/{report_id}/downvote", response_model=VoteResponse)
+async def downvote_report(
+    report_id: UUID,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Downvote a report.
-    Used to flag potentially false reports.
+    Downvote a report (requires authentication).
+    - First downvote: adds vote, increments count
+    - Second downvote (toggle off): removes vote, decrements count
+    - Switching from upvote: changes vote type, adjusts counts
+    - Cannot downvote your own report
     """
     try:
         report = db.query(models.Report).filter(models.Report.id == report_id).first()
         if not report:
             raise HTTPException(status_code=404, detail="Report not found")
 
-        # Increment downvotes
-        report.downvotes += 1
+        # Prevent self-voting
+        if report.user_id == current_user.id:
+            raise HTTPException(status_code=400, detail="Cannot vote on your own report")
+
+        # Check for existing vote
+        existing_vote = db.query(models.ReportVote).filter(
+            models.ReportVote.user_id == current_user.id,
+            models.ReportVote.report_id == report_id
+        ).first()
+
+        user_vote = None
+        if existing_vote:
+            if existing_vote.vote_type == 'downvote':
+                # Toggle off - remove downvote
+                db.delete(existing_vote)
+                report.downvotes = max(0, report.downvotes - 1)
+                user_vote = None
+            else:
+                # Switch from upvote to downvote
+                existing_vote.vote_type = 'downvote'
+                report.downvotes += 1
+                report.upvotes = max(0, report.upvotes - 1)
+                user_vote = 'downvote'
+        else:
+            # New downvote
+            db.add(models.ReportVote(
+                user_id=current_user.id,
+                report_id=report_id,
+                vote_type='downvote'
+            ))
+            report.downvotes += 1
+            user_vote = 'downvote'
+
         db.commit()
 
-        return {
-            'message': 'Report downvoted',
-            'report_id': report_id,
-            'downvotes': report.downvotes
-        }
+        return VoteResponse(
+            message='Vote updated',
+            report_id=report_id,
+            upvotes=report.upvotes,
+            downvotes=report.downvotes,
+            user_vote=user_vote
+        )
 
     except HTTPException:
         raise
@@ -664,7 +820,14 @@ def get_user_archived_reports(
             models.Report.timestamp.desc()
         ).offset(offset).limit(limit).all()
 
-        return reports
+        # Get comment counts
+        report_ids = [r.id for r in reports]
+        comment_counts = get_comment_counts(db, report_ids)
+
+        return [
+            convert_report_to_response(r, comment_counts.get(str(r.id), 0))
+            for r in reports
+        ]
     except HTTPException:
         raise
     except Exception as e:
@@ -719,3 +882,4 @@ def get_user_report_stats(
     except Exception as e:
         logger.error(f"Error fetching report stats for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch report stats")
+

@@ -18,7 +18,7 @@ export default function MapLegend({ className }: MapLegendProps) {
                     size="icon"
                     variant="ghost"
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="h-6 w-6 p-0"
+                    className="h-11 w-11 p-0"
                 >
                     {isExpanded ? (
                         <ChevronDown className="h-4 w-4" />

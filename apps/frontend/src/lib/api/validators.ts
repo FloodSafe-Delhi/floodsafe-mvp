@@ -165,9 +165,11 @@ export function validateReport(data: unknown): Report | null {
         water_depth: isString(data.water_depth) ? data.water_depth : undefined,
         vehicle_passability: isString(data.vehicle_passability) ? data.vehicle_passability : undefined,
         iot_validation_score: isNumber(data.iot_validation_score) ? data.iot_validation_score : undefined,
-        downvotes: isNumber(data.downvotes) ? data.downvotes : undefined,
+        downvotes: isNumber(data.downvotes) ? data.downvotes : 0,
         quality_score: isNumber(data.quality_score) ? data.quality_score : undefined,
         verified_at: isString(data.verified_at) ? data.verified_at : undefined,
+        comment_count: isNumber(data.comment_count) ? data.comment_count : undefined,
+        user_vote: data.user_vote === 'upvote' || data.user_vote === 'downvote' ? data.user_vote : undefined,
     };
 }
 

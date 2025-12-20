@@ -29,6 +29,7 @@ function FloodSafeApp() {
     const [selectedAlert, setSelectedAlert] = useState<FloodAlert | null>(null);
     const [isOffline, setIsOffline] = useState(false);
     const [initialRouteDestination, setInitialRouteDestination] = useState<[number, number] | null>(null);
+    const [shouldOpenNavigationPanel, setShouldOpenNavigationPanel] = useState(false);
 
     const handleAlertClick = (alert: FloodAlert) => {
         setSelectedAlert(alert);
@@ -57,6 +58,7 @@ function FloodSafeApp() {
     };
 
     const handleNavigateToMap = () => {
+        setShouldOpenNavigationPanel(true);
         setActiveTab('map');
     };
 
@@ -140,6 +142,8 @@ function FloodSafeApp() {
                 return <FloodAtlasScreen
                     initialDestination={initialRouteDestination}
                     onClearInitialDestination={() => setInitialRouteDestination(null)}
+                    openNavigationPanel={shouldOpenNavigationPanel}
+                    onClearOpenNavigationPanel={() => setShouldOpenNavigationPanel(false)}
                 />;
             case 'report':
                 return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} />;

@@ -300,6 +300,7 @@ class RoutingService:
         profile: str,
         alternatives: bool = True,
         max_alternatives: int = 2,
+        include_annotations: bool = False
     ) -> Dict:
         """Fetch routes from Mapbox Directions API."""
         coords = f"{origin[0]},{origin[1]};{destination[0]},{destination[1]}"
@@ -309,11 +310,15 @@ class RoutingService:
             "access_token": self.mapbox_token,
             "geometries": "geojson",
             "overview": "full",
+            "steps": "true",  # Always include turn-by-turn steps
         }
 
         if alternatives:
             params["alternatives"] = "true"
             # Note: Mapbox automatically returns up to 3 alternatives, no max_alternatives param needed
+
+        if include_annotations:
+            params["annotations"] = "congestion_numeric,duration,distance"
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -328,6 +333,53 @@ class RoutingService:
         except Exception as e:
             logger.error(f"Mapbox request failed: {str(e)}")
             raise
+
+    def _extract_traffic_metrics(self, route: Dict) -> Dict:
+        """Extract traffic metrics from Mapbox route annotations."""
+        legs = route.get('legs', [{}])
+        annotation = legs[0].get('annotation', {}) if legs else {}
+
+        congestion_numeric = annotation.get('congestion_numeric', [])
+
+        if congestion_numeric:
+            valid_values = [c for c in congestion_numeric if c is not None]
+            avg_congestion = sum(valid_values) / len(valid_values) if valid_values else 0
+        else:
+            avg_congestion = 0
+
+        if avg_congestion < 25:
+            traffic_level = "low"
+        elif avg_congestion < 50:
+            traffic_level = "moderate"
+        elif avg_congestion < 75:
+            traffic_level = "heavy"
+        else:
+            traffic_level = "severe"
+
+        return {
+            'average_congestion': avg_congestion,
+            'traffic_level': traffic_level,
+        }
+
+    def _extract_turn_instructions(self, route: Dict) -> List[Dict]:
+        """Extract turn-by-turn instructions from Mapbox route."""
+        instructions = []
+        legs = route.get('legs', [])
+
+        for leg in legs:
+            for step in leg.get('steps', []):
+                maneuver = step.get('maneuver', {})
+                instructions.append({
+                    'instruction': maneuver.get('instruction', ''),
+                    'distance_meters': int(step.get('distance', 0)),
+                    'duration_seconds': int(step.get('duration', 0)),
+                    'maneuver_type': maneuver.get('type', 'continue'),
+                    'maneuver_modifier': maneuver.get('modifier', 'straight'),
+                    'street_name': step.get('name', ''),
+                    'coordinates': tuple(maneuver.get('location', [0, 0])),
+                })
+
+        return instructions
 
     async def _process_mapbox_route(
         self, route: Dict, index: int, flood_zones: List[Dict], mode: str
@@ -696,6 +748,11 @@ class RoutingService:
         """
         Find nearby metro stations within radius.
 
+        For Delhi, includes safety information based on nearby hotspots:
+        - is_affected: True if any HIGH/EXTREME hotspot within 300m
+        - affected_hotspots: List of nearby dangerous hotspots
+        - safety_warning: Warning message if affected
+
         Args:
             lat: Latitude
             lng: Longitude
@@ -703,7 +760,7 @@ class RoutingService:
             radius_km: Search radius in kilometers
 
         Returns:
-            List of metro stations with distance and walking time
+            List of metro stations with distance, walking time, and safety info (Delhi only)
         """
         try:
             # Load metro stations GeoJSON for city
@@ -718,6 +775,15 @@ class RoutingService:
 
             user_location = (lat, lng)
             nearby_stations = []
+
+            # Fetch hotspots for Delhi safety analysis
+            hotspots = []
+            if city.upper() == "DEL":
+                try:
+                    from .hotspot_routing import fetch_hotspots_with_fhi
+                    hotspots = await fetch_hotspots_with_fhi(include_fhi=True)
+                except Exception as e:
+                    logger.warning(f"Could not fetch hotspots for metro safety: {e}")
 
             # Find stations within radius
             for feature in metro_data.get("features", []):
@@ -736,7 +802,7 @@ class RoutingService:
                     # Estimate walking time (avg 5 km/h)
                     walking_minutes = int((distance_km / 5.0) * 60)
 
-                    nearby_stations.append({
+                    station_info = {
                         "id": properties.get("id", properties.get("name", "unknown")),
                         "name": properties.get("name", "Unknown Station"),
                         "line": properties.get("line", "Unknown Line"),
@@ -745,7 +811,16 @@ class RoutingService:
                         "lng": station_coords[0],
                         "distance_meters": int(distance_km * 1000),
                         "walking_minutes": walking_minutes,
-                    })
+                    }
+
+                    # Add safety information for Delhi stations
+                    if city.upper() == "DEL" and hotspots:
+                        safety_info = self._check_metro_station_safety(
+                            station_coords[1], station_coords[0], hotspots
+                        )
+                        station_info.update(safety_info)
+
+                    nearby_stations.append(station_info)
 
             # Sort by distance
             nearby_stations.sort(key=lambda s: s["distance_meters"])
@@ -755,6 +830,61 @@ class RoutingService:
         except Exception as e:
             logger.error(f"Error finding nearby metros: {str(e)}")
             return []
+
+    def _check_metro_station_safety(
+        self, station_lat: float, station_lng: float, hotspots: List[Dict]
+    ) -> Dict:
+        """
+        Check if a metro station is affected by nearby hotspots.
+
+        Args:
+            station_lat: Station latitude
+            station_lng: Station longitude
+            hotspots: List of GeoJSON hotspot features
+
+        Returns:
+            Dictionary with is_affected, affected_hotspots, and safety_warning
+        """
+        SAFETY_THRESHOLD_METERS = 300
+        station_location = (station_lat, station_lng)
+        affected_hotspots = []
+
+        for hotspot in hotspots:
+            props = hotspot.get("properties", {})
+            coords = hotspot.get("geometry", {}).get("coordinates", [])
+
+            if len(coords) < 2:
+                continue
+
+            hotspot_location = (coords[1], coords[0])  # [lng, lat] -> (lat, lng)
+            distance_m = geodesic(station_location, hotspot_location).meters
+
+            # Only flag HIGH or EXTREME hotspots
+            fhi_level = props.get("fhi_level", "moderate").lower()
+            if distance_m <= SAFETY_THRESHOLD_METERS and fhi_level in ["high", "extreme"]:
+                affected_hotspots.append({
+                    "id": props.get("id", 0),
+                    "name": props.get("name", "Unknown"),
+                    "fhi_level": fhi_level,
+                    "fhi_color": props.get("fhi_color", "#ef4444"),
+                    "distance_meters": round(distance_m, 1),
+                })
+
+        is_affected = len(affected_hotspots) > 0
+        safety_warning = None
+
+        if is_affected:
+            hotspot_names = [h["name"] for h in affected_hotspots[:2]]
+            if len(affected_hotspots) == 1:
+                safety_warning = f"Station near {hotspot_names[0]} ({affected_hotspots[0]['fhi_level'].upper()} flood risk)"
+            else:
+                safety_warning = f"Station near {len(affected_hotspots)} flood hotspot(s): {', '.join(hotspot_names)}"
+
+        return {
+            "is_affected": is_affected,
+            "affected_hotspots": affected_hotspots[:5],  # Limit to 5
+            "safety_warning": safety_warning,
+        }
 
     def _get_metro_file_path(self, city: str) -> Path:
         """Get path to metro stations GeoJSON file."""
@@ -1072,3 +1202,423 @@ class RoutingService:
         except Exception as e:
             logger.error(f"Error calculating walking route: {str(e)}")
             return None
+
+    async def _calculate_walking_segment(
+        self,
+        start: Tuple[float, float],
+        end: Tuple[float, float]
+    ) -> Optional[Dict]:
+        """Calculate walking segment with turn-by-turn instructions."""
+        if not self.mapbox_token:
+            # Fallback: straight line estimation
+            dist = geodesic((start[1], start[0]), (end[1], end[0])).meters
+            return {
+                'geometry': {
+                    'type': 'LineString',
+                    'coordinates': [list(start), list(end)]
+                },
+                'coordinates': [list(start), list(end)],
+                'duration_seconds': int(dist / 1.4),  # ~5 km/h walking
+                'distance_meters': int(dist),
+                'instructions': [{
+                    'instruction': 'Walk to destination',
+                    'distance_meters': int(dist),
+                    'duration_seconds': int(dist / 1.4),
+                    'maneuver_type': 'depart',
+                    'maneuver_modifier': 'straight',
+                    'street_name': '',
+                    'coordinates': tuple(start),
+                }],
+            }
+
+        try:
+            routes_data = await self._fetch_mapbox_routes(
+                start, end, "walking",
+                alternatives=False,
+                include_annotations=False
+            )
+
+            if routes_data and routes_data.get('routes'):
+                route = routes_data['routes'][0]
+                geometry = route.get('geometry', {})
+                coords = geometry.get('coordinates', [])
+
+                return {
+                    'geometry': geometry,
+                    'coordinates': coords,
+                    'duration_seconds': int(route.get('duration', 0)),
+                    'distance_meters': int(route.get('distance', 0)),
+                    'instructions': self._extract_turn_instructions(route),
+                }
+        except Exception as e:
+            logger.error(f"Walking segment calculation failed: {e}")
+
+        return None
+
+    async def calculate_metro_route(
+        self,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+        city_code: str,
+        hotspots: List[Dict] = None,
+    ) -> Optional[Dict]:
+        """
+        Calculate metro-based route:
+        1. Find nearest safe metro station to origin
+        2. Find nearest safe metro station to destination
+        3. Calculate walking routes to/from stations
+        4. Estimate metro travel time (simplified)
+        5. Check for affected stations near hotspots
+        """
+        # Get nearby metros for origin and destination
+        origin_metros = await self.get_nearby_metros(
+            lat=origin[1], lng=origin[0], city=city_code, radius_km=2.0
+        )
+        dest_metros = await self.get_nearby_metros(
+            lat=destination[1], lng=destination[0], city=city_code, radius_km=2.0
+        )
+
+        if not origin_metros or not dest_metros:
+            return None
+
+        # Filter out HIGH/EXTREME affected stations
+        def is_station_safe(station, hotspots):
+            if not hotspots:
+                return True
+            for hotspot in hotspots:
+                props = hotspot.get('properties', {})
+                coords = hotspot.get('geometry', {}).get('coordinates', [])
+                if len(coords) >= 2:
+                    dist = geodesic(
+                        (station['lat'], station['lng']),
+                        (coords[1], coords[0])
+                    ).meters
+                    if dist <= 300 and props.get('fhi_level') in ['high', 'extreme']:
+                        return False
+            return True
+
+        # Select safest nearest stations
+        safe_origin_stations = [s for s in origin_metros if is_station_safe(s, hotspots)]
+        safe_dest_stations = [s for s in dest_metros if is_station_safe(s, hotspots)]
+
+        origin_station = safe_origin_stations[0] if safe_origin_stations else origin_metros[0]
+        dest_station = safe_dest_stations[0] if safe_dest_stations else dest_metros[0]
+
+        if origin_station['id'] == dest_station['id']:
+            return None  # Same station, metro not useful
+
+        # Calculate walking routes using Mapbox walking profile
+        walk_to_metro = await self._calculate_walking_segment(
+            origin, (origin_station['lng'], origin_station['lat'])
+        )
+        walk_from_metro = await self._calculate_walking_segment(
+            (dest_station['lng'], dest_station['lat']), destination
+        )
+
+        if not walk_to_metro or not walk_from_metro:
+            return None
+
+        # Estimate metro time (simplified: 2.5 min/stop avg + 3 min wait)
+        estimated_stops = 5  # Could be improved with actual metro graph
+        metro_time_seconds = 3 * 60 + estimated_stops * 2.5 * 60
+
+        # Check for affected stations
+        affected_stations = []
+        for station in [origin_station, dest_station]:
+            if not is_station_safe(station, hotspots):
+                affected_stations.append(station['name'])
+
+        return {
+            'id': str(uuid.uuid4()),
+            'type': 'metro',
+            'segments': [
+                {
+                    'type': 'walking',
+                    'geometry': walk_to_metro['geometry'],
+                    'coordinates': walk_to_metro['coordinates'],
+                    'duration_seconds': walk_to_metro['duration_seconds'],
+                    'distance_meters': walk_to_metro['distance_meters'],
+                    'instructions': walk_to_metro['instructions'],
+                },
+                {
+                    'type': 'metro',
+                    'line': origin_station['line'],
+                    'line_color': origin_station['color'],
+                    'from_station': origin_station['name'],
+                    'to_station': dest_station['name'],
+                    'stops': estimated_stops,
+                    'duration_seconds': int(metro_time_seconds),
+                },
+                {
+                    'type': 'walking',
+                    'geometry': walk_from_metro['geometry'],
+                    'coordinates': walk_from_metro['coordinates'],
+                    'duration_seconds': walk_from_metro['duration_seconds'],
+                    'distance_meters': walk_from_metro['distance_meters'],
+                    'instructions': walk_from_metro['instructions'],
+                }
+            ],
+            'total_duration_seconds': (
+                walk_to_metro['duration_seconds'] +
+                int(metro_time_seconds) +
+                walk_from_metro['duration_seconds']
+            ),
+            'total_distance_meters': (
+                walk_to_metro['distance_meters'] +
+                walk_from_metro['distance_meters']
+            ),
+            'metro_line': origin_station['line'],
+            'metro_color': origin_station['color'],
+            'affected_stations': affected_stations,
+            'is_recommended': len(affected_stations) == 0,
+        }
+
+    async def _calculate_fastest_route(
+        self, origin, destination, mode, flood_zones, hotspots
+    ) -> Optional[Dict]:
+        """Calculate fastest route with traffic and hotspot analysis."""
+        try:
+            routes_data = await self._fetch_mapbox_routes(
+                origin, destination, "driving-traffic",
+                alternatives=False,
+                include_annotations=True
+            )
+
+            if not routes_data or not routes_data.get('routes'):
+                return None
+
+            route = routes_data['routes'][0]
+            geometry = route.get('geometry', {})
+            coords = geometry.get('coordinates', [])
+
+            # Extract traffic metrics
+            traffic_metrics = self._extract_traffic_metrics(route)
+
+            # Analyze hotspots
+            hotspot_analysis = None
+            hotspot_count = 0
+            warnings = []
+            if hotspots:
+                from .hotspot_routing import analyze_route_hotspots
+                hotspot_analysis = analyze_route_hotspots(coords, hotspots)
+                hotspot_count = hotspot_analysis.total_hotspots_nearby
+                if hotspot_analysis.warning_message:
+                    warnings = hotspot_analysis.warning_message.split(' | ')
+
+            # Calculate safety score
+            safety_score = 100 - (hotspot_count * 15)  # Deduct 15 per hotspot
+            safety_score = max(0, min(100, safety_score))
+
+            return {
+                'id': str(uuid.uuid4()),
+                'type': 'fastest',
+                'geometry': geometry,
+                'coordinates': coords,
+                'distance_meters': int(route.get('distance', 0)),
+                'duration_seconds': int(route.get('duration', 0)),
+                'hotspot_count': hotspot_count,
+                'traffic_level': traffic_metrics.get('traffic_level', 'moderate'),
+                'safety_score': safety_score,
+                'is_recommended': hotspot_count == 0 and traffic_metrics.get('traffic_level') != 'severe',
+                'warnings': warnings,
+                'instructions': self._extract_turn_instructions(route),
+            }
+        except Exception as e:
+            logger.error(f"Fastest route calculation failed: {e}")
+            return None
+
+    async def _calculate_safest_route(
+        self, origin, destination, mode, flood_zones, hotspots, fastest_route
+    ) -> Optional[Dict]:
+        """Calculate safest route avoiding all HIGH/EXTREME hotspots."""
+        try:
+            safe_result = await self.calculate_safe_routes(
+                origin, destination,
+                city_code='DEL',  # Hardcoded for now
+                mode=mode,
+                max_routes=1
+            )
+
+            if not safe_result.get("routes"):
+                return None
+
+            safest = safe_result["routes"][0]
+            coords = safest.get('geometry', {}).get('coordinates', [])
+
+            # Analyze hotspots on safest route
+            hotspot_count = 0
+            hotspots_avoided = []
+            if hotspots:
+                from .hotspot_routing import analyze_route_hotspots
+                safest_analysis = analyze_route_hotspots(coords, hotspots)
+                hotspot_count = safest_analysis.total_hotspots_nearby
+
+                # Calculate avoided hotspots if we have fastest route
+                if fastest_route:
+                    fastest_hotspot_ids = set()
+                    fastest_coords = fastest_route.get('coordinates', [])
+                    fastest_analysis = analyze_route_hotspots(fastest_coords, hotspots)
+                    fastest_hotspot_ids = {h.id for h in fastest_analysis.nearby_hotspots}
+                    safest_hotspot_ids = {h.id for h in safest_analysis.nearby_hotspots}
+                    avoided_ids = fastest_hotspot_ids - safest_hotspot_ids
+                    hotspots_avoided = [
+                        h.name for h in fastest_analysis.nearby_hotspots
+                        if h.id in avoided_ids
+                    ][:5]
+
+            # Calculate detour
+            detour_km = 0.0
+            detour_minutes = 0
+            if fastest_route:
+                detour_km = (safest['distance_meters'] - fastest_route['distance_meters']) / 1000
+                detour_minutes = round(
+                    (safest.get('duration_seconds', 0) - fastest_route['duration_seconds']) / 60
+                )
+
+            return {
+                'id': safest['id'],
+                'type': 'safest',
+                'geometry': safest['geometry'],
+                'coordinates': coords,
+                'distance_meters': safest['distance_meters'],
+                'duration_seconds': safest.get('duration_seconds', 0),
+                'hotspot_count': hotspot_count,
+                'safety_score': safest.get('safety_score', 95),
+                'detour_km': round(max(0, detour_km), 1),
+                'detour_minutes': max(0, detour_minutes),
+                'is_recommended': hotspot_count == 0,
+                'hotspots_avoided': hotspots_avoided,
+                'instructions': safest.get('instructions', []),
+            }
+        except Exception as e:
+            logger.error(f"Safest route calculation failed: {e}")
+            return None
+
+    def _determine_enhanced_recommendation(
+        self, fastest, metro, safest, hotspots
+    ) -> Dict:
+        """Determine which route to recommend."""
+        if not hotspots or len(hotspots) == 0:
+            return {'route_type': 'fastest', 'reason': 'No flood hotspots detected in the area'}
+
+        # Check fastest route safety
+        if fastest:
+            if fastest.get('hotspot_count', 0) > 0:
+                high_risk = any('DANGER' in w or 'HIGH' in w.upper() for w in fastest.get('warnings', []))
+
+                if high_risk:
+                    if safest and safest.get('hotspot_count', 0) == 0:
+                        avoided = len(safest.get('hotspots_avoided', []))
+                        return {
+                            'route_type': 'safest',
+                            'reason': f'Fastest route has HIGH/EXTREME flood risk. Safest route avoids {avoided} hotspot(s) with +{safest.get("detour_minutes", 0)} min detour.'
+                        }
+                    elif metro and len(metro.get('affected_stations', [])) == 0:
+                        return {
+                            'route_type': 'metro',
+                            'reason': 'Road conditions risky. Metro avoids all flood-prone areas.'
+                        }
+
+            # Check traffic
+            if fastest.get('traffic_level') == 'severe':
+                if metro:
+                    return {
+                        'route_type': 'metro',
+                        'reason': 'Severe traffic congestion. Metro likely faster.'
+                    }
+
+        # Default: fastest if safe
+        if fastest and fastest.get('is_recommended', False):
+            return {
+                'route_type': 'fastest',
+                'reason': 'Fastest route is safe with good traffic conditions.'
+            }
+
+        return {
+            'route_type': 'safest',
+            'reason': 'Recommended for maximum flood safety.'
+        }
+
+    def _build_hotspot_analysis(self, fastest_result, hotspots):
+        """Build hotspot analysis from fastest route for enhanced comparison."""
+        if not fastest_result or not hotspots:
+            return None
+
+        coords = fastest_result.get('coordinates', [])
+        from .hotspot_routing import analyze_route_hotspots
+        analysis = analyze_route_hotspots(coords, hotspots)
+
+        return {
+            'total_hotspots_nearby': analysis.total_hotspots_nearby,
+            'hotspots_to_avoid': analysis.hotspots_to_avoid,
+            'hotspots_with_warnings': analysis.hotspots_with_warnings,
+            'highest_fhi_score': analysis.highest_fhi_score,
+            'highest_fhi_level': analysis.highest_fhi_level,
+            'total_delay_seconds': analysis.total_delay_seconds,
+            'route_is_safe': analysis.route_is_safe,
+            'must_reroute': analysis.must_reroute,
+            'nearby_hotspots': [
+                {
+                    'id': h.id,
+                    'name': h.name,
+                    'fhi_level': h.fhi_level,
+                    'fhi_color': h.fhi_color,
+                    'fhi_score': h.fhi_score,
+                    'distance_to_route_m': h.distance_to_route_m,
+                    'estimated_delay_seconds': h.estimated_delay_seconds,
+                    'must_avoid': h.must_avoid,
+                }
+                for h in analysis.nearby_hotspots[:5]
+            ],
+            'warning_message': analysis.warning_message,
+        }
+
+    async def compare_routes_enhanced(
+        self,
+        origin: Tuple[float, float],
+        destination: Tuple[float, float],
+        city_code: str = 'DEL',
+        mode: str = 'driving',
+        test_fhi_override: str = None,
+    ) -> Dict:
+        """
+        Enhanced route comparison with 3 options:
+        1. Fastest (driving-traffic, no flood avoidance)
+        2. Metro Option (walking + metro segments)
+        3. Safest (FloodSafe with 1000x penalty, avoids all HIGH/EXTREME)
+        """
+        # Get flood zones and hotspots
+        flood_zones = await self._get_active_flood_zones()
+        flood_zones_geojson = await self._flood_zones_to_geojson(flood_zones)
+        hotspots = await self._get_hotspots_for_routing(city_code, test_fhi_override)
+
+        # 1. FASTEST route
+        fastest_result = await self._calculate_fastest_route(
+            origin, destination, mode, flood_zones, hotspots
+        )
+
+        # 2. METRO route
+        metro_result = await self.calculate_metro_route(
+            origin, destination, city_code, hotspots
+        )
+
+        # 3. SAFEST route (existing FloodSafe logic)
+        safest_result = await self._calculate_safest_route(
+            origin, destination, mode, flood_zones, hotspots, fastest_result
+        )
+
+        # Determine recommendation
+        recommendation = self._determine_enhanced_recommendation(
+            fastest_result, metro_result, safest_result, hotspots
+        )
+
+        return {
+            'routes': {
+                'fastest': fastest_result,
+                'metro': metro_result,
+                'safest': safest_result,
+            },
+            'recommendation': recommendation,
+            'hotspot_analysis': self._build_hotspot_analysis(fastest_result, hotspots) if hotspots else None,
+            'flood_zones': flood_zones_geojson,
+        }

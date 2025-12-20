@@ -203,9 +203,12 @@ class ReputationService:
         # Check for new badges
         self._check_and_award_badges(user)
 
+        # Check for auto-promotion to verified_reporter
+        promoted = self._check_auto_promotion(user)
+
         self.db.commit()
 
-        return {
+        result = {
             'user_id': user.id,
             'points': user.points,
             'level': user.level,
@@ -213,6 +216,11 @@ class ReputationService:
             'quality_score': quality_score,
             'points_earned': total_points
         }
+
+        if promoted:
+            result['promoted_to'] = user.role
+
+        return result
 
     def _process_rejected_report(
         self,
@@ -550,3 +558,39 @@ class ReputationService:
         elif requirement_type == 'level':
             return user.level
         return 0
+
+    def _check_auto_promotion(self, user: models.User) -> bool:
+        """
+        Check if user qualifies for auto-promotion to verified_reporter.
+
+        Criteria:
+        - Current role is "user"
+        - At least 10 verified reports
+        - Reputation score >= 70
+
+        Returns True if promoted, False otherwise.
+        """
+        # Only promote users with "user" role
+        if user.role != "user":
+            return False
+
+        # Check criteria: 10+ verified reports AND 70+ reputation
+        if user.verified_reports_count >= 10 and user.reputation_score >= 70:
+            old_role = user.role
+            user.role = "verified_reporter"
+            user.verified_reporter_since = datetime.utcnow()
+
+            # Log role change to history
+            role_history = models.RoleHistory(
+                user_id=user.id,
+                old_role=old_role,
+                new_role="verified_reporter",
+                changed_by=None,  # NULL indicates auto-promotion
+                reason="Auto-promoted: 10+ verified reports with 70+ reputation score"
+            )
+            self.db.add(role_history)
+
+            logger.info(f"User {user.id} auto-promoted to verified_reporter")
+            return True
+
+        return False

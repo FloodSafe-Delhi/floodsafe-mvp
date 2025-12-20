@@ -8,7 +8,7 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Progress } from '../ui/progress';
-import { MapPin, Award, Bell, Globe, Settings, LogOut, Edit, Trash2, FileText, Route } from 'lucide-react';
+import { MapPin, Award, Bell, Globe, Settings, LogOut, Edit, Trash2, FileText, Route, ShieldCheck, Shield, UserCheck } from 'lucide-react';
 import { useUserReports, Report, useDailyRoutes, useDeleteDailyRoute } from '../../lib/api/hooks';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Input } from '../ui/input';
@@ -17,11 +17,8 @@ import { Checkbox } from '../ui/checkbox';
 import { toast } from 'sonner';
 import { User } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { API_BASE_URL } from '../../lib/api/config';
-
-// For demo purposes, using a hardcoded user ID
-// In production, this would come from auth context
-const DEMO_USER_ID = 'admin'; // Will be created by seed script
+import { fetchJson } from '../../lib/api/client';
+import { cn } from '../../lib/utils';
 
 interface WatchArea {
   id: string;
@@ -56,29 +53,18 @@ interface ProfileScreenProps {
 
 export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const queryClient = useQueryClient();
-  const { logout } = useAuth();
+  const { logout, user: authUser } = useAuth();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  // Fetch user profile
+  // Fetch user profile using secure endpoint
   const { data: rawUser, isLoading } = useQuery<User>({
-    queryKey: ['user', DEMO_USER_ID],
+    queryKey: ['user', 'profile', authUser?.id],
     queryFn: async () => {
-      // Try to get admin user first
-      const usersResponse = await fetch(`${API_BASE_URL}/leaderboards/top?limit=50`);
-      const users = await usersResponse.json();
-      const adminUser = users.find((u: User) => u.username === 'admin');
-
-      if (adminUser) {
-        return normalizeUserData(adminUser);
-      }
-
-      // If no admin user, get first user or show error
-      if (users.length > 0) {
-        return normalizeUserData(users[0]);
-      }
-
-      throw new Error('No users found. Please seed the database.');
+      // Use secure /users/me/profile endpoint (requires auth)
+      const userData = await fetchJson<User>('/users/me/profile');
+      return normalizeUserData(userData);
     },
+    enabled: !!authUser, // Only fetch when authenticated
   });
 
   const user = rawUser;
@@ -88,9 +74,11 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
     queryKey: ['watchAreas', user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      const response = await fetch(`${API_BASE_URL}/watch-areas/user/${user.id}`);
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        return await fetchJson<WatchArea[]>(`/watch-areas/user/${user.id}`);
+      } catch {
+        return [];
+      }
     },
     enabled: !!user?.id,
   });
@@ -105,11 +93,9 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   // Delete watch area mutation
   const deleteWatchAreaMutation = useMutation({
     mutationFn: async (watchAreaId: string) => {
-      const response = await fetch(`${API_BASE_URL}/watch-areas/${watchAreaId}`, {
+      return fetchJson(`/watch-areas/${watchAreaId}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete watch area');
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['watchAreas'] });
@@ -120,19 +106,17 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
     },
   });
 
-  // Update user mutation
+  // Update user mutation - uses secure /users/me/profile endpoint
   const updateUserMutation = useMutation({
     mutationFn: async (updates: Partial<User>) => {
-      const response = await fetch(`${API_BASE_URL}/users/${user?.id}`, {
+      // Use secure endpoint that validates auth token
+      return fetchJson<User>('/users/me/profile', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (!response.ok) throw new Error('Failed to update profile');
-      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
       toast.success('Profile updated successfully!');
     },
     onError: () => {
@@ -160,7 +144,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-full">
         <div className="text-lg">Loading profile...</div>
       </div>
     );
@@ -168,7 +152,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-full">
         <div className="text-center">
           <h2 className="text-xl font-semibold mb-2">No User Found</h2>
           <p className="text-gray-600">Please run the database seed script</p>
@@ -191,7 +175,7 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const verifiedReportsCount = user.verified_reports_count ?? 0;
 
   return (
-    <div className="pb-16 md:pb-4 min-h-screen bg-gray-50">
+    <div className="pb-4 min-h-full bg-gray-50">
       {/* Profile Header */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white p-6">
         <div className="flex items-center gap-4 mb-4">
@@ -203,8 +187,20 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <h2 className="text-xl font-semibold">{user.username}</h2>
-              <Badge variant="secondary" className="text-xs">
-                {user.role}
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-xs flex items-center gap-1",
+                  user.role === "admin" && "bg-purple-100 text-purple-800",
+                  user.role === "moderator" && "bg-blue-100 text-blue-800",
+                  user.role === "verified_reporter" && "bg-green-100 text-green-800",
+                  user.role === "user" && "bg-gray-100 text-gray-800"
+                )}
+              >
+                {user.role === "admin" && <ShieldCheck className="w-3 h-3" />}
+                {user.role === "moderator" && <Shield className="w-3 h-3" />}
+                {user.role === "verified_reporter" && <UserCheck className="w-3 h-3" />}
+                {user.role === "verified_reporter" ? "Verified Reporter" : user.role}
               </Badge>
             </div>
             <p className="text-sm opacity-90">{user.email}</p>

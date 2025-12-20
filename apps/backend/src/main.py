@@ -7,7 +7,7 @@ from .infrastructure.database import engine
 
 models.Base.metadata.create_all(bind=engine)
 
-from .api import webhook, reports, users, sensors, otp, watch_areas, daily_routes, reputation, leaderboards, badges, routes_api, auth, alerts, search, predictions, saved_routes, historical_floods, hotspots, external_alerts, rainfall
+from .api import webhook, reports, users, sensors, otp, watch_areas, daily_routes, reputation, leaderboards, badges, routes_api, auth, alerts, search, predictions, saved_routes, historical_floods, hotspots, external_alerts, rainfall, gamification, comments
 from .domain.services.external_alerts import start_scheduler, stop_scheduler
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -99,6 +99,8 @@ app.include_router(saved_routes.router, prefix="/api", tags=["saved-routes"])
 app.include_router(historical_floods.router, prefix="/api/historical-floods", tags=["historical-floods"])
 app.include_router(hotspots.router, prefix="/api/hotspots", tags=["hotspots"])
 app.include_router(rainfall.router, prefix="/api/rainfall", tags=["rainfall"])
+app.include_router(gamification.router, prefix="/api/gamification", tags=["gamification"])
+app.include_router(comments.router, prefix="/api", tags=["comments"])
 
 @app.get("/health")
 def health_check():

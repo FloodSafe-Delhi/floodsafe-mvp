@@ -3,22 +3,35 @@ import MapComponent from '../MapComponent';
 import { Button } from '../ui/button';
 import { Navigation } from 'lucide-react';
 import { NavigationPanel } from '../NavigationPanel';
+import { LiveNavigationPanel } from '../LiveNavigationPanel';
 import { useCurrentCity } from '../../contexts/CityContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { VoiceGuidanceProvider } from '../../contexts/VoiceGuidanceContext';
+import { NavigationProvider, useNavigation } from '../../contexts/NavigationContext';
+import { LocationTrackingProvider } from '../../contexts/LocationTrackingContext';
 import type { RouteOption, MetroStation } from '../../types';
 import { toast } from 'sonner';
+
+// GPS Testing Panel - only rendered when VITE_ENABLE_GPS_TESTING=true
+import { GPSTestPanel } from '../testing/GPSTestPanel';
 
 interface FloodAtlasScreenProps {
     initialDestination?: [number, number] | null;
     onClearInitialDestination?: () => void;
+    openNavigationPanel?: boolean;
+    onClearOpenNavigationPanel?: () => void;
 }
 
-export function FloodAtlasScreen({
+// Inner component that uses navigation context
+function FloodAtlasContent({
     initialDestination,
-    onClearInitialDestination
+    onClearInitialDestination,
+    openNavigationPanel,
+    onClearOpenNavigationPanel
 }: FloodAtlasScreenProps) {
     const city = useCurrentCity();
     const { user: _user } = useAuth();
+    const { state: navState } = useNavigation();
 
     // Navigation state
     const [showNavigationPanel, setShowNavigationPanel] = useState(!!initialDestination);
@@ -90,6 +103,14 @@ export function FloodAtlasScreen({
         }
     }, [initialDestination]);
 
+    // Handle opening navigation panel from HomeScreen "Routes" button
+    useEffect(() => {
+        if (openNavigationPanel) {
+            setShowNavigationPanel(true);
+            onClearOpenNavigationPanel?.();
+        }
+    }, [openNavigationPanel, onClearOpenNavigationPanel]);
+
     const handleRoutesCalculated = (routes: RouteOption[], zones: GeoJSON.FeatureCollection) => {
         setNavigationRoutes(routes);
         setFloodZones(zones);
@@ -112,6 +133,19 @@ export function FloodAtlasScreen({
 
     return (
         <div className="fixed inset-0 top-14 md:top-0 bottom-0 bg-transparent">
+            {/* GPS Test Panel - only visible in testing mode */}
+            {import.meta.env.VITE_ENABLE_GPS_TESTING === 'true' && (
+                <GPSTestPanel
+                    onPositionChange={(pos) => {
+                        // Update user location for map marker
+                        setUserLocation({ lat: pos.lat, lng: pos.lng });
+                    }}
+                />
+            )}
+
+            {/* Live Navigation Panel - shown when navigation is active */}
+            {navState.isNavigating && <LiveNavigationPanel />}
+
             <MapComponent
                 className="w-full h-full"
                 title="Flood Atlas"
@@ -126,11 +160,11 @@ export function FloodAtlasScreen({
                 onMetroClick={handleMetroSelected}
             />
 
-            {/* Floating Route Button - Only show when panel is closed */}
-            {!showNavigationPanel && (
+            {/* Floating Route Button - Only show when panel is closed AND not navigating */}
+            {!showNavigationPanel && !navState.isNavigating && (
                 <div
                     className="fixed right-4 pointer-events-auto"
-                    style={{ bottom: '80px', zIndex: 9999 }}
+                    style={{ bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))', zIndex: 9999 }}
                 >
                     <Button
                         onClick={() => setShowNavigationPanel(true)}
@@ -143,19 +177,34 @@ export function FloodAtlasScreen({
                 </div>
             )}
 
-            {/* Navigation Panel */}
-            <NavigationPanel
-                isOpen={showNavigationPanel}
-                onClose={() => setShowNavigationPanel(false)}
-                userLocation={userLocation}
-                city={city}
-                onRoutesCalculated={handleRoutesCalculated}
-                onRouteSelected={handleRouteSelected}
-                onMetroSelected={handleMetroSelected}
-                onOriginChange={setNavigationOrigin}
-                onDestinationChange={setNavigationDestination}
-                initialDestination={navigationDestination}
-            />
+            {/* Navigation Panel - hide when actively navigating */}
+            {!navState.isNavigating && (
+                <NavigationPanel
+                    isOpen={showNavigationPanel}
+                    onClose={() => setShowNavigationPanel(false)}
+                    userLocation={userLocation}
+                    city={city}
+                    onRoutesCalculated={handleRoutesCalculated}
+                    onRouteSelected={handleRouteSelected}
+                    onMetroSelected={handleMetroSelected}
+                    onOriginChange={setNavigationOrigin}
+                    onDestinationChange={setNavigationDestination}
+                    initialDestination={navigationDestination}
+                />
+            )}
         </div>
+    );
+}
+
+// Main component with providers
+export function FloodAtlasScreen(props: FloodAtlasScreenProps) {
+    return (
+        <VoiceGuidanceProvider>
+            <LocationTrackingProvider>
+                <NavigationProvider>
+                    <FloodAtlasContent {...props} />
+                </NavigationProvider>
+            </LocationTrackingProvider>
+        </VoiceGuidanceProvider>
     );
 }

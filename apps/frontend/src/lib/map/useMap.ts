@@ -155,7 +155,7 @@ export function useMap(
                     layout: {
                         'visibility': 'visible',
                         'text-field': ['get', 'name'],
-                        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                        'text-font': ['Noto Sans Medium'],
                         'text-size': 12,
                         'text-offset': [0, 1.5],
                         'text-anchor': 'top'
@@ -217,7 +217,7 @@ export function useMap(
                     source: 'search-result',
                     layout: {
                         'text-field': ['get', 'name'],
-                        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                        'text-font': ['Noto Sans Medium'],
                         'text-size': 13,
                         'text-offset': [0, 2],
                         'text-anchor': 'top',

@@ -225,25 +225,27 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
 
     return (
         <div className="space-y-4">
-            {/* Hidden file inputs */}
+            {/* Hidden file inputs - using sr-only to completely hide from view */}
             <input
                 ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 onChange={handleCameraCapture}
-                className="hidden"
+                className="sr-only"
                 id="camera-input"
                 name="camera-photo"
+                aria-hidden="true"
             />
             <input
                 ref={galleryInputRef}
                 type="file"
                 accept="image/*"
                 onChange={handleGalleryUpload}
-                className="hidden"
+                className="sr-only"
                 id="gallery-input"
                 name="gallery-photo"
+                aria-hidden="true"
             />
 
             {/* Photo preview or capture buttons */}

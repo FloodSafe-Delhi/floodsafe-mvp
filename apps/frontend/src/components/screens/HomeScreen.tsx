@@ -188,10 +188,12 @@ export function HomeScreen({
         helped: 0,
     };
 
-    // Determine risk level
-    const riskLevel = activeAlerts.length === 0 ? 'low' :
-                      activeAlerts.some(a => a.level === 'critical') ? 'severe' :
-                      activeAlerts.length > 2 ? 'high' : 'moderate';
+    // Determine risk level based on filtered alerts (user's city)
+    // Aligned with userAreaRiskLevel thresholds for consistency
+    const riskLevel = filteredAlerts.length === 0 ? 'low' :
+                      filteredAlerts.some(a => a.level === 'critical') ? 'severe' :
+                      filteredAlerts.length > 3 ? 'high' :
+                      filteredAlerts.length > 1 ? 'moderate' : 'low';
 
     const riskColors = {
         low: 'bg-green-500',
@@ -215,17 +217,20 @@ export function HomeScreen({
             : 'Your Area';
 
     // Calculate risk level for user's area (using filtered alerts)
+    // Aligned with header riskLevel thresholds for consistency
     const userAreaAlerts = filteredAlerts.length; // Alerts in user's selected city
+    const hasCriticalAlert = filteredAlerts.some(a => a.level === 'critical');
     const userAreaRiskLevel = userAreaAlerts === 0 ? 'Low Risk' :
+                              hasCriticalAlert ? 'Severe Risk' :
                               userAreaAlerts > 3 ? 'High Risk' :
                               userAreaAlerts > 1 ? 'Moderate Risk' : 'Low Risk';
 
-    // Calculate time to next alert (find nearest future alert)
+    // Calculate time to next alert (find nearest future alert in user's city)
     const now = new Date();
-    const nextAlertTime = activeAlerts.length > 0
+    const nextAlertTime = filteredAlerts.length > 0
         ? (() => {
-            // For simplicity, calculate based on alert timestamps
-            const alertTimes = activeAlerts
+            // Calculate based on alert timestamps for user's selected city
+            const alertTimes = filteredAlerts
                 .filter(a => a.timestamp) // Only alerts with timestamps
                 .map(a => new Date(a.timestamp!))
                 .filter(t => t > now);
@@ -271,10 +276,10 @@ export function HomeScreen({
     };
 
     const handleViewDetails = () => {
-        if (activeAlerts.length > 0) {
-            onAlertClick(activeAlerts[0]);
+        if (filteredAlerts.length > 0) {
+            onAlertClick(filteredAlerts[0]);
         } else {
-            toast.info('No active alerts at this time');
+            toast.info('No active alerts in your area');
         }
     };
 
@@ -403,18 +408,34 @@ export function HomeScreen({
         return time.toLocaleDateString();
     };
 
+    // Gradient risk colors using inline styles (Tailwind JIT doesn't generate these)
+    const riskGradientStyles: Record<string, React.CSSProperties> = {
+        low: { background: 'linear-gradient(to right, #10b981, #059669)' },      // emerald-500 to emerald-600
+        moderate: { background: 'linear-gradient(to right, #f59e0b, #d97706)' }, // amber-500 to amber-600
+        high: { background: 'linear-gradient(to right, #f97316, #ea580c)' },     // orange-500 to orange-600
+        severe: { background: 'linear-gradient(to right, #ef4444, #dc2626)' }    // red-500 to red-600
+    };
+
+    // Dynamic button text colors matching risk level
+    const riskButtonColors = {
+        low: 'text-emerald-600',
+        moderate: 'text-amber-600',
+        high: 'text-orange-600',
+        severe: 'text-red-600'
+    };
+
     return (
-        <div className="min-h-screen bg-gradient-to-b from-white to-blue-50 pb-20 overflow-y-auto">
+        <div className="h-full flex flex-col bg-slate-50 overflow-y-auto">
             {/* Dynamic Risk Header */}
-            <div className={cn(riskColors[riskLevel], 'text-white p-4 shadow-lg')}>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex-1 min-w-[200px]">
+            <div style={riskGradientStyles[riskLevel]} className="text-white px-4 py-4 flex-shrink-0">
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 text-lg font-bold">
                             <AlertTriangle className="w-5 h-5" />
                             {riskLabels[riskLevel]}
                         </div>
                         <div className="text-sm opacity-90 mt-1">
-                            Next 12 hours • Rajendra Nagar Area
+                            Next 12 hours • {userAreaName}
                         </div>
                     </div>
                     <div className="flex gap-2">
@@ -426,7 +447,8 @@ export function HomeScreen({
                         </button>
                         <button
                             onClick={handleSetAlerts}
-                            className="bg-white text-yellow-600 px-3 py-1 rounded text-sm font-medium hover:bg-gray-100 transition-colors min-h-[44px]"
+                            className="bg-white px-3 py-1 rounded text-sm font-medium hover:bg-gray-100 transition-colors min-h-[44px]"
+                            style={{ color: riskLevel === 'low' ? '#059669' : riskLevel === 'moderate' ? '#d97706' : riskLevel === 'high' ? '#ea580c' : '#dc2626' }}
                         >
                             Set Alerts
                         </button>
@@ -434,98 +456,127 @@ export function HomeScreen({
                 </div>
             </div>
 
-            {/* Smart Summary Cards */}
-            <div className="grid grid-cols-3 gap-3 p-4">
-                <Card className="p-3 border-l-4 border-blue-500 hover:shadow-lg transition-shadow">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-1">
+            {/* Status Cards Section */}
+            <div className="px-4 py-4 space-y-3 flex-shrink-0">
+                {/* Your Area Card - Clean design matching reference */}
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                    <div className="flex items-center gap-2 text-slate-500 text-xs font-medium uppercase tracking-wider mb-3">
                         <MapPin className="w-4 h-4" />
                         <span>Your Area</span>
                     </div>
-                    <div className="font-bold text-sm md:text-base">{userAreaName}</div>
-                    <div className={cn(
-                        "text-xs",
-                        userAreaRiskLevel === 'Low Risk' && 'text-green-600',
-                        userAreaRiskLevel === 'Moderate Risk' && 'text-yellow-600',
-                        userAreaRiskLevel === 'High Risk' && 'text-red-600'
-                    )}>{userAreaRiskLevel}</div>
-                    <button
-                        onClick={handleAreaDetails}
-                        className="text-blue-500 text-xs mt-2 flex items-center gap-1 hover:underline min-h-[32px]"
-                    >
-                        Details <ChevronRight className="w-3 h-3" />
-                    </button>
-                </Card>
-
-                <Card className="p-3 border-l-4 border-yellow-500 hover:shadow-lg transition-shadow">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-1">
-                        <Bell className="w-4 h-4" />
-                        <span>Alerts</span>
+                    <h3 className="font-semibold text-slate-800 text-lg leading-tight">{userAreaName}</h3>
+                    <div className="flex items-center justify-between mt-3">
+                        <span className={cn(
+                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold",
+                            userAreaRiskLevel === 'Low Risk' && 'bg-emerald-50 text-emerald-600',
+                            userAreaRiskLevel === 'Moderate Risk' && 'bg-amber-50 text-amber-600',
+                            userAreaRiskLevel === 'High Risk' && 'bg-orange-50 text-orange-600',
+                            userAreaRiskLevel === 'Severe Risk' && 'bg-red-50 text-red-600'
+                        )}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                            {userAreaRiskLevel}
+                        </span>
+                        <button
+                            onClick={handleAreaDetails}
+                            className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors min-h-[44px]"
+                        >
+                            Details <ChevronRight className="w-4 h-4" />
+                        </button>
                     </div>
-                    <div className="font-bold text-sm md:text-base">{activeAlerts.length} Active</div>
-                    <div className="text-gray-600 text-xs">{nextAlertTime}</div>
-                    <button
-                        onClick={handleViewAllAlerts}
-                        className="text-blue-500 text-xs mt-2 flex items-center gap-1 hover:underline min-h-[32px]"
-                    >
-                        View All <ChevronRight className="w-3 h-3" />
-                    </button>
-                </Card>
+                </div>
 
-                <Card className="p-3 border-l-4 border-green-500 hover:shadow-lg transition-shadow">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-1">
-                        <Shield className="w-4 h-4" />
-                        <span>Safety</span>
+                {/* Alerts & Safety - Side by Side */}
+                <div className="flex gap-3">
+                    {/* Alerts Card */}
+                    <div className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                        <div className="flex items-center gap-2 text-slate-500 text-xs font-medium uppercase tracking-wider mb-2">
+                            <Bell className="w-4 h-4" />
+                            <span>Alerts</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-bold text-slate-800">{filteredAlerts.length}</span>
+                            <span className="text-slate-500 text-sm">Active</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">{nextAlertTime}</p>
+                        <button
+                            onClick={handleViewAllAlerts}
+                            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-3 font-medium transition-colors min-h-[44px]"
+                        >
+                            View All <ChevronRight className="w-4 h-4" />
+                        </button>
                     </div>
-                    <div className="font-bold text-sm md:text-base">{userRoutesCount} {userRoutesCount === 1 ? 'Route' : 'Routes'}</div>
-                    <div className="text-gray-600 text-xs">{userRoutesCount > 0 ? 'Available' : 'Set up routes'}</div>
-                    <button
-                        onClick={() => handleNavigateRoutes()}
-                        className="text-blue-500 text-xs mt-2 flex items-center gap-1 hover:underline min-h-[32px]"
-                    >
-                        {userRoutesCount > 0 ? 'Navigate' : 'Add Routes'} <ChevronRight className="w-3 h-3" />
-                    </button>
-                </Card>
+
+                    {/* Safety Card */}
+                    <div className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+                        <div className="flex items-center gap-2 text-slate-500 text-xs font-medium uppercase tracking-wider mb-2">
+                            <Shield className="w-4 h-4" />
+                            <span>Safe Routes</span>
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-bold text-slate-800">{userRoutesCount}</span>
+                            <span className="text-slate-500 text-sm">Saved</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">{userRoutesCount > 0 ? 'Ready to navigate' : 'Plan safe routes'}</p>
+                        <button
+                            onClick={() => handleNavigateRoutes()}
+                            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-3 font-medium transition-colors min-h-[44px]"
+                        >
+                            {userRoutesCount > 0 ? 'Navigate' : 'Plan Route'} <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            {/* Quick Action Buttons */}
-            <div className="px-4 pb-3">
-                <div className="grid grid-cols-3 gap-3">
-                    <button
-                        onClick={handleSOS}
-                        className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-all border-2 border-red-100 hover:border-red-300 min-h-[100px]"
-                    >
-                        <div className="bg-red-500 text-white p-3 rounded-full">
-                            <Phone className="w-6 h-6" />
-                        </div>
-                        <span className="text-sm font-semibold text-gray-700">SOS</span>
-                    </button>
+            {/* Quick Actions - Single Card with Dividers */}
+            <div className="px-4 pb-4 flex-shrink-0">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="grid grid-cols-3 divide-x divide-slate-100">
+                        {/* SOS Button */}
+                        <button
+                            onClick={handleSOS}
+                            className="flex flex-col items-center gap-2 py-4 hover:bg-red-50 transition-colors min-h-[88px]"
+                        >
+                            <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center shadow-lg shadow-red-500/30">
+                                <Phone className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="text-xs font-semibold text-red-600">SOS</span>
+                        </button>
 
-                    <button
-                        onClick={onNavigateToReport}
-                        className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-all border-2 border-blue-100 hover:border-blue-300 min-h-[100px]"
-                    >
-                        <div className="bg-blue-500 text-white p-3 rounded-full">
-                            <Camera className="w-6 h-6" />
-                        </div>
-                        <span className="text-sm font-semibold text-gray-700">Report</span>
-                    </button>
+                        {/* Report Button */}
+                        <button
+                            onClick={onNavigateToReport}
+                            className="flex flex-col items-center gap-2 py-4 hover:bg-blue-50 transition-colors min-h-[88px]"
+                        >
+                            <div
+                                className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+                                style={{ backgroundColor: '#3b82f6', boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.3)' }}
+                            >
+                                <Camera className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="text-xs font-semibold text-blue-600">Report</span>
+                        </button>
 
-                    <button
-                        onClick={() => handleNavigateRoutes()}
-                        className="flex flex-col items-center gap-2 p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-all border-2 border-green-100 hover:border-green-300 min-h-[100px]"
-                    >
-                        <div className="bg-green-500 text-white p-3 rounded-full">
-                            <Navigation className="w-6 h-6" />
-                        </div>
-                        <span className="text-sm font-semibold text-gray-700">Routes</span>
-                    </button>
+                        {/* Routes Button */}
+                        <button
+                            onClick={() => handleNavigateRoutes()}
+                            className="flex flex-col items-center gap-2 py-4 hover:bg-green-50 transition-colors min-h-[88px]"
+                        >
+                            <div
+                                className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+                                style={{ backgroundColor: '#10b981', boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.3)' }}
+                            >
+                                <Navigation className="w-5 h-5 text-white" />
+                            </div>
+                            <span className="text-xs font-medium text-slate-600">Routes</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             {/* Enhanced Map View */}
-            <div className="px-4 pb-3">
-                <Card className="overflow-hidden">
-                    <div className="relative h-48 bg-gradient-to-br from-blue-100 to-blue-200">
+            <div className="px-4 pb-4 flex-shrink-0">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="relative min-h-[10rem] sm:min-h-[12rem] md:min-h-[14rem]">
                         <MapComponent
                             className="w-full h-full"
                             targetLocation={mapTargetLocation}
@@ -539,7 +590,7 @@ export function HomeScreen({
                         <div className="absolute top-12 right-8 bg-yellow-500 text-white p-2 rounded-full">
                             <Droplets className="w-3 h-3" />
                         </div>
-                        {activeAlerts.length > 0 && (
+                        {filteredAlerts.length > 0 && (
                             <div className="absolute bottom-8 left-12 bg-red-500 text-white p-2 rounded-full animate-pulse">
                                 <AlertCircle className="w-3 h-3" />
                             </div>
@@ -565,20 +616,28 @@ export function HomeScreen({
                             </button>
                         </div>
                     </div>
-                </Card>
+                </div>
             </div>
 
             {/* Live Updates Feed with Auto-Refresh Settings */}
-            <div className="px-4 pb-3">
-                <Card>
-                    <div className="p-3 border-b flex items-center justify-between">
-                        <h3 className="font-semibold flex items-center gap-2">
-                            Recent Updates
-                            <RefreshCw className={cn('w-4 h-4 text-blue-500', isRefreshing && 'animate-spin')} />
-                        </h3>
-                        <div className="flex items-center gap-2">
+            <div className="px-4 pb-4 flex-1 min-h-0 flex flex-col gap-4">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-100 flex-shrink-0">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                                Recent Updates
+                                <RefreshCw className={cn('w-4 h-4 text-blue-500', isRefreshing && 'animate-spin')} />
+                            </h3>
+                            <button
+                                onClick={handleRefresh}
+                                className="text-xs text-blue-600 hover:text-blue-700 min-h-[44px] px-2 flex items-center gap-1"
+                            >
+                                Refresh
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
                             <Select value={refreshInterval} onValueChange={(value) => setRefreshInterval(value as RefreshInterval)}>
-                                <SelectTrigger className="w-[100px] h-8 text-xs">
+                                <SelectTrigger className="w-auto min-w-[5rem] h-8 text-xs bg-slate-50 border-slate-200">
                                     <Settings className="w-3 h-3 mr-1" />
                                     <SelectValue />
                                 </SelectTrigger>
@@ -589,7 +648,7 @@ export function HomeScreen({
                                 </SelectContent>
                             </Select>
                             <Select value={cityFilter} onValueChange={(value) => setCityFilter(value as CityFilter)}>
-                                <SelectTrigger className="w-[110px] h-8 text-xs">
+                                <SelectTrigger className="w-auto min-w-[5.5rem] h-8 text-xs bg-slate-50 border-slate-200">
                                     <MapPin className="w-3 h-3 mr-1" />
                                     <SelectValue />
                                 </SelectTrigger>
@@ -599,16 +658,10 @@ export function HomeScreen({
                                     <SelectItem value="bangalore">Bangalore</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <button
-                                onClick={handleRefresh}
-                                className="text-xs text-blue-500 hover:underline min-h-[32px] px-2"
-                            >
-                                Refresh
-                            </button>
                         </div>
                     </div>
 
-                    <div className="divide-y">
+                    <div className="divide-y flex-1 overflow-y-auto">
                         {/* Sensor Alerts with Location and Locate Button */}
                         {filteredAlerts.length > 0 ? (
                             filteredAlerts.slice(0, 2).map((alert, _index) => (
@@ -640,27 +693,27 @@ export function HomeScreen({
                                             <div className="flex gap-2 mt-2 flex-wrap">
                                                 <button
                                                     onClick={() => onAlertClick(alert)}
-                                                    className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors min-h-[32px]"
+                                                    className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors min-h-[44px]"
                                                 >
                                                     View
                                                 </button>
                                                 <button
                                                     onClick={() => handleLocateAlert(alert.coordinates[1], alert.coordinates[0], alert.location)}
-                                                    className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded hover:bg-purple-100 transition-colors min-h-[32px] flex items-center gap-1"
+                                                    className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded hover:bg-purple-100 transition-colors min-h-[44px] flex items-center gap-1"
                                                 >
                                                     <MapPinned className="w-3 h-3" />
                                                     Locate
                                                 </button>
                                                 <button
                                                     onClick={() => handleShare(alert)}
-                                                    className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors min-h-[32px]"
+                                                    className="text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded hover:bg-gray-100 transition-colors min-h-[44px]"
                                                 >
                                                     <Share2 className="w-3 h-3 inline mr-1" />
                                                     Share
                                                 </button>
                                                 <button
                                                     onClick={() => handleNavigateRoutes(alert)}
-                                                    className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded hover:bg-green-100 transition-colors min-h-[32px]"
+                                                    className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded hover:bg-green-100 transition-colors min-h-[44px]"
                                                 >
                                                     Alt Routes
                                                 </button>
@@ -702,13 +755,13 @@ export function HomeScreen({
                                             <div className="flex gap-2 mt-2 flex-wrap">
                                                 <button
                                                     onClick={() => toast.info('Viewing report details')}
-                                                    className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors min-h-[32px]"
+                                                    className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors min-h-[44px]"
                                                 >
                                                     View
                                                 </button>
                                                 <button
                                                     onClick={() => handleLocateAlert(report.latitude, report.longitude, 'Report Location')}
-                                                    className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded hover:bg-purple-100 transition-colors min-h-[32px] flex items-center gap-1"
+                                                    className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded hover:bg-purple-100 transition-colors min-h-[44px] flex items-center gap-1"
                                                 >
                                                     <MapPinned className="w-3 h-3" />
                                                     Locate
@@ -716,7 +769,7 @@ export function HomeScreen({
                                                 {!report.verified && (
                                                     <button
                                                         onClick={handleThankReporter}
-                                                        className="text-xs bg-amber-50 text-amber-600 px-2 py-1 rounded hover:bg-amber-100 transition-colors min-h-[32px]"
+                                                        className="text-xs bg-amber-50 text-amber-600 px-2 py-1 rounded hover:bg-amber-100 transition-colors min-h-[44px]"
                                                     >
                                                         <ThumbsUp className="w-3 h-3 inline mr-1" />
                                                         Thank
@@ -749,52 +802,26 @@ export function HomeScreen({
                             </div>
                         )}
                     </div>
-                </Card>
-            </div>
+                </div>
 
-            {/* Community Engagement Widget - Under Recent Updates with Proper Logic */}
-            <div className="px-4 pb-4">
-                <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg shadow-md p-4">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold flex items-center gap-2">
-                            <Users className="w-5 h-5" />
-                            Community Safety Network
-                        </h3>
-                        <Info className="w-4 h-4 opacity-70" />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                        <div>
-                            <div className="text-2xl font-bold">{activeReporters}</div>
-                            <div className="text-xs opacity-90">Active Reporters</div>
-                            <div className="text-[10px] opacity-75">Past 7 days</div>
+                {/* Join Ambassadors Widget */}
+                <div
+                    className="text-white rounded-2xl shadow-sm p-4 flex-shrink-0"
+                    style={{ background: 'linear-gradient(to right, #3b82f6, #2563eb)' }}
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Users className="w-6 h-6" />
                         </div>
-                        <div>
-                            <div className="text-2xl font-bold">{nearbyReporters}</div>
-                            <div className="text-xs opacity-90">Near You</div>
-                            <div className="text-[10px] opacity-75">Within 5km</div>
+                        <div className="flex-1 min-w-0">
+                            <div className="font-semibold">Join Ambassadors</div>
+                            <div className="text-sm text-white/80">Help your community stay safe</div>
                         </div>
-                    </div>
-
-                    <div className="bg-white/20 backdrop-blur rounded p-2 mb-3">
-                        <div className="flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4" />
-                            <span className="text-sm">Your Impact: {userImpact.reports} reports, {userImpact.helped} people helped</span>
-                        </div>
-                    </div>
-
-                    <div className="flex gap-2">
                         <button
                             onClick={handleJoinAmbassadors}
-                            className="flex-1 bg-white text-blue-600 py-2 rounded font-medium text-sm hover:bg-gray-100 transition-colors min-h-[44px]"
+                            className="bg-white text-blue-600 px-4 py-2 rounded-lg font-medium text-sm hover:bg-white/90 transition-colors min-h-[44px] flex-shrink-0"
                         >
-                            Join Ambassadors
-                        </button>
-                        <button
-                            onClick={handleViewLeaderboard}
-                            className="flex-1 bg-white/20 backdrop-blur py-2 rounded text-sm hover:bg-white/30 transition-colors min-h-[44px]"
-                        >
-                            Leaderboard
+                            Join
                         </button>
                     </div>
                 </div>

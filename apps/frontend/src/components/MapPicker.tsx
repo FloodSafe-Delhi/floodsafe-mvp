@@ -412,20 +412,20 @@ function MapContent({ initialLocation, onLocationSelect, onClose }: MapContentPr
                 )}
             </div>
 
-            {/* Footer - Fixed height at bottom */}
-            <div className="shrink-0 px-4 py-4 border-t bg-white space-y-3">
-                <div className="space-y-1">
-                    <p className="text-sm font-medium text-gray-700">Selected Location:</p>
+            {/* Footer - Compact, scrollable if needed */}
+            <div className="shrink-0 px-3 py-2 border-t bg-white space-y-2 max-h-[30vh] overflow-y-auto">
+                <div className="space-y-0.5">
+                    <p className="text-xs font-medium text-gray-600">Selected Location:</p>
                     {isGeocoding ? (
-                        <Skeleton className="h-6 w-full" />
+                        <Skeleton className="h-5 w-full" />
                     ) : (
-                        <p className="text-base font-semibold text-gray-900">
-                            {locationName || 'Click on the map to select a location'}
+                        <p className="text-sm font-semibold text-gray-900 line-clamp-2">
+                            {locationName || 'Click on the map to select'}
                         </p>
                     )}
                     {selectedCoords && (
-                        <p className="text-xs text-gray-500">
-                            {selectedCoords[1].toFixed(6)}, {selectedCoords[0].toFixed(6)}
+                        <p className="text-[10px] text-gray-400">
+                            {selectedCoords[1].toFixed(5)}, {selectedCoords[0].toFixed(5)}
                         </p>
                     )}
                     {geocodingError && (
@@ -433,22 +433,24 @@ function MapContent({ initialLocation, onLocationSelect, onClose }: MapContentPr
                     )}
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-2">
                     <Button
                         onClick={onClose}
                         variant="outline"
-                        className="flex-1"
+                        size="sm"
+                        className="flex-1 h-9"
                     >
-                        <X className="h-4 w-4 mr-2" />
+                        <X className="h-3 w-3 mr-1" />
                         Cancel
                     </Button>
                     <Button
                         onClick={handleConfirm}
                         disabled={!selectedCoords || !!geocodingError || isGeocoding}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                        size="sm"
+                        className="flex-1 h-9 bg-blue-600 hover:bg-blue-700"
                     >
-                        <Check className="h-4 w-4 mr-2" />
-                        Confirm Location
+                        <Check className="h-3 w-3 mr-1" />
+                        Confirm
                     </Button>
                 </div>
             </div>
@@ -467,13 +469,13 @@ export default function MapPicker({ isOpen, onClose, initialLocation, onLocation
         <>
             {/* Overlay - positioned between nav bars */}
             <div
-                style={{ position: 'fixed', top: 56, left: 0, right: 0, bottom: 80, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60 }}
+                style={{ position: 'fixed', top: 56, left: 0, right: 0, bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 60 }}
                 onClick={onClose}
             />
             {/* Side Panel - fits between TopNav and BottomNav */}
             <div
-                style={{ position: 'fixed', top: 56, left: 0, bottom: 80, width: 350, maxWidth: '90vw', zIndex: 61 }}
-                className="bg-white shadow-xl flex flex-col rounded-br-lg"
+                style={{ position: 'fixed', top: 56, left: 0, bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))', width: 'min(350px, 90vw)', zIndex: 61 }}
+                className="bg-white shadow-xl flex flex-col rounded-br-lg overflow-hidden"
             >
                 <MapContent
                     initialLocation={initialLocation}

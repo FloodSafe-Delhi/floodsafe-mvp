@@ -61,7 +61,7 @@ export function ReportCard({ report, onLocate, showFullDetails = false }: Report
     const deleteCommentMutation = useDeleteComment();
 
     const isVoting = upvoteMutation.isPending || downvoteMutation.isPending;
-    const isOwnReport = user?.id === report.id; // Note: reports don't have user_id exposed
+    const _isOwnReport = user?.id === report.id; // Note: reports don't have user_id exposed
 
     const handleUpvote = async () => {
         if (!user) {

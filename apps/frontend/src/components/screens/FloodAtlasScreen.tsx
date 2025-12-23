@@ -61,7 +61,7 @@ function FloodAtlasContent({
             setNavigationOrigin(loc);
         };
 
-        const useFallback = () => {
+        const applyFallback = () => {
             const fallbackCoords = city === 'bangalore'
                 ? { lat: 12.9716, lng: 77.5946 }
                 : { lat: 28.6139, lng: 77.2090 };
@@ -80,13 +80,13 @@ function FloodAtlasContent({
                         setLocationFromPosition,
                         (retryError) => {
                             console.warn('Geolocation retry failed:', retryError);
-                            useFallback();
+                            applyFallback();
                         },
                         { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
                     );
                 } else {
                     console.warn('Geolocation error:', error.message);
-                    useFallback();
+                    applyFallback();
                 }
             },
             { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }

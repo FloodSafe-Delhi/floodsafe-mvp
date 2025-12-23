@@ -9,7 +9,7 @@
  * 5. No dots on Bangalore map
  */
 
-import { chromium, Page, Browser } from 'playwright';
+import { chromium, Page } from 'playwright';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

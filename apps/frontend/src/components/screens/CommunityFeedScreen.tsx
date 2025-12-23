@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, RefreshCw, Filter, CheckCircle, Clock, TrendingUp } from 'lucide-react';
+import { Users, RefreshCw, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useReports } from '../../lib/api/hooks';
 import { ReportCard } from '../ReportCard';

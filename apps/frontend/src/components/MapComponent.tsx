@@ -92,7 +92,7 @@ export default function MapComponent({
     const isDelhiCity = city === 'delhi';
 
     // Fetch ML predictions for heatmap (only for Delhi)
-    const { data: predictionGrid } = usePredictionGrid({
+    const { data: _predictionGrid } = usePredictionGrid({
         bounds: mapBounds,
         resolutionKm: 2.0, // 2km resolution for performance
         horizonDays: 0,    // Today only

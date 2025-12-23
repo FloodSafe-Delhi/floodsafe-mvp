@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Navigation, MapPin, Clock, Shield, Bike, Car, Footprints, Train, Bookmark, Star, Trash2, LocateFixed, GitCompare, X, Loader2, Play } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
+import { Navigation, MapPin, Clock, Shield, Bike, Car, Footprints, Train, Bookmark, Star, Trash2, LocateFixed, GitCompare, Loader2, Play } from 'lucide-react';
+import { Sheet, SheetContent } from './ui/sheet';
 import { Button } from './ui/button';
 import SmartSearchBar from './SmartSearchBar';
 import { useEnhancedCompareRoutes, useNearbyMetros, useSavedRoutes, useCreateSavedRoute, useDeleteSavedRoute, useIncrementRouteUsage } from '../lib/api/hooks';
-import { RouteOption, MetroStation, EnhancedRouteComparisonResponse, FastestRouteOption, MetroRouteOption, SafestRouteOption } from '../types';
+import { RouteOption, MetroStation, EnhancedRouteComparisonResponse, FastestRouteOption, SafestRouteOption } from '../types';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { EnhancedRouteCard } from './EnhancedRouteCard';

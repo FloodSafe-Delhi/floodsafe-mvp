@@ -1348,13 +1348,66 @@ export function useAddComment() {
 export function useDeleteComment() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({ commentId, reportId }: { commentId: string; reportId: string }): Promise<void> => {
+        mutationFn: async ({ commentId, reportId: _reportId }: { commentId: string; reportId: string }): Promise<void> => {
             await fetchJson(`/comments/${commentId}`, { method: 'DELETE' });
         },
         onSuccess: (_, { reportId }) => {
             queryClient.invalidateQueries({ queryKey: ['comments', reportId] });
             queryClient.invalidateQueries({ queryKey: ['comments', 'count', reportId] });
             queryClient.invalidateQueries({ queryKey: ['reports'] });
+        },
+    });
+}
+
+// ============================================================================
+// EMAIL VERIFICATION HOOKS
+// ============================================================================
+
+export interface VerificationStatus {
+    email_verified: boolean;
+    phone_verified: boolean;
+    auth_provider: string;
+}
+
+/**
+ * Get current verification status for the authenticated user.
+ * Used by frontend to poll for verification completion after user clicks email link.
+ *
+ * @param options.enabled - Set to false to disable polling (e.g., when already verified)
+ * @param options.pollInterval - Polling interval in ms (default: 5000 = 5 seconds)
+ */
+export function useVerificationStatus(options: {
+    enabled?: boolean;
+    pollInterval?: number;
+} = {}) {
+    const { enabled = true, pollInterval = 5000 } = options;
+
+    return useQuery({
+        queryKey: ['verification-status'],
+        queryFn: () => fetchJson<VerificationStatus>('/auth/verification-status'),
+        enabled,
+        refetchInterval: enabled ? pollInterval : false,
+        staleTime: 0, // Always consider stale to ensure fresh data when polling
+    });
+}
+
+/**
+ * Resend verification email to the current user.
+ * Rate limited to 3 emails per hour on the backend.
+ *
+ * Call this when user clicks "Resend verification email" button.
+ * The mutation will throw an error if rate limited (429 status).
+ */
+export function useResendVerificationEmail() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (): Promise<{ message: string }> => {
+            return fetchJson('/auth/resend-verification', { method: 'POST' });
+        },
+        onSuccess: () => {
+            // Invalidate verification status to trigger re-fetch
+            queryClient.invalidateQueries({ queryKey: ['verification-status'] });
         },
     });
 }

@@ -15,7 +15,7 @@ import {
 const CONNAUGHT_PLACE = { lat: 28.6315, lng: 77.2167 };
 const INDIA_GATE = { lat: 28.6129, lng: 77.2295 };
 const ITO_JUNCTION = { lat: 28.6280, lng: 77.2400 };
-const RAJIV_CHOWK = { lat: 28.6328, lng: 77.2195 };
+const _RAJIV_CHOWK = { lat: 28.6328, lng: 77.2195 };
 
 describe('haversineDistance', () => {
     it('calculates correct distance between CP and India Gate (~2.3 km)', () => {

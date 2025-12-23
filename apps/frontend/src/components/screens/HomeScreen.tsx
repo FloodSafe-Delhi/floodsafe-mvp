@@ -4,7 +4,7 @@ import { Badge } from '../ui/badge';
 import {
     MapPin, Users, AlertTriangle, Bell, Shield, Phone, Camera,
     Navigation, ChevronRight, AlertCircle, Droplets,
-    Maximize2, Target, RefreshCw, Info, Share2, ThumbsUp, TrendingUp, Settings, MapPinned
+    Maximize2, Target, RefreshCw, Share2, ThumbsUp, Settings, MapPinned
 } from 'lucide-react';
 import { FloodAlert } from '../../types';
 import MapComponent from '../MapComponent';
@@ -15,6 +15,7 @@ import { getNestedArray, hasLocationData } from '../../lib/safe-access';
 import { detectCityFromCoordinates, getCityKeyFromCoordinates, type CityKey } from '../../lib/map/cityConfigs';
 import { useAuth } from '../../contexts/AuthContext';
 import { CITIES } from '../../lib/map/cityConfigs';
+import { VerificationReminderBanner } from '../VerificationReminderBanner';
 import {
     Select,
     SelectContent,
@@ -95,7 +96,7 @@ export function HomeScreen({
             });
         };
 
-        const useFallback = () => {
+        const applyFallback = () => {
             const fallbackCoords = user?.city_preference === 'bangalore'
                 ? { latitude: 12.9716, longitude: 77.5946 }
                 : { latitude: 28.6139, longitude: 77.2090 };
@@ -113,13 +114,13 @@ export function HomeScreen({
                         setLocationFromPosition,
                         (retryError) => {
                             console.warn('Geolocation retry failed:', retryError);
-                            useFallback();
+                            applyFallback();
                         },
                         { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
                     );
                 } else {
                     console.warn('Geolocation error:', error.message);
-                    useFallback();
+                    applyFallback();
                 }
             },
             { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
@@ -178,12 +179,12 @@ export function HomeScreen({
         }) || [];
 
     // Community stats with proper logic
-    const activeReporters = activeReportersData?.count || 0; // Users with reports in past 7 days
-    const nearbyReporters = nearbyReportersData?.count || 0; // Users who reported within 5km
+    const _activeReporters = activeReportersData?.count || 0; // Users with reports in past 7 days
+    const _nearbyReporters = nearbyReportersData?.count || 0; // Users who reported within 5km
 
     // Use authenticated user's data
     // Note: reports_count would need to be fetched from backend separately
-    const userImpact = {
+    const _userImpact = {
         reports: 0, // TODO: Fetch from backend /api/reports/user/{id}/count
         helped: 0,
     };
@@ -195,7 +196,7 @@ export function HomeScreen({
                       filteredAlerts.length > 3 ? 'high' :
                       filteredAlerts.length > 1 ? 'moderate' : 'low';
 
-    const riskColors = {
+    const _riskColors = {
         low: 'bg-green-500',
         moderate: 'bg-yellow-500',
         high: 'bg-orange-500',
@@ -354,7 +355,7 @@ export function HomeScreen({
         toast.success('Opening ambassador program');
     };
 
-    const handleViewLeaderboard = () => {
+    const _handleViewLeaderboard = () => {
         onNavigateToProfile?.();
         toast.info('Viewing community leaderboard');
     };
@@ -417,7 +418,7 @@ export function HomeScreen({
     };
 
     // Dynamic button text colors matching risk level
-    const riskButtonColors = {
+    const _riskButtonColors = {
         low: 'text-emerald-600',
         moderate: 'text-amber-600',
         high: 'text-orange-600',
@@ -426,6 +427,9 @@ export function HomeScreen({
 
     return (
         <div className="h-full flex flex-col bg-slate-50 overflow-y-auto">
+            {/* Email Verification Reminder Banner (for unverified email users) */}
+            <VerificationReminderBanner />
+
             {/* Dynamic Risk Header */}
             <div style={riskGradientStyles[riskLevel]} className="text-white px-4 py-4 flex-shrink-0">
                 <div className="flex items-center justify-between gap-2">

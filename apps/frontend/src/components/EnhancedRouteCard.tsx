@@ -1,5 +1,5 @@
 import React from 'react';
-import { Car, Train, Shield, Clock, MapPin, AlertTriangle, Check } from 'lucide-react';
+import { Car, Train, Shield, AlertTriangle, Check } from 'lucide-react';
 import type { EnhancedRoutes, RouteRecommendation, TrafficLevel } from '../types';
 import { formatDuration, formatDistance } from '../lib/geo/distance';
 
@@ -12,7 +12,7 @@ interface EnhancedRouteCardProps {
 
 export function EnhancedRouteCard({
     routes,
-    recommendation,
+    recommendation: _recommendation,
     selectedType,
     onSelectRoute,
 }: EnhancedRouteCardProps) {

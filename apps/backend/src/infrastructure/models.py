@@ -67,6 +67,7 @@ class User(Base):
     # Relationships
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     saved_routes = relationship("SavedRoute", back_populates="user", cascade="all, delete-orphan")
+    verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
 
 class Sensor(Base):
     __tablename__ = "sensors"
@@ -298,6 +299,21 @@ class RefreshToken(Base):
 
     # Relationship
     user = relationship("User", back_populates="refresh_tokens")
+
+
+class EmailVerificationToken(Base):
+    """Stores email verification tokens for email confirmation"""
+    __tablename__ = "email_verification_tokens"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String, unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    used_at = Column(DateTime, nullable=True)  # NULL = unused, set = when token was used
+
+    # Relationship
+    user = relationship("User", back_populates="verification_tokens")
 
 
 class SavedRoute(Base):

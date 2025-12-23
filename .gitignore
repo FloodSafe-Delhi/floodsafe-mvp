@@ -18,6 +18,17 @@ credentials/*.json
 e2e-*.png
 hotspots-*.png
 screenshot-*.png
+direct-*.png
+mappicker-*.png
+mobile-*.png
+
+# Local Claude settings
+.claude/settings.local.json
+
+# Test data files
+all_hotspots.json
+hotspots_test.json
+route_test.json
 
 # Temporary files
 nul

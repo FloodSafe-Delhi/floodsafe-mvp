@@ -3,6 +3,7 @@ import type { CityKey } from '../lib/map/cityConfigs';
 import { MAP_CONSTANTS } from '../lib/map/config';
 import { useAuth } from './AuthContext';
 import { API_BASE_URL } from '../lib/api/config';
+import { TokenStorage } from '../lib/auth/token-storage';
 
 interface CityContextType {
     city: CityKey;
@@ -68,7 +69,7 @@ export function CityProvider({ children }: CityProviderProps) {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    'Authorization': `Bearer ${TokenStorage.getAccessToken()}`
                 },
                 body: JSON.stringify({ city_preference: newCity })
             });

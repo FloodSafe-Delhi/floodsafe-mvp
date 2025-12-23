@@ -37,6 +37,9 @@ export interface AuthUser {
     points: number;
     level: number;
     reputation_score: number;
+    // Verification status
+    email_verified: boolean;
+    phone_verified: boolean;
     // Onboarding & City Preference
     city_preference: string | null;
     profile_complete: boolean;
@@ -67,6 +70,7 @@ interface AuthContextType {
     // Session
     logout: () => Promise<void>;
     refreshSession: () => Promise<boolean>;
+    refreshUser: () => Promise<void>;
     clearError: () => void;
 }
 
@@ -398,6 +402,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
     }, [phoneConfirmation, fetchUser]);
 
+    // Refresh user profile (useful when verification status changes)
+    const refreshUser = useCallback(async () => {
+        const userData = await fetchUser();
+        if (userData) {
+            setUser(userData);
+        }
+    }, [fetchUser]);
+
     // Logout
     const logout = useCallback(async () => {
         setIsLoading(true);
@@ -445,6 +457,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         phoneConfirmation,
         logout,
         refreshSession,
+        refreshUser,
         clearError,
     };
 

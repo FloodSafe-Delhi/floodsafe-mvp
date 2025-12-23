@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     ALERT_REFRESH_TWITTER_MINUTES: int = 30  # Twitter refresh interval
     ALERT_REFRESH_CWC_MINUTES: int = 120   # CWC scraper refresh interval
 
+    # SendGrid Email Service (for email verification)
+    SENDGRID_API_KEY: str = ""
+    SENDGRID_FROM_EMAIL: str = "noreply@floodsafe.app"
+    SENDGRID_FROM_NAME: str = "FloodSafe"
+
+    # Email Verification
+    EMAIL_VERIFICATION_EXPIRE_HOURS: int = 24
+    FRONTEND_URL: str = "http://localhost:5175"  # For verification redirects
+    BACKEND_URL: str = "http://localhost:8000"   # For verification links in emails
+
     class Config:
         case_sensitive = True
         env_file = ".env"

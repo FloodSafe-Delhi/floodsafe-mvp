@@ -1,17 +1,21 @@
 """
 Authentication API endpoints for FloodSafe.
-Handles Google OAuth, Phone Auth, and token management.
+Handles Google OAuth, Phone Auth, Email/Password, and token management.
 """
 from typing import Optional
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from src.infrastructure.database import get_db
 from src.infrastructure.models import User
 from src.domain.services.auth_service import auth_service
-from .deps import get_current_user
+from src.domain.services.email_service import email_service
+from src.domain.services.verification_service import verification_service
+from src.core.config import settings
+from .deps import get_current_user, check_rate_limit
 
 
 router = APIRouter()
@@ -62,6 +66,10 @@ class UserResponse(BaseModel):
     level: int
     reputation_score: int
 
+    # Verification status
+    email_verified: bool = False
+    phone_verified: bool = False
+
     # Onboarding & City Preference
     city_preference: Optional[str] = None
     profile_complete: bool = False
@@ -83,6 +91,7 @@ class MessageResponse(BaseModel):
 @router.post("/google", response_model=TokenResponse, tags=["authentication"])
 async def google_auth(
     request: GoogleAuthRequest,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -92,7 +101,13 @@ async def google_auth(
     FloodSafe JWT tokens.
 
     Returns access and refresh tokens for authenticated requests.
+
+    Rate limited to 10 attempts per minute per IP address.
     """
+    # Rate limit: 10 OAuth attempts per minute per IP (more lenient for OAuth)
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    check_rate_limit(f"google:{client_ip}", max_requests=10, window_seconds=60)
+
     # Verify Google token
     google_data = await auth_service.verify_google_token(request.id_token)
 
@@ -118,6 +133,7 @@ async def google_auth(
 @router.post("/phone/verify", response_model=TokenResponse, tags=["authentication"])
 async def phone_auth(
     request: PhoneAuthRequest,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -133,7 +149,13 @@ async def phone_auth(
     4. Send the ID token to this endpoint
 
     Returns access and refresh tokens for authenticated requests.
+
+    Rate limited to 5 attempts per minute per IP address.
     """
+    # Rate limit: 5 phone auth attempts per minute per IP
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    check_rate_limit(f"phone:{client_ip}", max_requests=5, window_seconds=60)
+
     # Verify Firebase token
     phone_data = await auth_service.verify_firebase_phone_token(request.id_token)
 
@@ -172,13 +194,17 @@ class EmailLoginRequest(BaseModel):
 @router.post("/register/email", response_model=TokenResponse, tags=["authentication"])
 async def register_email(
     request: EmailRegisterRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
     Register a new user with email and password.
 
-    Creates a new user account and returns JWT tokens.
+    Creates a new user account, sends a verification email, and returns JWT tokens.
     Password must be at least 8 characters.
+
+    The user can use the app immediately but will see a verification reminder
+    until they click the link in their email.
 
     Returns access and refresh tokens for authenticated requests.
     """
@@ -203,7 +229,16 @@ async def register_email(
             detail=str(e)
         )
 
-    # Create tokens
+    # Generate verification token and send email (async in background)
+    token = verification_service.create_email_verification_token(user.id, db)
+    background_tasks.add_task(
+        email_service.send_verification_email,
+        user.email,
+        token,
+        user.username
+    )
+
+    # Create tokens - user can use app immediately
     tokens = auth_service.create_tokens(user, db)
 
     return TokenResponse(**tokens)
@@ -212,6 +247,7 @@ async def register_email(
 @router.post("/login/email", response_model=TokenResponse, tags=["authentication"])
 async def login_email(
     request: EmailLoginRequest,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
     """
@@ -220,7 +256,13 @@ async def login_email(
     Exchange email/password credentials for JWT tokens.
 
     Returns access and refresh tokens for authenticated requests.
+
+    Rate limited to 5 attempts per minute per IP address.
     """
+    # Rate limit: 5 login attempts per minute per IP
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    check_rate_limit(f"login:{client_ip}", max_requests=5, window_seconds=60)
+
     user = auth_service.authenticate_email_user(
         email=request.email,
         password=request.password,
@@ -330,6 +372,8 @@ async def get_current_user_profile(
         points=current_user.points,
         level=current_user.level,
         reputation_score=current_user.reputation_score,
+        email_verified=current_user.email_verified,
+        phone_verified=current_user.phone_verified,
         city_preference=current_user.city_preference,
         profile_complete=current_user.profile_complete,
         onboarding_step=current_user.onboarding_step,
@@ -347,3 +391,120 @@ async def check_auth(
     Returns 200 if authenticated, 401 if not.
     """
     return {"authenticated": True, "user_id": str(current_user.id)}
+
+
+# =============================================================================
+# Email Verification Endpoints
+# =============================================================================
+
+class VerificationStatusResponse(BaseModel):
+    """Response for verification status"""
+    email_verified: bool
+    phone_verified: bool
+    auth_provider: str
+
+
+@router.get("/verify-email", tags=["authentication"])
+async def verify_email(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Verify email address via link click.
+
+    This endpoint is called when a user clicks the verification link in their email.
+    It validates the token, marks the email as verified, and redirects to the frontend.
+
+    Query Parameters:
+        token: The verification token from the email link
+
+    Returns:
+        Redirect to frontend success or error page
+    """
+    success, user, message = verification_service.verify_email_token(token, db)
+
+    if success:
+        # Redirect to success page
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/email-verified?success=true",
+            status_code=status.HTTP_302_FOUND
+        )
+    else:
+        # Redirect to error page with message
+        import urllib.parse
+        encoded_message = urllib.parse.quote(message)
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/email-verified?success=false&message={encoded_message}",
+            status_code=status.HTTP_302_FOUND
+        )
+
+
+@router.post("/resend-verification", response_model=MessageResponse, tags=["authentication"])
+async def resend_verification(
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Resend verification email.
+
+    Sends a new verification email to the current user.
+    Rate limited to 3 emails per hour.
+
+    Requires authentication.
+
+    Returns:
+        Message indicating success or failure
+    """
+    # Check if already verified
+    if current_user.email_verified:
+        return MessageResponse(message="Email already verified")
+
+    # Check if user has an email (phone-only users don't)
+    if not current_user.email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No email address associated with this account"
+        )
+
+    # Check rate limit
+    can_resend, rate_message = verification_service.can_resend_verification(
+        current_user.id, db
+    )
+    if not can_resend:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=rate_message
+        )
+
+    # Generate new token and send email
+    token = verification_service.create_email_verification_token(current_user.id, db)
+    background_tasks.add_task(
+        email_service.send_verification_email,
+        current_user.email,
+        token,
+        current_user.username
+    )
+
+    return MessageResponse(message="Verification email sent")
+
+
+@router.get("/verification-status", response_model=VerificationStatusResponse, tags=["authentication"])
+async def get_verification_status(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get current verification status.
+
+    Returns the email and phone verification status for the current user.
+    Used by the frontend to poll for verification completion.
+
+    Requires authentication.
+
+    Returns:
+        email_verified: Whether email is verified
+        phone_verified: Whether phone is verified
+        auth_provider: The authentication provider used
+    """
+    status_data = verification_service.get_verification_status(current_user)
+    return VerificationStatusResponse(**status_data)

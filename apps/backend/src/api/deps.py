@@ -3,6 +3,8 @@ Authentication dependencies for FastAPI routes.
 Provides dependency injection for protected endpoints.
 """
 from typing import Optional
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -11,6 +13,56 @@ from sqlalchemy.orm import Session
 from src.infrastructure.database import get_db
 from src.infrastructure.models import User
 from src.domain.services.security import verify_token
+
+
+# =============================================================================
+# Rate Limiting
+# =============================================================================
+
+# In-memory rate limit store: key -> list of timestamps
+_rate_limit_store: dict[str, list[datetime]] = defaultdict(list)
+
+
+def check_rate_limit(
+    key: str,
+    max_requests: int = 5,
+    window_seconds: int = 60
+) -> None:
+    """
+    Simple in-memory rate limiter.
+
+    Tracks requests per key (e.g., IP address) within a sliding window.
+    Raises HTTP 429 if rate limit exceeded.
+
+    Args:
+        key: Unique identifier for rate limiting (e.g., "login:192.168.1.1")
+        max_requests: Maximum allowed requests in the window
+        window_seconds: Time window in seconds
+
+    Raises:
+        HTTPException: 429 Too Many Requests if limit exceeded
+
+    Usage:
+        @router.post("/login")
+        async def login(request: Request, ...):
+            check_rate_limit(f"login:{request.client.host}")
+            ...
+    """
+    now = datetime.utcnow()
+    cutoff = now - timedelta(seconds=window_seconds)
+
+    # Clean old entries outside the window
+    _rate_limit_store[key] = [t for t in _rate_limit_store[key] if t > cutoff]
+
+    # Check if limit exceeded
+    if len(_rate_limit_store[key]) >= max_requests:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many requests. Please wait {window_seconds} seconds before trying again.",
+        )
+
+    # Record this request
+    _rate_limit_store[key].append(now)
 
 
 # HTTP Bearer token security scheme

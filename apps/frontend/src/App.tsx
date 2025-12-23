@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { ResponsiveLayout } from './components/ResponsiveLayout';
 import { HomeScreen } from './components/screens/HomeScreen';
 import { FloodAtlasScreen } from './components/screens/FloodAtlasScreen';
@@ -10,6 +11,7 @@ import { AlertsScreen } from './components/screens/AlertsScreen';
 import { AlertDetailScreen } from './components/screens/Placeholders';
 import { PrivacyPolicyScreen } from './components/screens/PrivacyPolicyScreen';
 import { TermsScreen } from './components/screens/TermsScreen';
+import { EmailVerifiedScreen } from './components/screens/EmailVerifiedScreen';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FloodAlert } from './types';
 import { Toaster } from './components/ui/sonner';
@@ -196,7 +198,17 @@ export default function App() {
             <AuthProvider>
                 <UserProvider>
                     <CityProvider>
-                        <FloodSafeApp />
+                        <Routes>
+                            {/* Email verification callback - accessible without auth */}
+                            <Route path="/email-verified" element={
+                                <>
+                                    <EmailVerifiedScreen />
+                                    <Toaster position="top-center" />
+                                </>
+                            } />
+                            {/* All other routes go to the main app */}
+                            <Route path="*" element={<FloodSafeApp />} />
+                        </Routes>
                     </CityProvider>
                 </UserProvider>
             </AuthProvider>

@@ -569,6 +569,29 @@ status: |
   MISSING: ML flood detection, severity estimation, real storage
 ```
 
+### @whatsapp (SKELETON)
+```yaml
+files:
+  - apps/backend/src/api/webhook.py - Receives Twilio webhooks (TODO processing)
+current: Skeleton - receives SOS location pins, doesn't create reports
+next: Implement report creation, conversation routing, Twilio client init
+```
+
+### @mobile (NOT STARTED)
+```yaml
+current: Web-responsive only via Tailwind CSS
+missing: Capacitor config, PWA manifest, service worker, offline mode
+next: Add Capacitor wrapper for Android/iOS builds
+```
+
+### @edge-ai (PLANNED)
+```yaml
+concept: ANN model running on IoT devices (ESP32/Raspberry Pi)
+goal: Local flood prediction without cloud dependency
+research: Based on research papers for edge computing in flood monitoring
+next: Design lightweight neural network architecture
+```
+
 ---
 
 ## Safety Rules
@@ -663,15 +686,35 @@ watch_area: Connaught Place
 - [ ] Data imbalance handling (only 4 high-risk events in 5 years)
 - [ ] Replace broken models in _archive/
 
-### Tier 3: Next Priorities
-- [ ] RF + XGBoost ensemble for hotspot predictions
-- [ ] Profile backend: Admin + Verified Reporter + User roles
-- [ ] Photo ML: Flood detection + severity estimation
-- [ ] IoT integration: Sensor registration, auth
-- [ ] Photo storage: Replace mock URLs with S3/Blob
-- [ ] UI cleanup
+### Tier 3: Smart Sensors & Edge AI
+- [ ] IoT sensor registration + pairing workflow
+- [ ] IoT authentication on /ingest endpoint
+- [ ] Edge ANN model for local flood prediction (ESP32/RPi)
+- [ ] Sensor-to-cloud sync with offline buffering
+- [ ] Real-time sensor status dashboard
 
-### Tier 4: Scale (LATER)
-- Flood simulation
-- Multi-language (i18n)
-- GNN spatial modeling
+### Tier 4: Photo Intelligence
+- [ ] Photo ML: Flood vs non-flood classification
+- [ ] Water depth estimation from images
+- [ ] Fake/manipulated image detection
+- [ ] Real photo storage (S3/Blob, replace mock URLs)
+- [ ] Photo verification confidence score
+
+### Tier 5: Messaging & Reach
+- [ ] WhatsApp Bot: Onboarding, preferences, watch areas
+- [ ] WhatsApp Bot: Alert delivery
+- [ ] SMS fallback for non-WhatsApp users
+- [ ] Notification service (implement INotificationService)
+
+### Tier 6: Mobile Native
+- [ ] Capacitor wrapper for Android/iOS
+- [ ] PWA manifest + service worker
+- [ ] Offline mode with sync
+- [ ] Push notifications (Firebase Cloud Messaging)
+- [ ] Background location tracking
+
+### Tier 7: Scale & Intelligence
+- [ ] Multi-language (i18n) - Hindi, Kannada
+- [ ] GNN spatial modeling
+- [ ] Flood simulation engine
+- [ ] City expansion (Mumbai, Chennai, Kolkata)

@@ -1,6 +1,10 @@
 """
 Flood Hazard Index (FHI) Calculator.
 
+IMPORTANT: This is a CUSTOM HEURISTIC formula, NOT from published academic research.
+The weights (0.35, 0.18, etc.) are empirically tuned for Delhi conditions.
+See CLAUDE.md @hotspots for documentation.
+
 FHI = (0.35×P + 0.18×I + 0.12×S + 0.12×A + 0.08×R + 0.15×E) × T_modifier
 
 Components:
@@ -85,7 +89,7 @@ class FHICalculator:
     ANTECEDENT_THRESHOLD_MM = 150.0  # 3-day total
     PRESSURE_BASELINE_HPA = 1013  # Standard pressure
 
-    # Urban calibration constants - VERIFIED for 100% historical accuracy
+    # Urban calibration constants - empirically tuned for Delhi (no formal validation study)
     BASE_PRECIP_CORRECTION = 1.5       # Conservative baseline (up from 1.2)
     PROB_BOOST_MULTIPLIER = 0.5        # Conservative prob scaling (max 2.25x total)
     MIN_RAIN_THRESHOLD_MM = 5.0        # Rain-gate: below this = LOW risk

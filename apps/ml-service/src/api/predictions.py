@@ -1,5 +1,10 @@
 """
 FastAPI endpoints for flood predictions.
+
+IMPORTANT: The ensemble models (ConvLSTM, GNN, LightGBM) are NOT TRAINED.
+Only the XGBoost Hotspot model is trained and working.
+The /forecast endpoint will return fallback 0.1 probability for all predictions.
+See CLAUDE.md @ml-predictions for details.
 """
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
@@ -141,8 +146,9 @@ async def get_flood_forecast(request: PredictionRequest):
 
         # For LSTM: Create a 30-day sequence by tiling the current feature vector
         # In production, this would be actual historical data
+        # NOTE: Ensemble models are NOT TRAINED - this will fall back to 0.1 probability
         seq_length = 30
-        X_seq = np.tile(combined.reshape(1, 1, -1), (1, seq_length, 1))  # Shape: (1, 30, 81)
+        X_seq = np.tile(combined.reshape(1, 1, -1), (1, seq_length, 1))  # Shape: (1, 30, 37)
 
         # Get predictions directly from LSTM (most reliable trained model)
         # Note: This is a simplified example. Real implementation would use ensemble properly.

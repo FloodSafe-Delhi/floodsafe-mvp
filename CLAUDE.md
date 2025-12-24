@@ -359,8 +359,9 @@ files:
   - apps/frontend/src/components/MapComponent.tsx:710-857 - Layer rendering
 
 architecture:
-  FHI (Flood Hazard Index) - Multi-component live risk:
+  FHI (Flood Hazard Index) - CUSTOM HEURISTIC (NOT from published research):
   - Formula: FHI = (0.35×P + 0.18×I + 0.12×S + 0.12×A + 0.08×R + 0.15×E) × T
+  - NOTE: Weights (0.35, 0.18, etc.) are empirically tuned, not from academic papers
   - P: Precipitation forecast with probability correction (1.5-2.25x)
   - I: Hourly max intensity
   - S: Soil saturation (urban hybrid: 70% drainage + 30% soil)
@@ -384,27 +385,51 @@ verification:
 status: COMPLETE - FHI-first coloring, spatial differentiation verified
 ```
 
-### @ml-predictions (NEEDS FIXING)
+### @ml-predictions (PARTIAL - XGBoost works, Ensemble broken)
 ```yaml
 files:
   ML Service:
-  - apps/ml-service/src/features/extractor.py - 40-dim feature extraction
+  - apps/ml-service/src/features/extractor.py - 37-dim feature extraction (was 40, reverted)
   - apps/ml-service/src/features/hotspot_features.py - 18-dim hotspot features
   - apps/ml-service/src/api/predictions.py - /forecast-grid endpoint
-  - apps/ml-service/src/models/lstm_model.py - LSTM architecture (untrained)
-  - apps/ml-service/src/models/lightgbm_model.py - LightGBM code (untrained)
+  - apps/ml-service/src/models/xgboost_hotspot.py - XGBoost hotspot model (TRAINED)
+  - apps/ml-service/src/models/lstm_model.py - LSTM architecture (NOT TRAINED)
+  - apps/ml-service/src/models/lightgbm_model.py - LightGBM code (NOT TRAINED)
   - apps/ml-service/data/grid_predictions_cache.json - Pre-computed fallback
 
   Frontend:
   - apps/frontend/src/components/MapComponent.tsx - Heatmap layer
 
+trained_models:
+  XGBoost Hotspot Model (PRODUCTION READY):
+    - Location: apps/ml-service/models/xgboost_hotspot/xgboost_model.json
+    - Trained: 2025-12-12
+    - AUC: 0.984 (exceeds 0.85 target)
+    - Precision: 0.927, Recall: 0.957, F1: 0.942
+    - Features: 18-dim (elevation, slope, TPI, TRI, TWI, SPI, rainfall, land cover, SAR)
+    - Top predictors: sar_vh_mean (18.5%), slope (7.3%), elevation (7.0%)
+
+broken_models:
+  ConvLSTM/GNN/LightGBM Ensemble:
+    - Status: Architecture exists, NEVER TRAINED
+    - /forecast endpoint returns hardcoded 0.1 probability (fallback)
+    - No trained weights in models/ensemble/ directory
+    - Silently fails - users see low risk for all predictions
+
 feature_extractors:
   Hotspot (18-dim): elevation, slope, TPI, TRI, TWI, SPI, rainfall stats, land cover, SAR, monsoon
-  General (40-dim): Dynamic World (9), WorldCover (6), Sentinel-2 (5), Terrain (6), Precip (8), Temporal (4), GloFAS (2)
+  General (37-dim): Dynamic World (9), WorldCover (6), Sentinel-2 (5), Terrain (6), Precip (5), Temporal (4), GloFAS (2)
 
 training_data:
-  - hotspot_training_data.npz: 486 samples × 18-dim (for XGBoost/RF)
-  - delhi_monsoon_5years_*.npz: 605 samples × 33-dim (dimension mismatch with 40-dim extractor)
+  - hotspot_training_data.npz: 486 samples × 18-dim (USED by XGBoost - WORKING)
+  - delhi_monsoon_5years_*.npz: 605 samples × 37-dim (for future ensemble training)
+
+data_imbalance:
+  - Low risk (0.0-0.2): 583 samples (96.4%)
+  - Moderate (0.2-0.5): 18 samples (3.0%)
+  - High (0.5-0.9): 4 samples (0.7%)
+  - Very High (0.9-1.0): 0 samples
+  - NOTE: Only 4 high-risk samples in 5 years - severe imbalance
 
 risk_levels:
   - 0.0-0.2: Low (green)
@@ -413,19 +438,20 @@ risk_levels:
   - 0.7-1.0: Extreme (red)
 
 what_works:
-  - FHI formula (rule-based, not ML)
+  - XGBoost hotspot model (AUC 0.984) - PRODUCTION READY
+  - FHI formula (rule-based, custom heuristic)
   - Pre-computed heatmap cache
-  - Feature extraction pipelines
+  - Feature extraction pipelines (18-dim and 37-dim)
 
 what_needs_fixing:
-  - Dimension mismatch (extractor: 40-dim vs data: 33-dim)
-  - All models in _archive/ trained on wrong dimensions
-  - Data highly imbalanced (583 low / 18 moderate / 4 high-risk)
-  - No trained model weights exist
+  - Train ConvLSTM/GNN/LightGBM ensemble on 37-dim data
+  - Address data imbalance with cost-weighted training
+  - Replace broken models in _archive/
 
 status: |
-  NEEDS FIXING - Architecture exists, models not trained
-  BLOCKER: Feature dimension alignment + retraining required
+  PARTIAL - XGBoost hotspot model WORKS (AUC 0.984)
+  Ensemble models (LSTM/GNN/LightGBM) are BROKEN - return fallback 0.1
+  NOTE: FHI is a CUSTOM HEURISTIC, not from published research
 ```
 
 ### @routing (COMPLETE)
@@ -664,27 +690,26 @@ watch_area: Connaught Place
 - [x] Authentication (Email/Password + Google + Phone)
 - [x] E2E Testing Suite (Playwright)
 
-### Tier 2: ML/AI Foundation (NEEDS FIXING)
+### Tier 2: ML/AI Foundation (PARTIAL - XGBoost works, Ensemble broken)
 
 **What Works:**
-- [x] FHI rule-based risk calculation (not ML, but functional)
+- [x] XGBoost Hotspot Model (AUC 0.984, Precision 0.927, Recall 0.957) - PRODUCTION READY
+- [x] FHI rule-based risk calculation (CUSTOM HEURISTIC, not from published research)
 - [x] Hotspot feature extractor (18-dim)
-- [x] General feature extractor (40-dim)
+- [x] General feature extractor (37-dim)
 - [x] Pre-computed heatmap cache
 - [x] Historical Floods Panel (Delhi NCR 1969-2023)
 - [x] Hotspots with live weather (FHI formula)
 - [x] Spatial differentiation verification
 
-**Training Data Exists:**
-- [x] hotspot_training_data.npz: 486 samples × 18-dim
-- [x] delhi_monsoon_5years_*.npz: 605 samples × 33-dim
+**Training Data Verified:**
+- [x] hotspot_training_data.npz: 486 samples × 18-dim (balanced: 38.3% positive)
+- [x] delhi_monsoon_5years_*.npz: 605 samples × 37-dim (severely imbalanced: 96.4% low-risk)
 
-**What Needs Fixing:**
-- [ ] Feature dimension alignment (extractor: 40-dim vs data: 33-dim)
-- [ ] Train XGBoost/RF on 18-dim hotspot data
-- [ ] Train LSTM on aligned feature data
-- [ ] Data imbalance handling (only 4 high-risk events in 5 years)
-- [ ] Replace broken models in _archive/
+**What's Broken:**
+- [ ] ConvLSTM/GNN/LightGBM Ensemble - Architecture exists but NEVER TRAINED
+- [ ] /forecast endpoint silently returns hardcoded 0.1 probability (fallback)
+- [ ] Data imbalance (only 4 high-risk events in 5 years) - needs cost-weighted training
 
 ### Tier 3: Smart Sensors & Edge AI
 - [ ] IoT sensor registration + pairing workflow

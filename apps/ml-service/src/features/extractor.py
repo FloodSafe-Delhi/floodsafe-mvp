@@ -18,30 +18,34 @@ class FeatureExtractor:
     """
     Extract and combine features from all data sources.
 
-    Feature Vector Structure (40 dimensions):
+    Feature Vector Structure (37 dimensions by default):
     - [0:9]    Dynamic World: 9 land cover probabilities (includes flooded_vegetation)
     - [9:15]   ESA WorldCover: 6 static land cover percentages
     - [15:20]  Sentinel-2: 5 spectral indices (NDWI, NDVI, NDBI, MNDWI, BSI)
     - [20:26]  Terrain: elev_mean, elev_min, elev_max, elev_range, slope, aspect
     - [26:31]  Precipitation (historical): rain_24h, rain_3d, rain_7d, max_daily, wet_days
-    - [31:34]  Precipitation (forecast): forecast_24h, forecast_48h, forecast_72h
-    - [34:38]  Temporal: day_of_year, month, is_monsoon, days_since_monsoon
-    - [38:40]  GloFAS: discharge_mean, discharge_max (river discharge/runoff)
+    - [31:35]  Temporal: day_of_year, month, is_monsoon, days_since_monsoon
+    - [35:37]  GloFAS: discharge_mean, discharge_max (river discharge/runoff)
 
-    Note: AlphaEarth (64 dims) REMOVED - doesn't cover Delhi region.
+    Optional (enable_forecast=True for 40 dimensions):
+    - [31:34]  Precipitation (forecast): forecast_24h, forecast_48h, forecast_72h
+    - [34:38]  Temporal: shifted by 3
+    - [38:40]  GloFAS: shifted by 3
+
+    Note: Forecast features disabled by default to match existing training data (37-dim).
     """
 
-    FEATURE_DIM = 40  # Updated from 37 (added 3 forecast dims)
-    DYNAMIC_WORLD_DIM = 9  # NEW: replaces AlphaEarth
-    LANDCOVER_DIM = 6  # NEW: ESA WorldCover
-    SENTINEL2_DIM = 5  # NEW: spectral indices
+    FEATURE_DIM = 37  # Default without forecast (use 40 with enable_forecast=True)
+    DYNAMIC_WORLD_DIM = 9  # Dynamic World land cover probabilities
+    LANDCOVER_DIM = 6  # ESA WorldCover
+    SENTINEL2_DIM = 5  # Sentinel-2 spectral indices
     TERRAIN_DIM = 6
     PRECIP_DIM = 5
-    PRECIP_FORECAST_DIM = 3  # NEW: 24h, 48h, 72h forecast
+    PRECIP_FORECAST_DIM = 3  # Optional: 24h, 48h, 72h forecast (only if enable_forecast=True)
     TEMPORAL_DIM = 4
     GLOFAS_DIM = 2
 
-    def __init__(self, lazy_load: bool = True, use_wavelet: bool = False, enable_forecast: bool = True):
+    def __init__(self, lazy_load: bool = True, use_wavelet: bool = False, enable_forecast: bool = False):
         """
         Initialize feature extractor.
 
@@ -209,17 +213,30 @@ class FeatureExtractor:
         else:
             features["glofas"] = np.zeros(self.GLOFAS_DIM)
 
-        # Combine all features (40 total)
-        features["combined"] = np.concatenate([
-            features["dynamic_world"],
-            features["landcover"],
-            features["sentinel2"],
-            features["terrain"],
-            features["precipitation"],
-            features["forecast"],  # NEW
-            features["temporal"],
-            features["glofas"],
-        ])
+        # Combine all features (37 default, 40 with forecast)
+        if self._enable_forecast:
+            # 40-dim with forecast
+            features["combined"] = np.concatenate([
+                features["dynamic_world"],
+                features["landcover"],
+                features["sentinel2"],
+                features["terrain"],
+                features["precipitation"],
+                features["forecast"],
+                features["temporal"],
+                features["glofas"],
+            ])
+        else:
+            # 37-dim without forecast (matches training data)
+            features["combined"] = np.concatenate([
+                features["dynamic_world"],
+                features["landcover"],
+                features["sentinel2"],
+                features["terrain"],
+                features["precipitation"],
+                features["temporal"],
+                features["glofas"],
+            ])
 
         return features
 
@@ -534,12 +551,13 @@ class FeatureExtractor:
             "wet_days_7d",
         ])
 
-        # Precipitation forecast features
-        names.extend([
-            "forecast_24h",
-            "forecast_48h",
-            "forecast_72h",
-        ])
+        # Precipitation forecast features (only if enabled)
+        if self._enable_forecast:
+            names.extend([
+                "forecast_24h",
+                "forecast_48h",
+                "forecast_72h",
+            ])
 
         # Temporal features
         names.extend([
@@ -559,16 +577,29 @@ class FeatureExtractor:
 
     def get_feature_indices(self) -> Dict[str, Tuple[int, int]]:
         """Get start and end indices for each feature group."""
-        return {
-            "dynamic_world": (0, 9),
-            "landcover": (9, 15),
-            "sentinel2": (15, 20),
-            "terrain": (20, 26),
-            "precipitation": (26, 31),
-            "forecast": (31, 34),  # NEW
-            "temporal": (34, 38),
-            "glofas": (38, 40),
-        }
+        if self._enable_forecast:
+            # 40-dim with forecast
+            return {
+                "dynamic_world": (0, 9),
+                "landcover": (9, 15),
+                "sentinel2": (15, 20),
+                "terrain": (20, 26),
+                "precipitation": (26, 31),
+                "forecast": (31, 34),
+                "temporal": (34, 38),
+                "glofas": (38, 40),
+            }
+        else:
+            # 37-dim without forecast (default)
+            return {
+                "dynamic_world": (0, 9),
+                "landcover": (9, 15),
+                "sentinel2": (15, 20),
+                "terrain": (20, 26),
+                "precipitation": (26, 31),
+                "temporal": (31, 35),
+                "glofas": (35, 37),
+            }
 
     def apply_wavelet_preprocessing(
         self,

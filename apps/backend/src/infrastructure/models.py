@@ -77,6 +77,13 @@ class Sensor(Base):
     last_ping = Column(DateTime, nullable=True)
     readings = relationship("Reading", back_populates="sensor")
 
+    # IoT enhancements (added via migrate_add_iot_enhancements.py)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    name = Column(String(100), nullable=True)  # Human-readable name e.g., "Home Bucket Sensor"
+    api_key_hash = Column(String(128), unique=True, nullable=True, index=True)  # SHA256 hash for auth
+    hardware_type = Column(String(64), default="ESP32S3_GROVE_VL53L0X")
+    firmware_version = Column(String(16), nullable=True)
+
     @hybrid_property
     def latitude(self):
         """Extract latitude from PostGIS POINT geometry"""
@@ -101,9 +108,22 @@ class Reading(Base):
     __tablename__ = "readings"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     sensor_id = Column(UUID(as_uuid=True), ForeignKey("sensors.id"))
-    water_level = Column(Float)
+    water_level = Column(Float)  # Legacy field - keeps backward compatibility
     timestamp = Column(DateTime, default=datetime.utcnow)
     sensor = relationship("Sensor", back_populates="readings")
+
+    # IoT enhancements for ESP32 sensor data (added via migrate_add_iot_enhancements.py)
+    water_segments = Column(Integer, nullable=True)  # 0-20 from Grove water sensor
+    distance_mm = Column(Float, nullable=True)  # VL53L0X raw distance measurement
+    water_height_mm = Column(Float, nullable=True)  # Calculated water height
+    water_percent_strips = Column(Float, nullable=True)  # Percentage from strip sensor
+    water_percent_distance = Column(Float, nullable=True)  # Percentage from distance sensor
+    is_warning = Column(Boolean, default=False)  # WARNING status flag
+    is_flood = Column(Boolean, default=False)  # FLOOD status flag
+
+    __table_args__ = (
+        Index('idx_readings_sensor_timestamp', 'sensor_id', 'timestamp'),
+    )
 
 class Report(Base):
     __tablename__ = "reports"
@@ -396,3 +416,25 @@ class ExternalAlert(Base):
         Index('ix_external_alerts_city_created', 'city', 'created_at'),
         Index('ix_external_alerts_source_city', 'source', 'city'),
     )
+
+
+class WhatsAppSession(Base):
+    """
+    WhatsApp conversation state for interactive flows.
+    Tracks user's position in multi-step conversations (e.g., account linking).
+    Sessions expire after 30 minutes of inactivity.
+    """
+    __tablename__ = "whatsapp_sessions"
+
+    phone = Column(String(20), primary_key=True)  # E.164 format: +919876543210
+    state = Column(String(50), default="idle")  # idle, awaiting_choice, awaiting_email, sos_active
+    data = Column(JSON, default={})  # Arbitrary session data (email attempts, temp values, etc.)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Linked user
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # States:
+    # - idle: Ready for new command
+    # - awaiting_choice: User asked "1. Create account" or "2. Submit anonymously"
+    # - awaiting_email: User chose to create account, waiting for email
+    # - sos_active: User in active SOS flow (location pending)

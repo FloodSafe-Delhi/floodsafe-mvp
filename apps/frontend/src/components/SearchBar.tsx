@@ -44,13 +44,14 @@ export default function SearchBar({
     const dropdownRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Debounce the search query (300ms)
-    const debouncedQuery = useDebounce(query, 300);
+    // Debounce the search query (30ms for fast response)
+    const debouncedQuery = useDebounce(query, 30);
 
-    // Use the new backend location search
+    // Use the new backend location search with city filtering
     const { data: results, isLoading, isFetching } = useLocationSearch(
         debouncedQuery,
         10,
+        cityKey,  // Filter by selected city
         debouncedQuery.length >= 2
     );
 

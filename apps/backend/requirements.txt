@@ -27,3 +27,6 @@ apscheduler>=3.10.0
 # Email Service (for verification emails)
 sendgrid>=6.10.0
 
+# WhatsApp/SMS Integration (Twilio)
+twilio>=9.0.0
+

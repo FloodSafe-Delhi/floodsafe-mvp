@@ -771,12 +771,58 @@ status: |
   MISSING: Depth estimation, fake detection, real storage
 ```
 
-### @whatsapp (SKELETON)
+### @whatsapp (MVP)
 ```yaml
 files:
-  - apps/backend/src/api/webhook.py - Receives Twilio webhooks (TODO processing)
-current: Skeleton - receives SOS location pins, doesn't create reports
-next: Implement report creation, conversation routing, Twilio client init
+  Backend:
+  - apps/backend/src/api/webhook.py - WhatsApp webhook handler with conversation flow
+  - apps/backend/src/domain/services/notification_service.py - TwilioNotificationService
+  - apps/backend/src/infrastructure/models.py - WhatsAppSession model
+  - apps/backend/src/scripts/migrate_add_whatsapp_sessions.py - Migration script
+  - apps/backend/src/core/config.py - Twilio settings
+
+features:
+  Inbound (SOS):
+    - Receive location pins from WhatsApp → Create SOS reports
+    - Signature validation (X-Twilio-Signature)
+    - User account linking flow (create or link to existing)
+    - Conversation state tracking (WhatsAppSession table)
+    - TwiML XML responses
+
+  Outbound (Alerts):
+    - TwilioNotificationService implements INotificationService
+    - Send WhatsApp alerts to users in watch areas
+    - Respects user.notification_whatsapp preference
+    - Graceful fallback when Twilio not configured
+
+conversation_flow: |
+  1. User sends location pin
+  2. SOS report created immediately
+  3. AlertService.check_watch_areas_for_report() runs
+  4. Users in watch areas get WhatsApp notification
+  5. If user not linked, prompted: "1. Create account / 2. Stay anonymous"
+  6. Email input → Creates/links FloodSafe account
+
+commands:
+  - Send location = Submit SOS
+  - LINK = Connect FloodSafe account
+  - STATUS = Check account status
+  - START/STOP = Subscribe/unsubscribe alerts
+
+setup:
+  1. Create Twilio account at https://www.twilio.com/try-twilio
+  2. Go to Messaging → Try it out → Send a WhatsApp message (sandbox)
+  3. Copy TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to .env
+  4. Set TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+  5. Use ngrok for local testing: ngrok http 8000
+  6. Configure sandbox webhook URL in Twilio Console
+  7. Run migration: python -m apps.backend.src.scripts.migrate_add_whatsapp_sessions
+
+status: MVP COMPLETE
+  - Inbound SOS reports: WORKING
+  - User account linking: WORKING
+  - Outbound alerts: WORKING (requires Twilio config)
+  - Conversation state: WORKING (30min session timeout)
 ```
 
 ### @mobile (NOT STARTED)

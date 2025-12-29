@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import io
 import logging
 import json
+import httpx
 
 from ..infrastructure.database import get_db
 from ..infrastructure import models
@@ -16,6 +17,7 @@ from ..domain.reputation_models import ReportVerificationRequest
 from .deps import get_current_user, get_current_user_optional
 from ..domain.services.reputation_service import ReputationService
 from ..core.utils import get_exif_data, get_lat_lon
+from ..core.config import settings
 from math import radians, sin, cos, sqrt, atan2
 from ..domain.services.otp_service import get_otp_service
 from ..domain.services.validation_service import ReportValidationService
@@ -341,6 +343,39 @@ async def create_report(
         # TODO: Upload to S3/Blob Storage and get URL
         # media_url = s3_upload(content)
         media_url = f"https://mock-storage.com/{image.filename}"
+
+        # 2.5. ML-based flood image verification (YOLO classifier)
+        # Validates if the photo actually shows a flood scene
+        if settings.ML_SERVICE_ENABLED:
+            try:
+                async with httpx.AsyncClient() as client:
+                    # Reset file position for reading
+                    files = {"image": (image.filename, content, image.content_type or "image/jpeg")}
+                    response = await client.post(
+                        f"{settings.ML_SERVICE_URL}/api/v1/classify-flood",
+                        files=files,
+                        timeout=10.0
+                    )
+                    if response.status_code == 200:
+                        ml_result = response.json()
+                        media_metadata["ml_classification"] = ml_result.get("classification")
+                        media_metadata["ml_confidence"] = ml_result.get("confidence")
+                        media_metadata["ml_is_flood"] = ml_result.get("is_flood")
+                        media_metadata["ml_needs_review"] = ml_result.get("needs_review")
+                        media_metadata["ml_verification_score"] = ml_result.get("verification_score")
+
+                        # Flag suspicious reports (non-flood images with high confidence)
+                        if not ml_result.get("is_flood") and ml_result.get("confidence", 0) > 0.8:
+                            media_metadata["needs_review"] = True
+                            logger.warning(
+                                f"Report photo doesn't look like flood (confidence: {ml_result.get('confidence'):.2%})"
+                            )
+                    else:
+                        logger.warning(f"ML classification returned status {response.status_code}")
+            except httpx.TimeoutException:
+                logger.warning("ML classification timed out - continuing without verification")
+            except Exception as e:
+                logger.warning(f"ML classification failed: {e} - continuing without verification")
 
     except HTTPException:
         raise

@@ -22,6 +22,7 @@ from email.utils import parsedate_to_datetime
 import logging
 
 from .base_fetcher import BaseFetcher, ExternalAlertCreate
+from .relevance_scorer import get_scorer_for_city
 from src.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -123,7 +124,7 @@ class RSSFetcher(BaseFetcher):
             city: City identifier ('delhi', 'bangalore')
 
         Returns:
-            List of ExternalAlertCreate objects
+            List of ExternalAlertCreate objects filtered by relevance score
         """
         self.log_fetch_start(city)
 
@@ -144,8 +145,27 @@ class RSSFetcher(BaseFetcher):
                 continue
             alerts.extend(result)
 
-        self.log_fetch_complete(city, len(alerts))
-        return alerts
+        logger.info(f"[RSS] Raw alerts before relevance filter: {len(alerts)}")
+
+        # Apply relevance scorer to filter out low-quality results
+        scorer = get_scorer_for_city(city.lower())
+        filtered_alerts = []
+
+        for alert in alerts:
+            score, reason = scorer.score(alert.title, alert.message)
+
+            if score >= 0.4:  # Accept MEDIUM and HIGH quality for RSS
+                # Add relevance metadata
+                if alert.raw_data is None:
+                    alert.raw_data = {}
+                alert.raw_data["relevance_score"] = score
+                alert.raw_data["relevance_reason"] = reason
+                filtered_alerts.append(alert)
+            else:
+                logger.debug(f"[RSS] Rejected (score={score:.2f}): {alert.title[:60]}... ({reason})")
+
+        self.log_fetch_complete(city, len(filtered_alerts))
+        return filtered_alerts
 
     async def _fetch_feed(self, feed_config: dict, city: str) -> list[ExternalAlertCreate]:
         """

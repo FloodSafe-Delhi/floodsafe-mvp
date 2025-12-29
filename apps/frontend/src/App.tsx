@@ -150,10 +150,7 @@ function FloodSafeApp() {
             case 'report':
                 return <ReportScreen onBack={handleBackFromReport} onSubmit={handleReportSubmit} />;
             case 'alerts':
-                return <AlertsScreen onNavigateToMap={(lat, lng) => {
-                    setInitialRouteDestination([lng, lat]);
-                    setActiveTab('map');
-                }} />;
+                return <AlertsScreen />;
             case 'profile':
                 return <ProfileScreen onNavigate={(screen) => setActiveTab(screen)} />;
             case 'privacy':

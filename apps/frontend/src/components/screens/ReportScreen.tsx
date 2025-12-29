@@ -23,15 +23,31 @@ interface ReportScreenProps {
     onSubmit: () => void;
 }
 
-// Quick tag options for flooding types
-const QUICK_TAGS = [
-    'Road Blocked',
-    'Drainage Overflow',
-    'Street Flooding',
-    'Waterlogging',
-    'Flash Flood',
-    'Heavy Rain'
-];
+// Quick tag options organized by category
+const TAG_CATEGORIES: Record<string, string[]> = {
+    '🚨 Emergency': [
+        'People Stranded',
+        'Vehicle Stuck',
+        'House Flooded',
+        'Power Outage'
+    ],
+    '🌊 Flooding': [
+        'Road Blocked',
+        'Drainage Overflow',
+        'Street Flooding',
+        'Waterlogging',
+        'Flash Flood',
+        'Heavy Rain'
+    ],
+    '🏗️ Infrastructure': [
+        'Bridge Submerged',
+        'Road Collapse'
+    ],
+    '⚠️ Hazards': [
+        'Debris Flow',
+        'Live Wires'
+    ]
+};
 
 const MAX_DESCRIPTION_LENGTH = 500;
 const MIN_DESCRIPTION_LENGTH = 10;
@@ -817,19 +833,30 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
                                 <div>
                                     <Label className="text-sm text-gray-700 mb-2 block">Quick Tags (Optional)</Label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {QUICK_TAGS.map((tag) => (
-                                            <Badge
-                                                key={tag}
-                                                variant={selectedTags.includes(tag) ? 'default' : 'outline'}
-                                                className="cursor-pointer transition-all hover:scale-105"
-                                                onClick={() => toggleTag(tag)}
-                                            >
-                                                {selectedTags.includes(tag) && (
-                                                    <X className="w-3 h-3 mr-1" />
-                                                )}
-                                                {tag}
-                                            </Badge>
+                                    <div className="space-y-3">
+                                        {Object.entries(TAG_CATEGORIES).map(([category, tags]) => (
+                                            <div key={category}>
+                                                <p className="text-xs font-semibold text-gray-600 mb-1.5">{category}</p>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {tags.map((tag) => (
+                                                        <Badge
+                                                            key={tag}
+                                                            variant={selectedTags.includes(tag) ? 'default' : 'outline'}
+                                                            className={`cursor-pointer transition-all hover:scale-105 text-xs ${
+                                                                category === '🚨 Emergency' && selectedTags.includes(tag)
+                                                                    ? 'bg-red-600 hover:bg-red-700'
+                                                                    : ''
+                                                            }`}
+                                                            onClick={() => toggleTag(tag)}
+                                                        >
+                                                            {selectedTags.includes(tag) && (
+                                                                <X className="w-3 h-3 mr-1" />
+                                                            )}
+                                                            {tag}
+                                                        </Badge>
+                                                    ))}
+                                                </div>
+                                            </div>
                                         ))}
                                     </div>
                                     <p className="text-xs text-gray-500 mt-2">

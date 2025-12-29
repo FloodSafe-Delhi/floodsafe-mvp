@@ -30,13 +30,15 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
                             <button
                                 key={tab.id}
                                 onClick={() => onTabChange(tab.id)}
-                                className="flex flex-col items-center justify-center"
-                                style={{ marginTop: '-68px' }}
+                                className={cn(
+                                    "flex flex-col items-center justify-center flex-1 py-1",
+                                    isActive ? "text-blue-600" : "text-blue-500"
+                                )}
                             >
-                                <div className="w-40 h-40 bg-blue-600 rounded-full shadow-lg flex items-center justify-center text-white hover:bg-blue-700 transition-colors">
-                                    <Icon className="w-16 h-16" />
+                                <div className="w-10 h-10 bg-blue-600 rounded-full shadow-md flex items-center justify-center text-white hover:bg-blue-700 transition-colors">
+                                    <Icon className="w-5 h-5" />
                                 </div>
-                                <span className="text-[11px] mt-2 font-black text-blue-600">{tab.label}</span>
+                                <span className="text-[10px] mt-1 font-bold">{tab.label}</span>
                             </button>
                         );
                     }

@@ -16,10 +16,13 @@ import { cn } from '../lib/utils';
 import { Report, useUpvoteReport, useDownvoteReport, useComments, useAddComment, useDeleteComment, Comment } from '../lib/api/hooks';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner';
+import { parseReportDescription } from '../lib/tagParser';
+import { ReportTagList } from './ReportTagBadge';
 
 interface ReportCardProps {
     report: Report;
     onLocate?: (lat: number, lng: number) => void;
+    onViewDetails?: (report: Report) => void;
     showFullDetails?: boolean;
 }
 
@@ -38,6 +41,11 @@ function formatTimeAgo(timestamp: string): string {
     return date.toLocaleDateString();
 }
 
+function formatExactTime(timestamp: string): string {
+    const date = new Date(timestamp.endsWith('Z') ? timestamp : timestamp + 'Z');
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 function getWaterDepthLabel(depth: string | undefined): string | null {
     if (!depth) return null;
     const labels: Record<string, string> = {
@@ -49,7 +57,7 @@ function getWaterDepthLabel(depth: string | undefined): string | null {
     return labels[depth] || depth;
 }
 
-export function ReportCard({ report, onLocate, showFullDetails = false }: ReportCardProps) {
+export function ReportCard({ report, onLocate, onViewDetails, showFullDetails = false }: ReportCardProps) {
     const { user } = useAuth();
     const [showComments, setShowComments] = useState(false);
     const [newComment, setNewComment] = useState('');
@@ -146,7 +154,7 @@ export function ReportCard({ report, onLocate, showFullDetails = false }: Report
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                             <Clock className="w-3 h-3" />
-                            <span>{formatTimeAgo(report.timestamp)}</span>
+                            <span>{formatExactTime(report.timestamp)} ({formatTimeAgo(report.timestamp)})</span>
                             {report.verified && (
                                 <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-xs font-medium">
                                     Verified
@@ -154,12 +162,21 @@ export function ReportCard({ report, onLocate, showFullDetails = false }: Report
                             )}
                         </div>
 
-                        <p className={cn(
-                            "text-gray-800 mt-1",
-                            showFullDetails ? "" : "line-clamp-2"
-                        )}>
-                            {report.description}
-                        </p>
+                        {/* Tags and Description */}
+                        {(() => {
+                            const { tags, description } = parseReportDescription(report.description);
+                            return (
+                                <>
+                                    <ReportTagList tags={tags} />
+                                    <p className={cn(
+                                        "text-gray-800 mt-1",
+                                        showFullDetails ? "" : "line-clamp-2"
+                                    )}>
+                                        {description}
+                                    </p>
+                                </>
+                            );
+                        })()}
 
                         {/* Water depth badge */}
                         {waterDepthLabel && (
@@ -244,10 +261,23 @@ export function ReportCard({ report, onLocate, showFullDetails = false }: Report
                     {netVotes > 0 ? '+' : ''}{netVotes}
                 </div>
 
+                {/* View Details button */}
+                {onViewDetails && (
+                    <button
+                        onClick={() => onViewDetails(report)}
+                        className="px-3 py-1.5 rounded-full text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors ml-auto"
+                    >
+                        View
+                    </button>
+                )}
+
                 {/* Comments toggle */}
                 <button
                     onClick={() => setShowComments(!showComments)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm hover:bg-gray-100 text-gray-600 ml-auto"
+                    className={cn(
+                        "flex items-center gap-1 px-3 py-1.5 rounded-full text-sm hover:bg-gray-100 text-gray-600",
+                        !onViewDetails && "ml-auto"
+                    )}
                 >
                     <MessageCircle className="w-4 h-4" />
                     <span>{report.comment_count || 0}</span>

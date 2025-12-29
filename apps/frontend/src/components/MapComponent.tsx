@@ -11,6 +11,7 @@ import { useCurrentCity, useCityContext } from '../contexts/CityContext';
 import { isWithinCityBounds, getAvailableCities, getCityConfig, type CityKey } from '../lib/map/cityConfigs';
 import { RouteOption, MetroStation } from '../types';
 import { toast } from 'sonner';
+import { parseReportDescription, generateTagHtml } from '../lib/tagParser';
 
 interface MapComponentProps {
     className?: string;
@@ -628,7 +629,9 @@ export default function MapComponent({
                 const waterDepth = props.water_depth || 'unknown';
                 const vehiclePassability = (props.vehicle_passability || 'unknown').replace('-', ' ');
                 const iotScore = props.iot_validation_score ?? 0;
-                const description = props.description || 'No description provided';
+                const rawDescription = props.description || 'No description provided';
+                const { tags: reportTags, description } = parseReportDescription(rawDescription);
+                const tagHtml = generateTagHtml(reportTags);
 
                 // Parse timestamp as UTC (backend stores UTC but without 'Z' suffix)
                 const parseUTCTimestamp = (timestamp: string) => {
@@ -661,6 +664,7 @@ export default function MapComponent({
                             <h3 class="font-bold text-sm">Community Report</h3>
                             ${props.verified ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded">✓ Verified</span>' : '<span class="text-xs bg-amber-500 text-white px-2 py-0.5 rounded">Pending</span>'}
                         </div>
+                        ${tagHtml ? `<div class="mb-2" style="display:flex;flex-wrap:wrap;">${tagHtml}</div>` : ''}
                         <p class="text-sm text-gray-800 mb-2 line-clamp-3">${description}</p>
                         <div class="text-xs space-y-1 text-gray-600 border-t pt-2">
                             <div class="flex justify-between">
@@ -744,9 +748,44 @@ export default function MapComponent({
                     paint: {
                         'circle-radius': 8,
                         'circle-color': ['coalesce', ['get', 'fhi_color'], ['get', 'risk_color']],
-                        'circle-stroke-width': 2,
-                        'circle-stroke-color': '#ffffff',
+                        'circle-stroke-width': [
+                            'case',
+                            ['==', ['get', 'verified'], true], 2.5,  // Thicker for verified (MCD)
+                            1.5  // Thinner for unverified (OSM)
+                        ],
+                        'circle-stroke-color': [
+                            'case',
+                            ['==', ['get', 'verified'], true], '#ffffff',  // White for verified (MCD)
+                            '#94a3b8'  // Slate-400 for unverified (OSM)
+                        ],
                         'circle-opacity': 0.9
+                    }
+                });
+
+                // Hotspot name + risk level labels
+                map.addLayer({
+                    id: 'hotspots-labels',
+                    type: 'symbol',
+                    source: 'hotspots',
+                    layout: {
+                        'text-field': [
+                            'concat',
+                            ['get', 'name'],
+                            ' - ',
+                            ['upcase', ['coalesce', ['get', 'fhi_level'], ['get', 'risk_level']]]
+                        ],
+                        'text-font': ['Open Sans Regular'],
+                        'text-size': 10,
+                        'text-offset': [0, 1.8],
+                        'text-anchor': 'top',
+                        'text-max-width': 10,
+                        'text-allow-overlap': false,
+                        'visibility': 'visible'
+                    },
+                    paint: {
+                        'text-color': '#1f2937',
+                        'text-halo-color': '#ffffff',
+                        'text-halo-width': 1.5
                     }
                 });
 
@@ -807,6 +846,9 @@ export default function MapComponent({
                                     </span>
                                 </div>
                                 ${elevation !== null ? `<div class="text-xs text-gray-400 mt-1">Elevation: ${elevation.toFixed(1)}m</div>` : ''}
+                                <div class="text-xs mt-1 ${props.verified ? 'text-green-600' : 'text-amber-600'}">
+                                    ${props.verified ? '✓ MCD Verified' : '⚠ ML Predicted (OSM)'}
+                                </div>
                                 <p class="text-gray-400 text-[10px] italic mt-1">Based on current weather conditions</p>
                             </div>
                             ` : ''}
@@ -1269,6 +1311,9 @@ export default function MapComponent({
         }
         if (map.getLayer('hotspots-layer')) {
             map.setLayoutProperty('hotspots-layer', 'visibility', layersVisible.hotspots ? 'visible' : 'none');
+        }
+        if (map.getLayer('hotspots-labels')) {
+            map.setLayoutProperty('hotspots-labels', 'visibility', layersVisible.hotspots ? 'visible' : 'none');
         }
         } catch (error) {
             console.error('Error toggling layer visibility:', error);

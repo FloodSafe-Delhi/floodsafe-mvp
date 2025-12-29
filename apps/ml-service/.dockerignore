@@ -19,3 +19,36 @@ env/
 
 # Jupyter checkpoints (temporary files)
 .ipynb_checkpoints/
+
+# =============================================================
+# TRAINING ARTIFACTS (not needed at runtime - saves ~2.4 GB)
+# =============================================================
+
+# Training data - Kaggle flood images used for YOLO training
+data/kaggle_downloads/
+
+# Archive of old/backup data files
+data/_archive/
+
+# Preprocessed flood images for training
+data/flood_images/
+
+# YOLOv8 training runs (checkpoints, visualizations, logs)
+# KEEP: flood_classifier_v1.pt is the production model
+models/yolov8_flood/runs/
+
+# Archived/broken models (old ensemble attempts)
+models/_archive/
+
+# Training data files (not needed for inference)
+data/hotspot_training_data.npz
+data/*_conservative.npz
+data/*_aggressive.npz
+
+# Development files
+*.ipynb
+scripts/
+tests/
+
+# Dev requirements (not used in production)
+requirements-dev.txt

@@ -2,16 +2,13 @@ import { useState } from 'react';
 import { Bell, RefreshCw, Loader2, AlertCircle, Cloud, Newspaper, MessageCircle, Users } from 'lucide-react';
 import { AlertCard } from '../AlertCard';
 import { ReportCard } from '../ReportCard';
+import { ReportDetailModal } from '../ReportDetailModal';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { useUnifiedAlerts, useRefreshExternalAlerts, useReports } from '../../lib/api/hooks';
+import { useUnifiedAlerts, useRefreshExternalAlerts, useReports, Report } from '../../lib/api/hooks';
 import { useCurrentCity } from '../../contexts/CityContext';
 import type { AlertSourceFilter } from '../../types';
 import { toast } from 'sonner';
-
-interface AlertsScreenProps {
-    onNavigateToMap?: (lat: number, lng: number) => void;
-}
 
 /**
  * Get filter display name
@@ -51,9 +48,10 @@ function getFilterIcon(filter: AlertSourceFilter) {
     }
 }
 
-export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
+export function AlertsScreen() {
     const city = useCurrentCity();
     const [sourceFilter, setSourceFilter] = useState<AlertSourceFilter>('all');
+    const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
     // Fetch alerts
     const { data, isLoading, error, refetch } = useUnifiedAlerts(city, sourceFilter);
@@ -87,8 +85,8 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
         // Map filters to source types
         const sourceMapping: Record<AlertSourceFilter, string[]> = {
             all: [],
-            official: ['imd', 'cwc'],
-            news: ['rss'],
+            official: ['imd', 'cwc', 'gdacs'],  // GDACS is UN official
+            news: ['rss', 'gdelt'],              // GDELT is news intelligence
             social: ['twitter', 'telegram'],
             community: ['floodsafe'],
         };
@@ -205,7 +203,11 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
                                 {communityReports.length} community report{communityReports.length !== 1 ? 's' : ''}
                             </p>
                             {communityReports.map((report) => (
-                                <ReportCard key={report.id} report={report} />
+                                <ReportCard
+                                    key={report.id}
+                                    report={report}
+                                    onViewDetails={setSelectedReport}
+                                />
                             ))}
                         </>
                     ) : (
@@ -226,7 +228,6 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
                             <AlertCard
                                 key={alert.id}
                                 alert={alert}
-                                onViewOnMap={onNavigateToMap}
                             />
                         ))
                     ) : (
@@ -253,6 +254,13 @@ export function AlertsScreen({ onNavigateToMap }: AlertsScreenProps) {
                     )
                 )}
             </div>
+
+            {/* Report Detail Modal */}
+            <ReportDetailModal
+                report={selectedReport}
+                isOpen={selectedReport !== null}
+                onClose={() => setSelectedReport(null)}
+            />
         </div>
     );
 }

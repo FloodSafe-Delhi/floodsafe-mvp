@@ -335,6 +335,10 @@ async def get_all_hotspots(
                     "elevation_m": 220.0,
                 })
 
+        # Determine source and verification status
+        source = hotspot.get("source", "mcd_reports")  # Default to MCD for legacy data
+        verified = source == "mcd_reports"  # MCD reports are verified, OSM underpasses are not
+
         # Create GeoJSON feature
         properties = {
             "id": hotspot["id"],
@@ -346,6 +350,9 @@ async def get_all_hotspots(
             "risk_color": risk_color,
             "severity_history": hotspot.get("severity_history", "unknown"),
             "rainfall_24h_mm": round(current_rainfall, 1),
+            "source": source,  # 'mcd_reports' or 'osm_underpass'
+            "verified": verified,  # True for MCD-validated, False for ML-predicted
+            "osm_id": hotspot.get("osm_id"),  # OSM way/node ID for underpasses
         }
 
         # Add FHI data if calculated
@@ -360,12 +367,22 @@ async def get_all_hotspots(
             "properties": properties,
         })
 
+    # Count verified vs unverified hotspots
+    verified_count = sum(1 for f in features if f["properties"].get("verified", True))
+    unverified_count = len(features) - verified_count
+
     response = AllHotspotsResponse(
         type="FeatureCollection",
         features=features,
         metadata={
             "generated_at": datetime.now().isoformat(),
             "total_hotspots": len(features),
+            "verified_count": verified_count,
+            "unverified_count": unverified_count,
+            "composition": {
+                "mcd_reports": verified_count,
+                "osm_underpass": unverified_count,
+            },
             "current_rainfall_mm": round(current_rainfall, 1),
             "predictions_source": "ml_cache" if predictions_cache else "severity_fallback",
             "cached_predictions_count": len(predictions_cache),

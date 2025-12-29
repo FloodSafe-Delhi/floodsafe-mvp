@@ -8,7 +8,7 @@ import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 import { Progress } from '../ui/progress';
-import { MapPin, Award, Bell, Globe, Settings, LogOut, Edit, Trash2, FileText, Route, ShieldCheck, Shield, UserCheck } from 'lucide-react';
+import { MapPin, Award, Bell, Globe, Settings, LogOut, Edit, Trash2, FileText, Route, ShieldCheck, Shield, UserCheck, Eye, Plus } from 'lucide-react';
 import { useUserReports, Report, useDailyRoutes, useDeleteDailyRoute } from '../../lib/api/hooks';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Input } from '../ui/input';
@@ -19,6 +19,20 @@ import { User } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { fetchJson } from '../../lib/api/client';
 import { cn } from '../../lib/utils';
+import { parseReportDescription } from '../../lib/tagParser';
+import { ReportTagList } from '../ReportTagBadge';
+import { ReportDetailModal } from '../ReportDetailModal';
+import {
+  StreakWidget,
+  ReputationDashboard,
+  LevelProgressCard,
+  BadgeGrid,
+  BadgeCatalogModal,
+  LeaderboardSection,
+  LeaderboardModal
+} from '../gamification';
+import AddDailyRouteDialog from '../AddDailyRouteDialog';
+import AddWatchAreaDialog from '../AddWatchAreaDialog';
 
 interface WatchArea {
   id: string;
@@ -55,6 +69,11 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
   const queryClient = useQueryClient();
   const { logout, user: authUser } = useAuth();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [badgeCatalogOpen, setBadgeCatalogOpen] = useState(false);
+  const [leaderboardModalOpen, setLeaderboardModalOpen] = useState(false);
+  const [addRouteDialogOpen, setAddRouteDialogOpen] = useState(false);
+  const [addWatchAreaDialogOpen, setAddWatchAreaDialogOpen] = useState(false);
 
   // Fetch user profile using secure endpoint
   const { data: rawUser, isLoading } = useQuery<User>({
@@ -257,57 +276,33 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
           </Card>
         )}
 
-        {/* Reputation Section */}
-        <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-lg flex items-center gap-2">
-              <Award className="w-5 h-5 text-yellow-600" />
-              Reputation Score
-            </h3>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-blue-600">Level {user.level}</div>
-              <div className="text-sm text-gray-600">{user.points} points</div>
-            </div>
-          </div>
+        {/* Gamification Section */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-gray-800 px-1">Your Progress</h2>
 
-          <div className="space-y-2 mb-4">
-            <div className="flex justify-between text-sm">
-              <span>Progress to Level {user.level + 1}</span>
-              <span className="text-gray-600">{pointsNeeded} more points</span>
-            </div>
-            <Progress value={progressToNextLevel} className="h-2" />
-          </div>
+          {/* Streak Widget */}
+          <StreakWidget />
 
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="p-3 bg-gray-50 rounded-lg">
-              <div className="text-2xl font-bold">{reportsCount}</div>
-              <div className="text-xs text-gray-600">Submitted</div>
-            </div>
-            <div className="p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">{verifiedReportsCount}</div>
-              <div className="text-xs text-gray-600">Verified</div>
-            </div>
-            <div className="p-3 bg-yellow-50 rounded-lg">
-              <div className="text-2xl font-bold text-yellow-600">
-                {reportsCount - verifiedReportsCount}
-              </div>
-              <div className="text-xs text-gray-600">Pending</div>
-            </div>
-          </div>
+          {/* Reputation Dashboard */}
+          <ReputationDashboard />
 
-          {user.badges && user.badges.length > 0 && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm font-medium text-blue-900 mb-2">Badges Earned</div>
-              <div className="flex flex-wrap gap-2">
-                {user.badges.map((badge, idx) => (
-                  <Badge key={idx} variant="secondary" className="bg-blue-100 text-blue-800">
-                    {badge}
-                  </Badge>
-                ))}
-              </div>
-            </div>
+          {/* Level Progress */}
+          {user && <LevelProgressCard user={user} />}
+
+          {/* Badge Grid with View All */}
+          <BadgeGrid
+            limit={6}
+            onViewAll={() => setBadgeCatalogOpen(true)}
+          />
+
+          {/* Leaderboard Section */}
+          {user && (
+            <LeaderboardSection
+              userId={user.id}
+              onViewFull={() => setLeaderboardModalOpen(true)}
+            />
           )}
-        </Card>
+        </div>
 
         {/* Watch Areas */}
         <Card className="p-4">
@@ -316,6 +311,15 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
               <MapPin className="w-5 h-5 text-gray-600" />
               Watch Areas ({watchAreas.length})
             </h3>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAddWatchAreaDialogOpen(true)}
+              className="flex items-center gap-1"
+            >
+              <Plus className="w-4 h-4" />
+              Add
+            </Button>
           </div>
 
           {watchAreas.length > 0 ? (
@@ -394,6 +398,15 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
               <Route className="w-5 h-5 text-gray-600" />
               Daily Routes ({dailyRoutes.length})
             </h3>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAddRouteDialogOpen(true)}
+              className="flex items-center gap-1"
+            >
+              <Plus className="w-4 h-4" />
+              Add
+            </Button>
           </div>
 
           {dailyRoutes.length > 0 ? (
@@ -449,12 +462,20 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
               <div className="text-sm">Loading reports...</div>
             </div>
           ) : userReports.length > 0 ? (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="space-y-2 max-h-[clamp(150px,30vh,350px)] overflow-y-auto">
               {userReports.slice(0, 10).map((report: Report) => (
                 <div key={report.id} className="p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="text-sm font-medium line-clamp-2">{report.description}</div>
+                      {(() => {
+                        const { tags, description } = parseReportDescription(report.description);
+                        return (
+                          <>
+                            <ReportTagList tags={tags} />
+                            <div className="text-sm font-medium line-clamp-2">{description}</div>
+                          </>
+                        );
+                      })()}
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-gray-500">
                           {new Date(report.timestamp).toLocaleDateString('en-US', {
@@ -474,11 +495,20 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
                         )}
                       </div>
                     </div>
-                    <div className="text-right text-xs text-gray-500">
-                      <div>{report.upvotes} upvotes</div>
-                      {report.water_depth && (
-                        <div className="capitalize">{report.water_depth}</div>
-                      )}
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="text-right text-xs text-gray-500">
+                        <div>{report.upvotes} upvotes</div>
+                        {report.water_depth && (
+                          <div className="capitalize">{report.water_depth}</div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => setSelectedReport(report)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors"
+                      >
+                        <Eye className="w-3 h-3" />
+                        View
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -708,6 +738,40 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
           Logout
         </Button>
       </div>
+
+      {/* Report Detail Modal */}
+      <ReportDetailModal
+        report={selectedReport}
+        isOpen={selectedReport !== null}
+        onClose={() => setSelectedReport(null)}
+      />
+
+      {/* Badge Catalog Modal */}
+      <BadgeCatalogModal
+        open={badgeCatalogOpen}
+        onOpenChange={setBadgeCatalogOpen}
+      />
+
+      {/* Leaderboard Modal */}
+      {user && (
+        <LeaderboardModal
+          open={leaderboardModalOpen}
+          onOpenChange={setLeaderboardModalOpen}
+          userId={user.id}
+        />
+      )}
+
+      {/* Add Watch Area Dialog */}
+      <AddWatchAreaDialog
+        open={addWatchAreaDialogOpen}
+        onOpenChange={setAddWatchAreaDialogOpen}
+      />
+
+      {/* Add Daily Route Dialog */}
+      <AddDailyRouteDialog
+        open={addRouteDialogOpen}
+        onOpenChange={setAddRouteDialogOpen}
+      />
     </div>
   );
 }

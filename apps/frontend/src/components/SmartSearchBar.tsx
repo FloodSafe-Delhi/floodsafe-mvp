@@ -51,8 +51,8 @@ export default function SmartSearchBar({
     const inputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
-    // Debounce the search query (100ms for near-instant response)
-    const debouncedQuery = useDebounce(query, 100);
+    // Debounce the search query (30ms for fast response)
+    const debouncedQuery = useDebounce(query, 30);
 
     // Use the unified search hook
     const { data: searchResults, isLoading, isFetching } = useUnifiedSearch({

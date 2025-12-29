@@ -22,6 +22,8 @@ from .rss_fetcher import RSSFetcher
 from .imd_fetcher import IMDFetcher
 from .twitter_fetcher import TwitterFetcher
 from .cwc_scraper import CWCScraper
+from .gdelt_fetcher import GDELTFetcher
+from .gdacs_fetcher import GDACSFetcher
 from src.infrastructure.models import ExternalAlert
 
 logger = logging.getLogger(__name__)
@@ -96,6 +98,8 @@ class AlertAggregator:
             IMDFetcher(),
             TwitterFetcher(),
             CWCScraper(),
+            GDELTFetcher(),    # News intelligence from GDELT
+            GDACSFetcher(),    # UN disaster alerts
         ]
 
     def get_enabled_fetchers(self) -> list[BaseFetcher]:
@@ -124,6 +128,8 @@ class AlertAggregator:
             "imd": "IMD Weather",
             "twitter": "Twitter/X",
             "cwc": "CWC Flood Forecast",
+            "gdelt": "GDELT News",
+            "gdacs": "UN GDACS",
         }
         return names.get(source, source.upper())
 

@@ -366,6 +366,28 @@ class ReadingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ApiKeyResponse(BaseModel):
+    """Response DTO for generated API key - shown only once"""
+    sensor_id: UUID
+    api_key: str  # Plaintext key - SHOW ONCE, then only hash is stored
+    message: str
+
+
+class SensorWithOwnerResponse(BaseModel):
+    """Extended sensor response including IoT enhancements"""
+    id: UUID
+    latitude: float
+    longitude: float
+    status: str
+    last_ping: Optional[datetime]
+    name: Optional[str]
+    hardware_type: Optional[str]
+    firmware_version: Optional[str]
+    has_api_key: bool  # True if api_key_hash is set
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class WatchAreaResponse(BaseModel):
     """Response DTO for watch area"""
     id: UUID

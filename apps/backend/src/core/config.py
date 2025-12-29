@@ -71,6 +71,13 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5175"  # For verification redirects
     BACKEND_URL: str = "http://localhost:8000"   # For verification links in emails
 
+    # Twilio WhatsApp/SMS Integration
+    TWILIO_ACCOUNT_SID: str = ""                 # Starts with "AC..."
+    TWILIO_AUTH_TOKEN: str = ""                  # Auth token from Twilio Console
+    TWILIO_WHATSAPP_NUMBER: str = ""             # e.g., "whatsapp:+14155238886" (sandbox)
+    TWILIO_SMS_NUMBER: str = ""                  # e.g., "+1234567890" (for SMS fallback)
+    TWILIO_WEBHOOK_URL: str = ""                 # Your public webhook URL for signature validation
+
     class Config:
         case_sensitive = True
         env_file = ".env"

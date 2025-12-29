@@ -45,7 +45,10 @@ DELHI_BOUNDS = {
 NEGATIVE_BUFFER_KM = 0.5
 
 # Number of negative samples per zone
-NEGATIVE_SAMPLES_PER_ZONE = 20  # 100 total (5 zones × 20)
+NEGATIVE_SAMPLES_PER_ZONE = 20  # 100 random negatives (5 zones × 20)
+
+# Path to explicit LOW risk underpasses (used as high-quality negatives)
+LOW_UNDERPASSES_FILE = Path(__file__).parent.parent / "data" / "low_risk_underpasses.json"
 
 # Sample dates for feature extraction
 # Using confirmed-working monsoon dates with SAR data available
@@ -59,6 +62,36 @@ SAMPLE_DATES = [
 
 # Zones for stratified negative sampling
 ZONES = ["ring_road", "rohtak_road_west", "central_north", "south_east", "rural_outlying"]
+
+
+def load_low_underpasses() -> List[Dict]:
+    """
+    Load LOW risk underpasses as explicit negative samples.
+
+    These are underpasses with infrastructure similar to hotspots but LOW flood risk,
+    providing high-quality negative examples that help the model learn decision boundaries.
+    """
+    if not LOW_UNDERPASSES_FILE.exists():
+        logger.warning(f"LOW underpasses file not found: {LOW_UNDERPASSES_FILE}")
+        return []
+
+    with open(LOW_UNDERPASSES_FILE) as f:
+        data = json.load(f)
+
+    negatives = []
+    for up in data["negatives"]:
+        negatives.append({
+            "id": up["id"],
+            "name": up["name"],
+            "lat": up["lat"],
+            "lng": up["lng"],
+            "zone": up["zone"],
+            "label": 0,  # Negative class
+            "source": "low_risk_underpass",  # Track source for analysis
+        })
+
+    logger.info(f"Loaded {len(negatives)} LOW risk underpasses as explicit negatives")
+    return negatives
 
 
 def haversine_distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -225,14 +258,23 @@ def main():
     for h in hotspots:
         h["label"] = 1
 
-    # Generate negative samples
-    n_negative = NEGATIVE_SAMPLES_PER_ZONE * len(ZONES)
-    print(f"Generating {n_negative} negative samples...")
-    negative_samples = generate_negative_samples(hotspots, n_negative)
+    # LOW underpasses DISABLED: Caused AUC drop from 0.82 to 0.71
+    # Using model predictions to generate labels introduced label noise
+    low_underpasses = []  # load_low_underpasses() - DISABLED
+    print(f"LOW underpasses disabled (AUC regression fix)")
 
-    # Combine samples
-    all_samples = hotspots + negative_samples
-    print(f"\nTotal samples: {len(all_samples)} ({len(hotspots)} positive, {len(negative_samples)} negative)")
+    # Generate random negative samples (reduced count since we have explicit negatives)
+    n_random_negative = NEGATIVE_SAMPLES_PER_ZONE * len(ZONES)
+    print(f"Generating {n_random_negative} random negative samples...")
+    random_negative_samples = generate_negative_samples(hotspots, n_random_negative)
+
+    # Combine all negative samples
+    all_negative_samples = low_underpasses + random_negative_samples
+    print(f"Total negatives: {len(all_negative_samples)} ({len(low_underpasses)} explicit + {len(random_negative_samples)} random)")
+
+    # Combine all samples
+    all_samples = hotspots + all_negative_samples
+    print(f"\nTotal unique locations: {len(all_samples)} ({len(hotspots)} positive, {len(all_negative_samples)} negative)")
 
     # Initialize feature extractor
     print("\nInitializing feature extractor...")
@@ -300,6 +342,10 @@ def main():
             "n_samples": len(labels),
             "n_positive": n_positive,
             "n_negative": n_negative,
+            "n_unique_locations": len(all_samples),
+            "n_hotspots": len(hotspots),
+            "n_low_underpasses": len(low_underpasses),
+            "n_random_negatives": len(random_negative_samples),
             "feature_names": FEATURE_NAMES,
             "dates_sampled": [d.strftime("%Y-%m-%d") for d in SAMPLE_DATES],
             "samples": metadata,

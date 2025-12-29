@@ -67,3 +67,19 @@ apps/ml-service/
 - Always compare against baseline
 - Use ml_flood (ECMWF) architecture as reference
 - Document data provenance
+
+## LARGE DATA FILE WARNING (CRITICAL)
+
+**NEVER read entire training data files. This will exhaust context.**
+
+### Safe Patterns
+- **NPZ files**: Use `python -c "import numpy as np; d = np.load('file.npz'); print([(k, d[k].shape) for k in d.keys()])"`
+- **CSV files**: Use Read with `limit: 15`
+- **JSON files**: Get length first, then sample ONE element
+
+### Known Traps in This Project
+- `hotspot_training_data.npz` - metadata field has 90K+ chars
+- `delhi_monsoon_*.npz` - 605 samples, don't dump full arrays
+- `delhi_waterlogging_hotspots.json` - 90 GeoJSON features
+
+**For data inspection, use `@data` skill or `data-inspector` agent.**

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ExternalLink, MapPin, Cloud, MessageCircle, Radio, Rss, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { ExternalLink, MapPin, Cloud, MessageCircle, Radio, Rss, AlertTriangle, ChevronDown, ChevronUp, Globe, Shield } from 'lucide-react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -7,7 +7,6 @@ import type { UnifiedAlert, AlertSource, AlertSeverity } from '../types';
 
 interface AlertCardProps {
     alert: UnifiedAlert;
-    onViewOnMap?: (lat: number, lng: number) => void;
 }
 
 /**
@@ -25,6 +24,10 @@ function getSourceIcon(source: AlertSource) {
             return <Radio className="w-4 h-4" />;
         case 'rss':
             return <Rss className="w-4 h-4" />;
+        case 'gdelt':
+            return <Globe className="w-4 h-4" />;
+        case 'gdacs':
+            return <Shield className="w-4 h-4" />;
         case 'floodsafe':
             return <MapPin className="w-4 h-4" />;
         default:
@@ -49,6 +52,10 @@ function getSourceDisplayName(source: AlertSource, sourceName?: string): string 
             return 'Telegram';
         case 'rss':
             return 'News';
+        case 'gdelt':
+            return 'GDELT';
+        case 'gdacs':
+            return 'UN GDACS';
         case 'floodsafe':
             return 'FloodSafe';
         default:
@@ -111,10 +118,8 @@ function formatTimeAgo(timestamp: string): string {
     return `${diffDays}d ago`;
 }
 
-export function AlertCard({ alert, onViewOnMap }: AlertCardProps) {
+export function AlertCard({ alert }: AlertCardProps) {
     const [isExpanded, setIsExpanded] = useState(false);
-
-    const hasLocation = alert.latitude !== undefined && alert.longitude !== undefined;
     const hasUrl = !!alert.url;
 
     // Truncate message for collapsed state (150 chars)
@@ -179,28 +184,16 @@ export function AlertCard({ alert, onViewOnMap }: AlertCardProps) {
                 )}
 
                 {/* Action Buttons */}
-                {(hasLocation || hasUrl) && (
+                {hasUrl && (
                     <div className="flex gap-2 flex-wrap">
-                        {hasLocation && onViewOnMap && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => onViewOnMap(alert.latitude!, alert.longitude!)}
-                            >
-                                <MapPin className="w-3 h-3 mr-1" />
-                                View on Map
-                            </Button>
-                        )}
-                        {hasUrl && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => window.open(alert.url, '_blank')}
-                            >
-                                <ExternalLink className="w-3 h-3 mr-1" />
-                                View Source
-                            </Button>
-                        )}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(alert.url, '_blank')}
+                        >
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            View Source
+                        </Button>
                     </div>
                 )}
             </div>

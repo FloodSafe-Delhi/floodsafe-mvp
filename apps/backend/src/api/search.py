@@ -155,6 +155,7 @@ async def unified_search(
 async def search_locations(
     q: str = Query(..., min_length=2, description="Location search query"),
     limit: int = Query(10, ge=1, le=20, description="Max results"),
+    city: Optional[str] = Query(None, regex="^(delhi|bangalore)$", description="City filter: 'delhi' or 'bangalore'"),
     db: Session = Depends(get_db)
 ):
     """
@@ -162,14 +163,21 @@ async def search_locations(
 
     Uses Nominatim with caching for efficiency.
     Alias expansion for common abbreviations (HSR -> HSR Layout Bangalore).
+
+    When city is provided, results are filtered to that city's bounds.
     """
-    # Don't filter by city bounds - let Nominatim return results from anywhere in India
-    # This allows searches like "HSR" to return HSR Layout Bangalore
+    # Determine city bounds based on city parameter
+    city_bounds = None
+    if city == 'delhi':
+        city_bounds = DELHI_BOUNDS
+    elif city == 'bangalore':
+        city_bounds = BANGALORE_BOUNDS
+
     search_service = get_search_service(db)
     results = await search_service.unified_search(
         query=q,
         search_type="locations",
-        city_bounds=None,  # No city filtering for location search
+        city_bounds=city_bounds,
         limit=limit
     )
 

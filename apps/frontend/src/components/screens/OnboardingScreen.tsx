@@ -18,9 +18,9 @@ import {
     useUpdateUserOnboarding,
     useWatchAreas,
     useDailyRoutes,
-    useGeocode
+    useLocationSearch
 } from '../../lib/api/hooks';
-import type { OnboardingFormState, OnboardingAction, WatchAreaCreate, DailyRouteCreate, GeocodingResult } from '../../types';
+import type { OnboardingFormState, OnboardingAction, WatchAreaCreate, DailyRouteCreate, SearchLocationResult } from '../../types';
 import { CITIES, isWithinCityBounds } from '../../lib/map/cityConfigs';
 
 // UI Components
@@ -488,21 +488,23 @@ function Step3WatchAreas({ watchAreas, existingWatchAreas, city, onAdd, onRemove
     const [searchQuery, setSearchQuery] = useState('');
     const [isGettingLocation, setIsGettingLocation] = useState(false);
 
-    // 100ms debounce for responsive search
-    const debouncedSearchQuery = useDebounce(searchQuery, 100);
+    // 30ms debounce for fast, responsive search
+    const debouncedSearchQuery = useDebounce(searchQuery, 30);
 
-    // Use geocoding for location search with debounced query
-    const { data: searchResults = [], isLoading: isSearching } = useGeocode(
+    // Use backend location search with city filtering
+    const { data: searchResults = [], isLoading: isSearching } = useLocationSearch(
         debouncedSearchQuery,
+        5,
+        city || undefined,  // Filter by selected city
         debouncedSearchQuery.length >= 3
     );
 
-    const handleAddFromSearch = (result: GeocodingResult) => {
+    const handleAddFromSearch = (result: SearchLocationResult) => {
         onAdd({
             user_id: userId,
-            name: name || result.display_name.split(',')[0],
-            latitude: parseFloat(result.lat),
-            longitude: parseFloat(result.lon),
+            name: name || result.formatted_name || result.display_name.split(',')[0],
+            latitude: result.lat,   // Already number, no parseFloat needed
+            longitude: result.lng,  // lng not lon, already number
             radius: 1000,
         });
         setName('');
@@ -652,7 +654,7 @@ function Step3WatchAreas({ watchAreas, existingWatchAreas, city, onAdd, onRemove
                                 className="w-full p-2 text-left hover:bg-gray-50 text-sm"
                                 onClick={() => handleAddFromSearch(result)}
                             >
-                                {result.display_name}
+                                {result.formatted_name || result.display_name}
                             </button>
                         ))}
                     </div>

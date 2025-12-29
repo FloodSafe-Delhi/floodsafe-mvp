@@ -1250,6 +1250,50 @@ export function useBadgesCatalog() {
 }
 
 // ============================================================================
+// LEADERBOARD HOOKS
+// ============================================================================
+
+export interface LeaderboardEntry {
+    rank: number;
+    display_name: string;
+    profile_photo_url: string | null;
+    points: number;
+    level: number;
+    reputation_score: number;
+    verified_reports: number;
+    badges_count: number;
+    is_anonymous: boolean;
+}
+
+export interface LeaderboardResponse {
+    leaderboard_type: string;
+    updated_at: string;
+    entries: LeaderboardEntry[];
+    current_user_rank: number | null;
+}
+
+/**
+ * Fetch leaderboard data with optional filtering by type.
+ * Types: 'global' (all-time), 'weekly' (last 7 days), 'monthly' (last 30 days)
+ * Pass userId to get current user's rank even if not in top N.
+ */
+export function useLeaderboard(
+    type: 'global' | 'weekly' | 'monthly' = 'global',
+    limit = 10,
+    userId?: string
+) {
+    return useQuery<LeaderboardResponse>({
+        queryKey: ['leaderboard', type, limit, userId],
+        queryFn: () => {
+            const params = new URLSearchParams({ type, limit: String(limit) });
+            if (userId) params.append('user_id', userId);
+            return fetchJson(`/leaderboards/?${params}`);
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
+    });
+}
+
+// ============================================================================
 // COMMUNITY FEEDBACK HOOKS (Voting and Comments)
 // ============================================================================
 

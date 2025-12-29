@@ -8,8 +8,9 @@ import {
 } from 'lucide-react';
 import { FloodAlert } from '../../types';
 import MapComponent from '../MapComponent';
-import { useSensors, useReports, useUsers, useActiveReporters, useNearbyReporters, useLocationDetails, useWatchAreas, useDailyRoutes } from '../../lib/api/hooks';
+import { useSensors, useReports, useUsers, useActiveReporters, useNearbyReporters, useLocationDetails, useWatchAreas, useDailyRoutes, Report } from '../../lib/api/hooks';
 import { toast } from 'sonner';
+import { ReportDetailModal } from '../ReportDetailModal';
 import { cn } from '../../lib/utils';
 import { getNestedArray, hasLocationData } from '../../lib/safe-access';
 import { detectCityFromCoordinates, getCityKeyFromCoordinates, type CityKey } from '../../lib/map/cityConfigs';
@@ -67,6 +68,7 @@ export function HomeScreen({
     });
     const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [mapTargetLocation, setMapTargetLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [selectedReport, setSelectedReport] = useState<Report | null>(null);
 
     // Update city filter when user's city preference changes
     useEffect(() => {
@@ -758,7 +760,11 @@ export function HomeScreen({
                                             </div>
                                             <div className="flex gap-2 mt-2 flex-wrap">
                                                 <button
-                                                    onClick={() => toast.info('Viewing report details')}
+                                                    onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    console.log('View clicked, setting report:', report?.id);
+                                                    setSelectedReport(report);
+                                                }}
                                                     className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors min-h-[44px]"
                                                 >
                                                     View
@@ -933,6 +939,14 @@ export function HomeScreen({
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Report Detail Modal */}
+            <ReportDetailModal
+                report={selectedReport}
+                isOpen={selectedReport !== null}
+                onClose={() => setSelectedReport(null)}
+                onLocate={(lat, lng) => handleLocateAlert(lat, lng, 'Report Location')}
+            />
 
         </div>
     );

@@ -260,12 +260,29 @@ export interface PhotoGps {
     lng: number;
 }
 
+// ML Flood Image Classification result (from YOLOv8 classifier)
+export interface FloodClassificationResult {
+    classification: 'flood' | 'no_flood';
+    confidence: number;  // 0.0-1.0
+    flood_probability: number;  // 0.0-1.0
+    is_flood: boolean;  // True if flood_probability >= threshold (0.3)
+    needs_review: boolean;  // True if probability in uncertain range (0.3-0.7)
+    verification_score: number;  // 0-100 score for report quality
+    probabilities: {
+        flood: number;
+        no_flood: number;
+    };
+}
+
 export interface PhotoData {
     file: File;
     gps: PhotoGps;
     source: 'camera' | 'gallery';
     isLocationVerified: boolean; // true if within 100m of reported location
     previewUrl: string;
+    // ML classification results (optional - may not be available)
+    mlClassification?: FloodClassificationResult | null;
+    mlValidating?: boolean;  // True while ML classification is in progress
 }
 
 export interface PhotoCaptureProps {
@@ -554,7 +571,7 @@ export interface RouteComparisonResponse {
 // UNIFIED ALERTS TYPES (Enhanced Alerts Section)
 // ============================================================================
 
-export type AlertSource = 'imd' | 'cwc' | 'twitter' | 'rss' | 'telegram' | 'floodsafe';
+export type AlertSource = 'imd' | 'cwc' | 'twitter' | 'rss' | 'telegram' | 'floodsafe' | 'gdelt' | 'gdacs';
 export type AlertType = 'external' | 'community';
 export type AlertSeverity = 'low' | 'moderate' | 'high' | 'severe';
 export type AlertSourceFilter = 'all' | 'official' | 'news' | 'social' | 'community';

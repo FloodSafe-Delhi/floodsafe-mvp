@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 
 from .core.config import settings
-from .api import predictions, hotspots
+from .api import predictions, hotspots, image_classification
 from .models.ensemble import create_default_ensemble
 from .features.extractor import FeatureExtractor
 from .data.gee_client import gee_client
@@ -49,6 +49,11 @@ app.include_router(
     hotspots.router,
     prefix=f"{settings.API_V1_STR}/hotspots",
     tags=["hotspots"],
+)
+app.include_router(
+    image_classification.router,
+    prefix=f"{settings.API_V1_STR}",
+    tags=["image-classification"],
 )
 
 
@@ -119,12 +124,26 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Grid cache loading failed: {e}")
 
+    # Initialize flood image classifier (MobileNet - Sohail's pretrained model)
+    try:
+        logger.info("Initializing flood image classifier...")
+        if image_classification.initialize_classifier():
+            classifier = image_classification.get_classifier()
+            logger.info(f"✓ MobileNet flood classifier loaded (threshold: {classifier.threshold})")
+        else:
+            logger.warning("✗ Flood classifier not available - image verification disabled")
+            logger.warning("  Ensure sohail_flood_model.h5 exists in models/")
+    except Exception as e:
+        logger.warning(f"Flood classifier initialization failed: {e}")
+
     logger.info("=" * 60)
     logger.info("ML Service startup complete")
     logger.info(f"  Model loaded: {predictions.ensemble_model is not None}")
     logger.info(f"  Model trained: {predictions.ensemble_model.is_trained if predictions.ensemble_model else False}")
     logger.info(f"  Hotspots: {len(hotspots.hotspots_data)} locations")
     logger.info(f"  Grid cache: {len(predictions.grid_predictions_cache.get('features', [])) if predictions.grid_predictions_cache else 0} points")
+    classifier = image_classification.get_classifier()
+    logger.info(f"  Flood classifier: {'ready' if classifier and classifier.is_trained else 'not available'}")
     logger.info(f"  GEE available: {gee_client._initialized}")
     logger.info(f"  Docs: {settings.API_V1_STR}/docs")
     logger.info("=" * 60)

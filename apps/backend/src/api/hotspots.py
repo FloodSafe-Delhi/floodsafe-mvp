@@ -93,6 +93,10 @@ def _load_static_hotspots() -> Dict[str, Any]:
             logger.warning(f"Skipping hotspot without coordinates: {hotspot.get('id')}")
             continue
 
+        # Determine source and verification status
+        source = hotspot.get("source", "mcd_reports")  # Default to MCD for legacy data
+        verified = source == "mcd_reports"  # MCD reports are verified, OSM underpasses are not
+
         feature = {
             "type": "Feature",
             "geometry": {
@@ -112,6 +116,9 @@ def _load_static_hotspots() -> Dict[str, Any]:
                 "historical_severity": severity,
                 "elevation_m": hotspot.get("elevation_m"),
                 "static_data": True,  # Flag indicating this is static data
+                "source": source,  # 'mcd_reports' or 'osm_underpass'
+                "verified": verified,  # True for MCD-validated, False for ML-predicted
+                "osm_id": hotspot.get("osm_id"),  # OSM way/node ID for underpasses
             }
         }
         features.append(feature)

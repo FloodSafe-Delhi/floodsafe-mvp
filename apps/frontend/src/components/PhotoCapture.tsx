@@ -1,11 +1,12 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import ExifReader from 'exifreader';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
-import { Camera, ImagePlus, X, MapPin, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Camera, ImagePlus, X, MapPin, CheckCircle, AlertTriangle, Loader2, Droplets } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PhotoCaptureProps, PhotoData, PhotoGps } from '../types';
+import { useClassifyFloodImage } from '../lib/api/hooks';
 
 // 100m tolerance in degrees (approximately)
 const GPS_TOLERANCE_DEGREES = 0.001;
@@ -93,6 +94,41 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
     const [isProcessing, setIsProcessing] = useState(false);
     const [isGettingGps, setIsGettingGps] = useState(false);
 
+    // ML-based flood image classification (non-blocking)
+    const classifyMutation = useClassifyFloodImage();
+
+    // Run ML classification when a new photo is captured
+    const runMlClassification = useCallback((file: File, photoData: PhotoData) => {
+        // Mark as validating
+        onPhotoCapture({ ...photoData, mlValidating: true });
+
+        // Run classification (non-blocking)
+        classifyMutation.mutate(file, {
+            onSuccess: (result) => {
+                // Update photo with ML results
+                onPhotoCapture({
+                    ...photoData,
+                    mlClassification: result,
+                    mlValidating: false,
+                });
+
+                // Show toast feedback
+                if (result.is_flood) {
+                    toast.success(`Flood detected (${Math.round(result.confidence * 100)}% confidence)`);
+                } else if (result.needs_review) {
+                    toast.warning('Photo needs review - unclear if flood is present');
+                } else {
+                    toast.warning('Photo may not show flooding. You can still submit.');
+                }
+            },
+            onError: (error) => {
+                console.log('ML classification unavailable:', error);
+                // Don't block - just clear validating state
+                onPhotoCapture({ ...photoData, mlValidating: false });
+            },
+        });
+    }, [classifyMutation, onPhotoCapture]);
+
     // Handle camera capture
     const handleCameraCapture = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -142,6 +178,9 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
             };
 
             onPhotoCapture(photoData);
+
+            // Trigger non-blocking ML classification
+            runMlClassification(file, photoData);
         } catch (error) {
             console.error('Camera capture error:', error);
             toast.error('Failed to process photo');
@@ -149,7 +188,7 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
             setIsProcessing(false);
             setIsGettingGps(false);
         }
-    }, [reportedLocation, onPhotoCapture]);
+    }, [reportedLocation, onPhotoCapture, runMlClassification]);
 
     // Handle gallery upload
     const handleGalleryUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -194,13 +233,16 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
 
             onPhotoCapture(photoData);
             toast.success('Photo uploaded successfully');
+
+            // Trigger non-blocking ML classification
+            runMlClassification(file, photoData);
         } catch (error) {
             console.error('Gallery upload error:', error);
             toast.error('Failed to process photo');
         } finally {
             setIsProcessing(false);
         }
-    }, [reportedLocation, onPhotoCapture]);
+    }, [reportedLocation, onPhotoCapture, runMlClassification]);
 
     // Remove photo
     const handleRemovePhoto = useCallback(() => {
@@ -268,6 +310,34 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
                         >
                             <X className="h-4 w-4" />
                         </Button>
+
+                        {/* ML Classification badge - top left */}
+                        <div className="absolute top-2 left-2">
+                            {photo.mlValidating && (
+                                <Badge className="bg-gray-500 hover:bg-gray-600 text-white flex items-center gap-1">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    Analyzing...
+                                </Badge>
+                            )}
+                            {photo.mlClassification && !photo.mlValidating && (
+                                photo.mlClassification.is_flood ? (
+                                    <Badge className="bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-1">
+                                        <Droplets className="h-3 w-3" />
+                                        Flood Detected ({Math.round(photo.mlClassification.confidence * 100)}%)
+                                    </Badge>
+                                ) : photo.mlClassification.needs_review ? (
+                                    <Badge className="bg-yellow-500 hover:bg-yellow-600 text-white flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        Needs Review
+                                    </Badge>
+                                ) : (
+                                    <Badge className="bg-orange-500 hover:bg-orange-600 text-white flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        May Not Be Flood
+                                    </Badge>
+                                )
+                            )}
+                        </div>
 
                         {/* Verification badge */}
                         <div className="absolute bottom-2 left-2">

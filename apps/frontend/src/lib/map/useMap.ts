@@ -183,7 +183,7 @@ export function useMap(
                             3, '#41B6C4',  // Teal
                             4, '#225EA8'   // Dark blue - highest flood risk
                         ],
-                        'fill-opacity': 0.6
+                        'fill-opacity': 0.25
                     }
                 },
                 // Search result marker - outer glow

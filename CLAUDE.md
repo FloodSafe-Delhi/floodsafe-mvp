@@ -23,6 +23,73 @@
 
 7. **FRONTEND DEV SERVER IS PORT 5175** - The frontend runs on `http://localhost:5175`, NOT 5173. Never confuse this.
 
+8. **CHECK DEPENDENCIES BEFORE CREATING** - Before creating new functions/files, search if similar functionality exists. Reuse existing code. Never duplicate.
+
+9. **ASK QUESTIONS WHENEVER NEEDED** - Don't proceed with ambiguity. Clarify scope, requirements, and acceptance criteria. Better to ask than assume wrong.
+
+10. **BE PATIENT - DON'T RUSH TO FINISH** - Don't jump to conclusions. Don't mark things complete prematurely. Take time to do it right.
+
+11. **VERIFY BEFORE CLAIMING COMPLETE** - "It should work" is not verification. TEST IT. PROVE IT. Be skeptical of your own work.
+
+12. **USE SUBAGENTS PRODUCTIVELY** - Use explore agents for unfamiliar code (3+ files). Use specialized agents for their domains. Use verifier/code-reviewer after implementation.
+
+13. **DOCUMENT IMPORTANT FINDINGS** - Add significant discoveries to REALISATIONS.md. Record gotchas, edge cases, and non-obvious behaviors.
+
+---
+
+## THE 10 COMMANDMENTS (Quick Reference)
+
+1. **EXPLORE FIRST** - Understand before you change
+2. **ASK QUESTIONS** - Clarify before you assume
+3. **CHECK EXISTING CODE** - Reuse before you create
+4. **PLAN PROPERLY** - Think before you code
+5. **NO SHORTCUTS** - Do it right, not fast
+6. **TYPE EVERYTHING** - No `any`, ever
+7. **FIX ROOT CAUSES** - Not symptoms
+8. **VERIFY THOROUGHLY** - Test, don't assume
+9. **BE PATIENT** - Don't rush to "done"
+10. **DOCUMENT LEARNINGS** - Record in REALISATIONS.md
+
+---
+
+## LARGE DATA FILE HANDLING (MANDATORY)
+
+**CRITICAL: NEVER attempt to read entire training data files. This WILL exhaust context and cause failure.**
+
+### Dangerous File Types
+| Type | Example | Trap |
+|------|---------|------|
+| `.npz` | `hotspot_training_data.npz` | metadata field can be 90K+ chars |
+| `.csv` | `India_Flood_Inventory_v3.csv` | 1000+ rows |
+| `.json` | Large GeoJSON files | Feature arrays with 100+ elements |
+
+### Safe Inspection Patterns
+
+**1. NPZ files** - Use Python one-liner (NEVER use Read tool):
+```bash
+python -c "import numpy as np; d = np.load('file.npz'); print([(k, d[k].shape, d[k].dtype) for k in d.keys()])"
+```
+
+**2. CSV files** - Read first 10-20 lines only:
+```
+Use Read tool with limit: 15
+```
+
+**3. JSON files** - Get count first, then sample ONE element:
+```bash
+python -c "import json; d=json.load(open('file.json')); print(f'Type: {type(d).__name__}, Len: {len(d)}')"
+```
+
+### Red Flags (STOP IMMEDIATELY)
+- About to read a data file WITHOUT `limit` parameter
+- Planning to read entire .npz file (binary - won't work anyway)
+- Second read of same large file "to see more examples"
+- Accessing `np.load()['metadata']` directly (often 90K+ chars!)
+
+### Use @data Skill
+For data inspection, invoke: `@data path/to/file.npz`
+This automatically applies safe patterns. See `.claude/commands/data.md`.
+
 ---
 
 ## Quick Reference
@@ -181,6 +248,26 @@ Always `[longitude, latitude]` order (not lat/lng).
 4. **Debug tip**: Use JS to check `element.getBoundingClientRect()` - if `top` is way off viewport (e.g., 1178px when viewport is 739px), a parent transform is likely the cause
 
 **Solution**: Render fixed overlays via Portal to document root, or use custom divs without Radix context dependencies.
+
+#### Docker Named Volumes vs Local Files
+**CRITICAL**: ML models trained locally won't appear in Docker containers using named volumes!
+
+The `docker-compose.yml` uses named volumes for ML models:
+```yaml
+volumes:
+  - ml_models:/app/models  # Named volume - isolated from local filesystem!
+```
+
+**Problem**: Training saves to `apps/ml-service/models/` locally, but Docker uses `/app/models/` from the named volume (separate storage).
+
+**Solutions**:
+1. **Copy manually**: `docker cp local/model.pt container:/app/models/`
+2. **Restart service**: `docker-compose restart ml-service`
+3. **For development**: Consider bind mount instead:
+   ```yaml
+   volumes:
+     - ./apps/ml-service/models:/app/models  # Bind mount - shares local files
+   ```
 
 ---
 
@@ -346,17 +433,23 @@ patterns:
 ```yaml
 files:
   ML Service:
-  - apps/ml-service/src/api/hotspots.py - 62 Delhi waterlogging hotspots
+  - apps/ml-service/src/api/hotspots.py - 90 Delhi waterlogging hotspots (62 MCD + 28 OSM)
   - apps/ml-service/src/data/fhi_calculator.py - FHI calculation
-  - apps/ml-service/data/delhi_waterlogging_hotspots.json - Location data
+  - apps/ml-service/data/delhi_waterlogging_hotspots.json - Location data with source field
 
   Backend:
-  - apps/backend/src/api/hotspots.py - API proxy with caching
+  - apps/backend/src/api/hotspots.py - API proxy with caching, source/verified fields
   - apps/backend/verify_hotspot_spatial.py - Spatial differentiation test
 
   Frontend:
-  - apps/frontend/src/lib/api/hooks.ts - useHotspots hook (30min cache)
+  - apps/frontend/src/lib/api/hooks.ts - useHotspots hook (30min cache), HotspotFeature types
   - apps/frontend/src/components/MapComponent.tsx:710-857 - Layer rendering
+
+hotspot_composition:
+  total: 90
+  sources:
+    - mcd_reports: 62 (verified - original MCD Delhi validated)
+    - osm_underpass: 28 (unverified - ML-predicted high-risk underpasses)
 
 architecture:
   FHI (Flood Hazard Index) - CUSTOM HEURISTIC (NOT from published research):
@@ -379,10 +472,10 @@ color_priority: |
 
 verification:
   - Run: python apps/backend/verify_hotspot_spatial.py
-  - Tests: 62 unique coordinates, elevation variation, FHI distribution
-  - Expected: PASS with 32+ unique elevations across 70m+ range
+  - Tests: 90 unique coordinates, elevation variation, FHI distribution
+  - Expected: PASS with 40+ unique elevations across 70m+ range
 
-status: COMPLETE - FHI-first coloring, spatial differentiation verified
+status: COMPLETE - 90 hotspots with source/verified fields, FHI-first coloring
 ```
 
 ### @ml-predictions (PARTIAL - XGBoost works, Ensemble broken)
@@ -401,13 +494,21 @@ files:
   - apps/frontend/src/components/MapComponent.tsx - Heatmap layer
 
 trained_models:
-  XGBoost Hotspot Model (PRODUCTION READY):
+  XGBoost Hotspot Model v2.1 (90 HOTSPOTS):
     - Location: apps/ml-service/models/xgboost_hotspot/xgboost_model.json
-    - Trained: 2025-12-12
-    - AUC: 0.984 (exceeds 0.85 target)
-    - Precision: 0.927, Recall: 0.957, F1: 0.942
+    - Trained: 2025-12-26 (retrained with 90 hotspots)
+    - Training Data: 570 samples (90 hotspots + 100 negatives × 3 monsoon dates)
+    - PURPOSE 1 - Dynamic Risk at Known Hotspots: WORKS
+      - Standard CV AUC: 0.9868 ± 0.017 (exceeds 0.85 target)
+      - Precision: 0.917, Recall: 0.974, F1: 0.945
+      - Model responds to weather changes for same location
+    - PURPOSE 2 - Generalize to New Locations: LIMITED
+      - Location-Aware CV AUC: 0.7535 ± 0.033 (below 0.85 target)
+      - NOTE: AUC varies 0.70-0.82 depending on random negative samples
+      - Temporal consistency gap: 0.041 (PASSES <0.10)
     - Features: 18-dim (elevation, slope, TPI, TRI, TWI, SPI, rainfall, land cover, SAR)
-    - Top predictors: sar_vh_mean (18.5%), slope (7.3%), elevation (7.0%)
+    - Top predictors: built_up_pct (15.7%), sar_vv_mean (10.3%), sar_vh_mean (8.8%)
+    - Next target: 300+ locations for AUC ≥0.85
 
 broken_models:
   ConvLSTM/GNN/LightGBM Ensemble:
@@ -421,8 +522,36 @@ feature_extractors:
   General (37-dim): Dynamic World (9), WorldCover (6), Sentinel-2 (5), Terrain (6), Precip (5), Temporal (4), GloFAS (2)
 
 training_data:
-  - hotspot_training_data.npz: 486 samples × 18-dim (USED by XGBoost - WORKING)
+  - hotspot_training_data.npz: 570 samples × 18-dim (90 hotspots + 100 negatives × 3 dates)
   - delhi_monsoon_5years_*.npz: 605 samples × 37-dim (for future ensemble training)
+
+verification_results:
+  Run: python apps/ml-service/scripts/verify_xgboost_model.py
+  Date: 2025-12-26 (retrained with 90 hotspots)
+
+  Standard CV:
+    - AUC: 0.9868 ± 0.017
+    - Precision: 0.917, Recall: 0.974, F1: 0.945
+    - All folds PASS 0.85 target
+
+  Location-Aware CV (HONEST - GroupKFold):
+    - AUC: 0.7535 ± 0.033 (below 0.85 target)
+    - Same location NEVER in train+test
+    - Per-fold: 0.726, 0.714, 0.755, 0.766, 0.807
+    - NOTE: AUC varies 0.70-0.82 due to random negative sampling
+
+  Temporal Split (PASSES):
+    - 2022 -> 2023: AUC 0.956
+    - 2023 -> 2022: AUC 0.997
+    - Gap: 0.041 (< 0.10 threshold)
+
+  Why Still Below 0.85:
+    - 190 unique locations is limited (need 300+)
+    - Model memorizes terrain patterns, struggles to generalize
+    - Fold 1 shows 91 location overlap explains inflated Standard CV
+    - No drainage network data (infrastructure failures invisible)
+
+  Next Phase: Collect 150+ more diverse flood-prone locations
 
 data_imbalance:
   - Low risk (0.0-0.2): 583 samples (96.4%)
@@ -438,18 +567,41 @@ risk_levels:
   - 0.7-1.0: Extreme (red)
 
 what_works:
-  - XGBoost hotspot model (AUC 0.984) - PRODUCTION READY
-  - FHI formula (rule-based, custom heuristic)
+  - XGBoost for KNOWN 62 HOTSPOTS - VERIFIED WORKING (weather-sensitive)
+    - Model responds to weather changes (MODERATE sensitivity)
+    - SAR features (cloud-penetrating) drive predictions during monsoon
+    - Predictions vary 0.22-0.89 for same location based on weather
+  - FHI formula (rule-based, custom heuristic) - WORKS for known locations
   - Pre-computed heatmap cache
   - Feature extraction pipelines (18-dim and 37-dim)
 
+what_does_not_work:
+  - XGBoost for NEW LOCATIONS - LIMITED (AUC 0.70-0.82, avg ~0.75)
+    - Model memorizes terrain of 90 known hotspots
+    - Cannot reliably generalize to discover new flood-prone areas
+    - AUC varies with random negative sample selection
+    - Solution: Collect 300+ diverse training locations
+
+  - Ensemble Models (LSTM/GNN/LightGBM) - BROKEN
+    - Architecture exists but never trained
+    - /forecast endpoint returns fallback 0.1
+
 what_needs_fixing:
-  - Train ConvLSTM/GNN/LightGBM ensemble on 37-dim data
-  - Address data imbalance with cost-weighted training
-  - Replace broken models in _archive/
+  Medium Priority:
+    - Train ConvLSTM/GNN/LightGBM ensemble on 37-dim data
+    - Address data imbalance with cost-weighted training
+    - Collect training data from more diverse locations
+
+  Low Priority:
+    - is_monsoon feature has 0% importance (all samples from monsoon)
+    - Consider removing or replacing with month encoding
 
 status: |
-  PARTIAL - XGBoost hotspot model WORKS (AUC 0.984)
+  XGBoost Hotspot Model - DUAL PURPOSE VERDICT:
+  - PURPOSE 1 (Known Hotspots): WORKS - model responds to weather
+  - PURPOSE 2 (New Locations): FAILS - AUC 0.71, cannot generalize
+  USE FOR: Dynamic risk calculation at 62 known Delhi waterlogging hotspots
+  DO NOT USE FOR: Discovering new flood-prone locations
   Ensemble models (LSTM/GNN/LightGBM) are BROKEN - return fallback 0.1
   NOTE: FHI is a CUSTOM HEURISTIC, not from published research
 ```
@@ -567,21 +719,44 @@ status: |
   NEXT: Add verified_reporter role with auto-elevated trust scores
 ```
 
-### @photo-verification (GPS Only)
+### @photo-verification (GPS + ML Classification COMPLETE)
 ```yaml
 files:
+  GPS Verification:
   - apps/backend/src/api/reports.py:241-288 - EXIF GPS extraction
   - apps/backend/src/domain/services/validation_service.py - IoT cross-validation
 
+  ML Classification:
+  - apps/ml-service/src/models/mobilenet_flood_classifier.py - MobileNet architecture
+  - apps/ml-service/src/api/image_classification.py - /classify-flood endpoint
+  - apps/ml-service/models/sohail_flood_model.h5 - Pre-trained weights (28MB, 55 layers)
+  - apps/backend/src/api/ml.py - Backend proxy endpoint
+  - apps/frontend/src/lib/api/hooks.ts - useClassifyFloodImage() hook
+
 current_verification:
-  1. Extract GPS from photo EXIF metadata (PIL)
-  2. Compare photo GPS to reported location
-  3. If distance > 100m, set location_verified=False
-  4. Cross-validate with nearby IoT sensors (1km radius)
-  5. Calculate iot_validation_score (0-100)
+  GPS:
+    1. Extract GPS from photo EXIF metadata (PIL)
+    2. Compare photo GPS to reported location
+    3. If distance > 100m, set location_verified=False
+    4. Cross-validate with nearby IoT sensors (1km radius)
+    5. Calculate iot_validation_score (0-100)
+
+  ML Classification:
+    1. Frontend sends image to POST /api/ml/classify-flood
+    2. Backend proxies to ML service at :8002/api/v1/classify-flood
+    3. MobileNet model classifies flood vs no_flood
+    4. Returns: {is_flood, confidence, flood_probability, class_name}
+    5. Threshold: 0.3 (safety-first to minimize false negatives)
+
+ml_model_details:
+  architecture: MobileNet with custom binary classification head
+  input: 224x224 RGB images
+  output: flood probability (0-1)
+  threshold: 0.3 (low to catch more potential floods)
+  training: apps/ml-service/scripts/train_flood_binary.py
+  weights: models/sohail_flood_model.h5
 
 what_does_NOT_exist:
-  - ML classification of flood vs non-flood images
   - Water depth estimation from photos
   - Fake/manipulated image detection
   - Actual photo storage (uses mock URLs)
@@ -591,8 +766,9 @@ photo_storage: |
   Photos are processed but NOT stored to S3/Blob
 
 status: |
-  PARTIAL - GPS verification works
-  MISSING: ML flood detection, severity estimation, real storage
+  GPS verification: COMPLETE
+  ML flood classification: COMPLETE
+  MISSING: Depth estimation, fake detection, real storage
 ```
 
 ### @whatsapp (SKELETON)
@@ -690,23 +866,34 @@ watch_area: Connaught Place
 - [x] Authentication (Email/Password + Google + Phone)
 - [x] E2E Testing Suite (Playwright)
 
-### Tier 2: ML/AI Foundation (PARTIAL - XGBoost works, Ensemble broken)
+### Tier 2: ML/AI Foundation (PARTIAL - See Dual Purpose Analysis)
 
-**What Works:**
-- [x] XGBoost Hotspot Model (AUC 0.984, Precision 0.927, Recall 0.957) - PRODUCTION READY
+**What Works (Verified 2025-12-24):**
+- [x] XGBoost for KNOWN 62 HOTSPOTS - WEATHER SENSITIVE
+  - Model responds to weather changes (MODERATE sensitivity)
+  - SAR VV/VH features drive predictions (r=0.35-0.36)
+  - Predictions vary 0.22-0.89 based on rainfall/SAR
+  - Verification: python apps/ml-service/scripts/test_xgboost_weather_sensitivity.py
 - [x] FHI rule-based risk calculation (CUSTOM HEURISTIC, not from published research)
 - [x] Hotspot feature extractor (18-dim)
 - [x] General feature extractor (37-dim)
 - [x] Pre-computed heatmap cache
 - [x] Historical Floods Panel (Delhi NCR 1969-2023)
 - [x] Hotspots with live weather (FHI formula)
-- [x] Spatial differentiation verification
 
-**Training Data Verified:**
-- [x] hotspot_training_data.npz: 486 samples × 18-dim (balanced: 38.3% positive)
-- [x] delhi_monsoon_5years_*.npz: 605 samples × 37-dim (severely imbalanced: 96.4% low-risk)
+**XGBoost Dual Purpose Verdict:**
+- PURPOSE 1 (Known Hotspots): WORKS - responds to weather
+- PURPOSE 2 (New Locations): LIMITED - AUC 0.70-0.82 (needs 0.85)
+- USE FOR: Dynamic risk at 90 known Delhi waterlogging hotspots
+- DO NOT USE FOR: Discovering new flood-prone locations
+
+**Training Data:**
+- [x] hotspot_training_data.npz: 570 samples × 18-dim (47% positive)
+- 190 unique locations (90 hotspots + 100 negatives × 3 dates)
+- is_monsoon feature has 0% importance (all samples from monsoon)
 
 **What's Broken:**
+- [ ] XGBoost spatial generalization - Need 300+ diverse locations to discover new hotspots
 - [ ] ConvLSTM/GNN/LightGBM Ensemble - Architecture exists but NEVER TRAINED
 - [ ] /forecast endpoint silently returns hardcoded 0.1 probability (fallback)
 - [ ] Data imbalance (only 4 high-risk events in 5 years) - needs cost-weighted training
@@ -719,7 +906,7 @@ watch_area: Connaught Place
 - [ ] Real-time sensor status dashboard
 
 ### Tier 4: Photo Intelligence
-- [ ] Photo ML: Flood vs non-flood classification
+- [x] Photo ML: Flood vs non-flood classification (MobileNet, threshold 0.3)
 - [ ] Water depth estimation from images
 - [ ] Fake/manipulated image detection
 - [ ] Real photo storage (S3/Blob, replace mock URLs)

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, uploadFile } from './client';
+import { API_BASE_URL } from './config';
 import { User, GeocodingResult, DailyRoute, DailyRouteCreate, WatchArea, WatchAreaCreate, RouteCalculationRequest, RouteCalculationResponse, MetroStation, RouteOption, RouteComparisonRequest, RouteComparisonResponse, EnhancedRouteComparisonResponse, FastestRouteOption, SafestRouteOption, WatchAreaRiskAssessment } from '../../types';
 import { validateUsers, validateSensors, validateReports } from './validators';
 
@@ -499,13 +500,18 @@ export function useTrendingSearches(limit: number = 5) {
 
 /**
  * Search for locations only (optimized)
+ * @param query - Search query
+ * @param limit - Max results (default 5)
+ * @param city - City to filter results ('delhi' | 'bangalore')
+ * @param enabled - Whether to enable the query
  */
-export function useLocationSearch(query: string, limit: number = 5, enabled: boolean = true) {
+export function useLocationSearch(query: string, limit: number = 5, city?: string, enabled: boolean = true) {
     return useQuery({
-        queryKey: ['location-search', query, limit],
+        queryKey: ['location-search', query, limit, city],
         queryFn: async (): Promise<SearchLocationResult[]> => {
+            const cityParam = city ? `&city=${city}` : '';
             const response = await fetchJson<SearchLocationResult[]>(
-                `/search/locations/?q=${encodeURIComponent(query)}&limit=${limit}`
+                `/search/locations/?q=${encodeURIComponent(query)}&limit=${limit}${cityParam}`
             );
             return response;
         },
@@ -958,6 +964,10 @@ export interface HotspotFeature {
         fhi_level?: string;         // 'low' | 'moderate' | 'high' | 'extreme'
         fhi_color?: string;         // Hex color for FHI level
         elevation_m?: number;       // Elevation in meters
+        // Source and verification status
+        source?: 'mcd_reports' | 'osm_underpass' | 'user_report';  // Data source
+        verified?: boolean;         // True for MCD-validated, False for ML-predicted
+        osm_id?: number;            // OSM way/node ID for underpasses
     };
 }
 
@@ -967,6 +977,12 @@ export interface HotspotsResponse {
     metadata: {
         generated_at: string;
         total_hotspots: number;
+        verified_count?: number;       // Count of MCD-validated hotspots
+        unverified_count?: number;     // Count of ML-predicted hotspots
+        composition?: {
+            mcd_reports: number;
+            osm_underpass: number;
+        };
         current_rainfall_mm: number;
         model_available: boolean;
         risk_thresholds: {
@@ -1356,6 +1372,49 @@ export function useDeleteComment() {
             queryClient.invalidateQueries({ queryKey: ['comments', 'count', reportId] });
             queryClient.invalidateQueries({ queryKey: ['reports'] });
         },
+    });
+}
+
+// ============================================================================
+// FLOOD IMAGE CLASSIFICATION HOOKS (ML-based photo verification)
+// ============================================================================
+
+import type { FloodClassificationResult } from '../../types';
+
+/**
+ * Classify a flood image using the ML service (MobileNet classifier).
+ *
+ * Uses low threshold (0.3) to minimize false negatives - safety first.
+ * If there's ANY reasonable chance the photo shows flooding, it's classified as flood.
+ *
+ * Call this when user captures/uploads a photo to provide immediate feedback.
+ * This is a NON-BLOCKING enhancement - report submission works even if this fails.
+ *
+ * Proxies through backend to work in both local dev and Docker environments.
+ *
+ * @returns FloodClassificationResult with classification, confidence, and review flags
+ */
+export function useClassifyFloodImage() {
+    return useMutation({
+        mutationFn: async (file: File): Promise<FloodClassificationResult> => {
+            const formData = new FormData();
+            formData.append('image', file);
+
+            // Use backend proxy instead of direct ML service call
+            // This works in both local dev (localhost:8000) and Docker (backend service)
+            const response = await fetch(`${API_BASE_URL}/ml/classify-flood`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Classification failed: ${errorText}`);
+            }
+
+            return response.json();
+        },
+        retry: 0, // Don't retry - this is a real-time UX enhancement, not critical
     });
 }
 

@@ -51,6 +51,10 @@ services:
       - ./apps/iot-ingestion:/app
     ports:
       - "8001:8001"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://user:password@db:5432/floodsafe
 
   ml-service:
     build:
@@ -59,7 +63,7 @@ services:
     command: uvicorn src.main:app --host 0.0.0.0 --port 8002 --reload
     volumes:
       - ./apps/ml-service:/app
-      - ml_models:/app/models
+      - ./apps/ml-service/models:/app/models  # Bind mount to share local model files
       - ml_cache:/app/cache
     ports:
       - "8002:8002"
@@ -79,5 +83,4 @@ services:
 
 volumes:
   postgres_data:
-  ml_models:
   ml_cache:

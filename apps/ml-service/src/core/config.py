@@ -17,13 +17,15 @@ class Settings(BaseSettings):
     # GCP Configuration
     GCP_PROJECT_ID: str = "gen-lang-client-0669818939"
     GEE_SERVICE_ACCOUNT_KEY: Optional[str] = None  # Path to JSON key
+    GEE_ENABLED: bool = True  # Set to False for HuggingFace Spaces (no OAuth)
 
     # Database (shared with main backend)
     DATABASE_URL: str = "postgresql://user:password@localhost:5432/floodsafe"
 
     # Model Configuration
-    MODEL_CACHE_DIR: str = "./models"
-    DATA_CACHE_DIR: str = "./cache"
+    # Use /tmp for HF Spaces (read-only filesystem except /tmp)
+    MODEL_CACHE_DIR: str = "./models"  # Models are bundled, not cached
+    DATA_CACHE_DIR: str = "/tmp/ml-cache"  # Runtime cache must be in /tmp for HF
 
     # Default Region (Delhi NCR)
     DEFAULT_LATITUDE: float = 28.6139

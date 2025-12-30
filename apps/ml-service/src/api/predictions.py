@@ -9,24 +9,24 @@ See CLAUDE.md @ml-predictions for details.
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from pathlib import Path
 import json
 import numpy as np
 import logging
 
-from ..models.ensemble import EnsembleFloodModel, create_default_ensemble
 from ..data.gee_client import gee_client
-from ..features.extractor import FeatureExtractor
 from ..core.config import settings, REGIONS
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Global instances (loaded on startup)
-ensemble_model: Optional[EnsembleFloodModel] = None
-feature_extractor: Optional[FeatureExtractor] = None
+# Global instances (loaded on startup by main.py)
+# NOTE: Ensemble models are NOT used in production (not trained).
+# XGBoost hotspot model and MobileNet are the only trained models.
+ensemble_model: Optional[Any] = None  # Shelved - not trained
+feature_extractor: Optional[Any] = None  # Optional - needs GEE
 grid_predictions_cache: Optional[Dict] = None  # Pre-computed grid predictions
 
 

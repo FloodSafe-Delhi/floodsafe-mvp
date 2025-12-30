@@ -4,16 +4,22 @@ FloodSafe ML Service - Main Application.
 FastAPI service for flood prediction using ensemble ML models.
 """
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-from pathlib import Path
 
 from .core.config import settings
 from .api import predictions, hotspots, image_classification
-from .models.ensemble import create_default_ensemble
-from .features.extractor import FeatureExtractor
 from .data.gee_client import gee_client
+
+# Optional imports - may not be available in production (HuggingFace)
+FeatureExtractor = None
+try:
+    from .features.extractor import FeatureExtractor as _FE
+    FeatureExtractor = _FE
+except ImportError:
+    pass  # GEE-based feature extractor not needed in production
 
 # Configure logging
 logging.basicConfig(
@@ -64,87 +70,75 @@ async def startup_event():
     logger.info(f"Starting {settings.PROJECT_NAME}...")
     logger.info("=" * 60)
 
-    # Initialize GEE
+    # Initialize GEE (only if enabled - disabled on HuggingFace)
+    gee_available = False
     try:
         logger.info("Initializing Google Earth Engine...")
         gee_client.initialize()
-        logger.info("✓ GEE initialized successfully")
-    except Exception as e:
-        logger.warning(f"✗ GEE initialization failed: {e}")
-        logger.warning("  Service will continue but predictions may fail")
-
-    # Initialize feature extractor
-    try:
-        logger.info("Initializing feature extractor...")
-        predictions.feature_extractor = FeatureExtractor(lazy_load=True)
-        logger.info("✓ Feature extractor ready")
-    except Exception as e:
-        logger.error(f"✗ Feature extractor initialization failed: {e}")
-
-    # Load or create ensemble model
-    try:
-        model_path = Path(settings.MODEL_CACHE_DIR) / "ensemble"
-
-        if model_path.exists():
-            logger.info(f"Loading pre-trained ensemble from {model_path}...")
-            from .models.ensemble import EnsembleFloodModel
-
-            predictions.ensemble_model = EnsembleFloodModel().load(model_path)
-            logger.info("✓ Ensemble model loaded from disk")
+        gee_available = gee_client.is_available
+        if gee_available:
+            logger.info("[OK] GEE initialized successfully")
         else:
-            logger.info("No pre-trained model found, creating default ensemble...")
-            predictions.ensemble_model = create_default_ensemble()
-            logger.info("✓ Default ensemble created (not trained)")
-            logger.warning(
-                "  Model needs training before making predictions."
-                " Use /train endpoint or train offline."
-            )
-
+            logger.info("[SKIP] GEE disabled (GEE_ENABLED=false)")
     except Exception as e:
-        logger.error(f"✗ Model initialization failed: {e}")
-        predictions.ensemble_model = None
+        logger.warning(f"[WARN] GEE initialization failed: {e}")
 
-    # Initialize hotspots service
+    # Initialize feature extractor (only if GEE is available)
+    if gee_available and FeatureExtractor:
+        try:
+            logger.info("Initializing feature extractor...")
+            predictions.feature_extractor = FeatureExtractor(lazy_load=True)
+            logger.info("[OK] Feature extractor ready")
+        except Exception as e:
+            logger.warning(f"[WARN] Feature extractor failed: {e}")
+    else:
+        logger.info("[SKIP] Feature extractor (GEE disabled)")
+        predictions.feature_extractor = None
+
+    # Skip ensemble model - it's not trained and not needed
+    # In production, we use XGBoost for hotspots and MobileNet for images
+    predictions.ensemble_model = None
+    logger.info("[SKIP] Ensemble model (shelved - using XGBoost for hotspots)")
+
+    # Initialize hotspots service (XGBoost model - TRAINED and working!)
     try:
         logger.info("Initializing hotspots service...")
         hotspots.initialize_hotspots_router()
         logger.info(f"  Hotspots loaded: {len(hotspots.hotspots_data)}")
-        logger.info(f"  Hotspot model: {'trained' if hotspots.hotspot_model and hotspots.hotspot_model.is_trained else 'not available'}")
+        logger.info(f"  XGBoost model: {'trained' if hotspots.hotspot_model and hotspots.hotspot_model.is_trained else 'not available'}")
     except Exception as e:
-        logger.error(f"Hotspots initialization failed: {e}")
+        logger.error(f"[ERROR] Hotspots initialization failed: {e}")
 
-    # Load pre-computed grid predictions cache (FAST forecasts)
+    # Load pre-computed grid predictions cache
     try:
         logger.info("Loading grid predictions cache...")
         if predictions.load_grid_predictions_cache():
             cache_points = len(predictions.grid_predictions_cache.get("features", []))
-            logger.info(f"✓ Grid predictions cache loaded: {cache_points} points")
+            logger.info(f"[OK] Grid predictions cache loaded: {cache_points} points")
         else:
-            logger.warning("✗ No grid predictions cache - /forecast-grid will be slow")
+            logger.info("[SKIP] No grid predictions cache")
     except Exception as e:
-        logger.error(f"Grid cache loading failed: {e}")
+        logger.warning(f"[WARN] Grid cache loading failed: {e}")
 
-    # Initialize flood image classifier (MobileNet - Sohail's pretrained model)
+    # Initialize flood image classifier (MobileNet - TRAINED and working!)
     try:
         logger.info("Initializing flood image classifier...")
         if image_classification.initialize_classifier():
             classifier = image_classification.get_classifier()
-            logger.info(f"✓ MobileNet flood classifier loaded (threshold: {classifier.threshold})")
+            logger.info(f"[OK] MobileNet flood classifier loaded (threshold: {classifier.threshold})")
         else:
-            logger.warning("✗ Flood classifier not available - image verification disabled")
-            logger.warning("  Ensure sohail_flood_model.h5 exists in models/")
+            logger.warning("[WARN] Flood classifier not available")
     except Exception as e:
-        logger.warning(f"Flood classifier initialization failed: {e}")
+        logger.warning(f"[WARN] Flood classifier failed: {e}")
 
+    # Startup summary
+    classifier = image_classification.get_classifier()
     logger.info("=" * 60)
     logger.info("ML Service startup complete")
-    logger.info(f"  Model loaded: {predictions.ensemble_model is not None}")
-    logger.info(f"  Model trained: {predictions.ensemble_model.is_trained if predictions.ensemble_model else False}")
     logger.info(f"  Hotspots: {len(hotspots.hotspots_data)} locations")
-    logger.info(f"  Grid cache: {len(predictions.grid_predictions_cache.get('features', [])) if predictions.grid_predictions_cache else 0} points")
-    classifier = image_classification.get_classifier()
-    logger.info(f"  Flood classifier: {'ready' if classifier and classifier.is_trained else 'not available'}")
-    logger.info(f"  GEE available: {gee_client._initialized}")
+    logger.info(f"  XGBoost: {'ready' if hotspots.hotspot_model and hotspots.hotspot_model.is_trained else 'N/A'}")
+    logger.info(f"  MobileNet: {'ready' if classifier and classifier.is_trained else 'N/A'}")
+    logger.info(f"  GEE: {'enabled' if gee_available else 'disabled'}")
     logger.info(f"  Docs: {settings.API_V1_STR}/docs")
     logger.info("=" * 60)
 
@@ -179,10 +173,12 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
 
+    # Use FASTAPI_PORT env var for HF Spaces (7860) or local dev (8002)
+    api_port = int(os.getenv("FASTAPI_PORT", "8002"))
     uvicorn.run(
         "src.main:app",
         host="0.0.0.0",
-        port=8002,
+        port=api_port,
         reload=True,
         log_level="info",
     )

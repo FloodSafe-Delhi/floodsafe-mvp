@@ -24,6 +24,7 @@ class GEEClient:
 
     _instance: Optional["GEEClient"] = None
     _initialized: bool = False
+    _gee_available: bool = False  # True only if GEE is actually usable
 
     def __new__(cls):
         if cls._instance is None:
@@ -34,9 +35,21 @@ class GEEClient:
         # Only initialize once
         pass
 
+    @property
+    def is_available(self) -> bool:
+        """Check if GEE is actually available and usable."""
+        return self._gee_available
+
     def initialize(self) -> None:
         """Initialize GEE with authentication."""
         if self._initialized:
+            return
+
+        # Check if GEE is disabled (e.g., for HuggingFace Spaces deployment)
+        if not settings.GEE_ENABLED:
+            logger.info("GEE disabled via GEE_ENABLED=false - skipping initialization")
+            self.__class__._initialized = True  # Mark as initialized but inactive
+            self.__class__._gee_available = False
             return
 
         try:
@@ -58,6 +71,7 @@ class GEEClient:
                     ee.Initialize(project=settings.GCP_PROJECT_ID)
 
             self.__class__._initialized = True
+            self.__class__._gee_available = True
             logger.info(f"GEE initialized with project: {settings.GCP_PROJECT_ID}")
 
         except Exception as e:

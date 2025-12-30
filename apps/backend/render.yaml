@@ -1,0 +1,73 @@
+# Render.yaml - FloodSafe Backend Deployment Configuration
+# Deploy to Render: https://render.com
+#
+# IMPORTANT: Set these environment variables in Render Dashboard:
+# - DATABASE_URL: Supabase connection string (pooler mode)
+# - JWT_SECRET_KEY: Generated secret (min 32 chars)
+# - FRONTEND_URL: Vercel frontend URL
+# - BACKEND_URL: This Render service URL
+# - BACKEND_CORS_ORIGINS: JSON array with frontend URL
+
+services:
+  - type: web
+    name: floodsafe-api
+    runtime: python
+    region: singapore  # Close to Supabase (ap-southeast-1)
+    plan: free
+    branch: deployment/free-stack
+    rootDir: apps/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # Database (REQUIRED - get from Supabase Dashboard > Settings > Database)
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render Dashboard
+
+      # JWT Secret (REQUIRED - use the generated key)
+      - key: JWT_SECRET_KEY
+        sync: false
+
+      # ML Service URL (HuggingFace Spaces)
+      - key: ML_SERVICE_URL
+        value: https://aniru8-floodsafe-ml.hf.space
+
+      # ML Routing (disabled by default until verified)
+      - key: ML_ROUTING_ENABLED
+        value: "false"
+
+      # Frontend/Backend URLs (set after Vercel deploy)
+      - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+
+      # CORS Origins (JSON array - set after knowing frontend URL)
+      - key: BACKEND_CORS_ORIGINS
+        sync: false
+
+      # Optional: Firebase (for phone auth)
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+
+      # Optional: Google OAuth
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      # Optional: Mapbox (for routing)
+      - key: MAPBOX_ACCESS_TOKEN
+        sync: false
+
+      # Optional: SendGrid (for email verification)
+      - key: SENDGRID_API_KEY
+        sync: false
+
+      # Optional: Twilio (for WhatsApp/SMS)
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false

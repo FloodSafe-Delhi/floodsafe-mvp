@@ -2,24 +2,71 @@
 Ensemble Flood Prediction Model.
 
 Combines ARIMA, Prophet, and LSTM predictions using weighted voting.
+
+NOTE: Heavy ML dependencies (PyTorch, LightGBM, Prophet) are optional.
+In production (HuggingFace Spaces), only XGBoost and MobileNet are used.
 """
 
 import numpy as np
 from pathlib import Path
 import json
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Type
 
 from .base import FloodPredictionModel
-from .convlstm_model import ConvLSTMFloodModel
-from .gnn_model import GNNFloodModel
-from .lightgbm_model import LightGBMFloodModel
-# Legacy imports (deprecated in v4)
-from .arima_model import ARIMAFloodModel
-from .prophet_model import ProphetFloodModel
-from .lstm_model import LSTMFloodModel
 
 logger = logging.getLogger(__name__)
+
+# Optional model imports - these require heavy dependencies
+# PyTorch models (ConvLSTM, GNN, LSTM)
+ConvLSTMFloodModel: Optional[Type] = None
+GNNFloodModel: Optional[Type] = None
+LSTMFloodModel: Optional[Type] = None
+
+# LightGBM model
+LightGBMFloodModel: Optional[Type] = None
+
+# Prophet model
+ProphetFloodModel: Optional[Type] = None
+
+# ARIMA model
+ARIMAFloodModel: Optional[Type] = None
+
+# Try importing PyTorch-based models
+try:
+    from .convlstm_model import ConvLSTMFloodModel as _ConvLSTM
+    from .gnn_model import GNNFloodModel as _GNN
+    from .lstm_model import LSTMFloodModel as _LSTM
+    ConvLSTMFloodModel = _ConvLSTM
+    GNNFloodModel = _GNN
+    LSTMFloodModel = _LSTM
+    logger.debug("PyTorch models available")
+except ImportError as e:
+    logger.info(f"PyTorch models not available (missing torch): {e}")
+
+# Try importing LightGBM model
+try:
+    from .lightgbm_model import LightGBMFloodModel as _LightGBM
+    LightGBMFloodModel = _LightGBM
+    logger.debug("LightGBM model available")
+except ImportError as e:
+    logger.info(f"LightGBM model not available: {e}")
+
+# Try importing Prophet model
+try:
+    from .prophet_model import ProphetFloodModel as _Prophet
+    ProphetFloodModel = _Prophet
+    logger.debug("Prophet model available")
+except ImportError as e:
+    logger.info(f"Prophet model not available: {e}")
+
+# Try importing ARIMA model
+try:
+    from .arima_model import ARIMAFloodModel as _ARIMA
+    ARIMAFloodModel = _ARIMA
+    logger.debug("ARIMA model available")
+except ImportError as e:
+    logger.info(f"ARIMA model not available: {e}")
 
 
 class EnsembleFloodModel(FloodPredictionModel):

@@ -1,11 +1,12 @@
 from sqlalchemy import create_engine, URL
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker as async_sessionmaker
 from ..core.config import settings
 import logging
-from urllib.parse import urlparse, unquote
+import re
 import os
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 def create_database_url() -> URL:
     """
     Create SQLAlchemy URL object, handling special characters in password.
-    Supports both connection string and component-based configuration.
+    Supports Supabase pooler format: postgresql://postgres.ref:password@host:port/db
     """
     database_url_string = settings.DATABASE_URL
 
@@ -22,35 +23,46 @@ def create_database_url() -> URL:
         raise ValueError("DATABASE_URL is empty or not set")
 
     try:
-        # Parse the URL string
-        parsed = urlparse(database_url_string)
+        # First, try SQLAlchemy's make_url (handles most cases)
+        try:
+            url_obj = make_url(database_url_string)
+            sanitized = f"{url_obj.drivername}://{url_obj.username}:****@{url_obj.host}:{url_obj.port}/{url_obj.database}"
+            logger.info(f"Connecting to database: {sanitized}")
+            return url_obj
+        except Exception as parse_error:
+            logger.warning(f"Standard URL parsing failed: {parse_error}, trying regex parser")
 
-        if not parsed.scheme:
-            raise ValueError("DATABASE_URL missing scheme (should start with postgresql://)")
+        # Fallback: Manual regex parsing for complex URLs (Supabase with special chars)
+        # Format: postgresql://user:password@host:port/database
+        pattern = r'^(postgresql(?:\+\w+)?):\/\/([^:]+):(.+)@([^:\/]+):(\d+)\/(.+)$'
+        match = re.match(pattern, database_url_string)
 
-        # Decode URL-encoded password if present
-        password = unquote(parsed.password) if parsed.password else None
+        if not match:
+            raise ValueError("URL doesn't match expected format: scheme://user:pass@host:port/db")
+
+        scheme, username, password, host, port, database = match.groups()
 
         # Create URL object (handles special characters properly)
         url_obj = URL.create(
-            drivername=parsed.scheme,
-            username=parsed.username,
+            drivername=scheme,
+            username=username,
             password=password,
-            host=parsed.hostname,
-            port=parsed.port,
-            database=parsed.path.lstrip('/') if parsed.path else None,
+            host=host,
+            port=int(port),
+            database=database,
         )
 
-        # Log sanitized version
-        sanitized = f"{parsed.scheme}://{parsed.username}:****@{parsed.hostname}:{parsed.port}{parsed.path}"
-        logger.info(f"Connecting to database: {sanitized}")
+        sanitized = f"{scheme}://{username}:****@{host}:{port}/{database}"
+        logger.info(f"Connecting to database (regex parsed): {sanitized}")
 
         return url_obj
 
     except Exception as e:
         logger.error(f"Failed to parse DATABASE_URL: {e}")
         logger.error(f"DATABASE_URL format should be: postgresql://user:password@host:port/database")
-        logger.error(f"DATABASE_URL value (first 50 chars): {database_url_string[:50]}...")
+        # Only log first 50 chars to avoid exposing password
+        safe_preview = database_url_string[:50] if len(database_url_string) > 50 else database_url_string[:20] + "..."
+        logger.error(f"DATABASE_URL preview: {safe_preview}")
         raise ValueError(f"Invalid DATABASE_URL format: {e}")
 
 

@@ -940,7 +940,7 @@ export function useIncrementRouteUsage() {
 }
 
 // ============================================================================
-// WATERLOGGING HOTSPOTS HOOKS (62 Delhi Hotspots)
+// WATERLOGGING HOTSPOTS HOOKS (90 Delhi Hotspots - 62 MCD + 28 OSM)
 // ============================================================================
 
 export interface HotspotFeature {
@@ -995,7 +995,7 @@ export interface HotspotsResponse {
 }
 
 /**
- * Fetch all 62 Delhi waterlogging hotspots with current risk levels
+ * Fetch all 90 Delhi waterlogging hotspots with current FHI risk levels
  *
  * Risk is dynamically calculated based on:
  * - Historical severity (always available)

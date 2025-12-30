@@ -37,7 +37,7 @@ interface LayersVisibility {
     routes: boolean;
     metro: boolean;
     predictions: boolean;  // ML flood hotspot predictions
-    hotspots: boolean;     // 62 Delhi waterlogging hotspots
+    hotspots: boolean;     // 90 Delhi waterlogging hotspots (62 MCD + 28 OSM)
 }
 
 interface MapBounds {
@@ -700,7 +700,7 @@ export default function MapComponent({
         // 2b. Historical Flood Events - Now shown as info panel instead of map markers
         // (See HistoricalFloodsPanel component - toggled via History button)
 
-        // 2c. Add Waterlogging Hotspots Layer (62 Delhi locations with ML risk)
+        // 2c. Add Waterlogging Hotspots Layer (90 Delhi locations with live FHI risk)
         if (hotspotsData && isDelhiCity) {
             // Wrap in try-catch to handle race conditions during city switch
             try {
@@ -1627,7 +1627,7 @@ export default function MapComponent({
                             size="icon"
                             onClick={() => setLayersVisible(prev => ({ ...prev, hotspots: !prev.hotspots }))}
                             className={`${layersVisible.hotspots ? '!bg-green-500 !hover:bg-green-600 !text-white' : '!bg-white !hover:bg-gray-100 !text-gray-800 border-2 border-gray-300'} shadow-xl rounded-full w-11 h-11 !opacity-100`}
-                            title="Toggle waterlogging hotspots (62 Delhi locations)"
+                            title="Toggle waterlogging hotspots (90 Delhi locations)"
                         >
                             <Droplets className="h-5 w-5" />
                         </Button>

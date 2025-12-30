@@ -38,8 +38,7 @@ def validate_config():
 
     # Warn about CORS in production
     if settings.is_production:
-        cors_origins = settings.cors_origins_list
-        localhost_origins = [o for o in cors_origins if "localhost" in o]
+        localhost_origins = [o for o in settings.BACKEND_CORS_ORIGINS if "localhost" in o]
         if localhost_origins:
             logger.warning(
                 f"WARNING: CORS origins contain localhost URLs in production: {localhost_origins}. "
@@ -72,11 +71,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
 
 # Set all CORS enabled origins
-cors_origins = settings.cors_origins_list
-if cors_origins:
+if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins,
+        allow_origins=settings.BACKEND_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

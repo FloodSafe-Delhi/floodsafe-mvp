@@ -37,21 +37,6 @@
 
 ---
 
-## THE 10 COMMANDMENTS (Quick Reference)
-
-1. **EXPLORE FIRST** - Understand before you change
-2. **ASK QUESTIONS** - Clarify before you assume
-3. **CHECK EXISTING CODE** - Reuse before you create
-4. **PLAN PROPERLY** - Think before you code
-5. **NO SHORTCUTS** - Do it right, not fast
-6. **TYPE EVERYTHING** - No `any`, ever
-7. **FIX ROOT CAUSES** - Not symptoms
-8. **VERIFY THOROUGHLY** - Test, don't assume
-9. **BE PATIENT** - Don't rush to "done"
-10. **DOCUMENT LEARNINGS** - Record in REALISATIONS.md
-
----
-
 ## LARGE DATA FILE HANDLING (MANDATORY)
 
 **CRITICAL: NEVER attempt to read entire training data files. This WILL exhaust context and cause failure.**
@@ -154,6 +139,93 @@ cd apps/frontend && npm run screenshot
 | `verifier` | E2E verification | After implementation, test flows |
 | `code-reviewer` | Quality check | After completing code changes |
 | `planner` | Architecture | Complex multi-file features |
+
+---
+
+## MCP Servers (Model Context Protocol)
+
+MCP servers extend Claude's capabilities with external tools and integrations. These are configured in `~/.claude/plugins/` and enabled in `~/.claude/settings.json`.
+
+### Active MCPs (Use These)
+
+| MCP | Purpose | When to Use |
+|-----|---------|-------------|
+| **Supabase** | Database management, SQL execution, migrations | Production database setup, schema changes, troubleshooting |
+| **Context7** | Library documentation lookup | Looking up API docs without web search (MapLibre, TanStack, FastAPI) |
+| **Figma** | Design-to-code conversion | Implementing UI from Figma designs |
+| **Firebase** | Firebase Auth/Config management | Auth configuration, SDK config |
+| **Vercel** | Frontend deployment | Deploying frontend to production |
+| **Serena** | Code intelligence, symbol analysis | Deep refactoring, symbol navigation |
+| **Claude-in-Chrome** | Browser automation | E2E testing, visual verification |
+
+### MCP Tool Reference
+
+#### Supabase (CRITICAL for Deployment)
+```
+mcp__plugin_supabase_supabase__list_projects    # List all projects
+mcp__plugin_supabase_supabase__execute_sql      # Run raw SQL
+mcp__plugin_supabase_supabase__apply_migration  # Apply tracked migrations
+mcp__plugin_supabase_supabase__list_tables      # Verify tables
+mcp__plugin_supabase_supabase__get_project_url  # Get API URL
+mcp__plugin_supabase_supabase__get_publishable_keys  # Get API keys
+mcp__plugin_supabase_supabase__get_advisors     # Security/performance checks
+```
+
+#### Context7 (Documentation Lookup)
+```
+# Step 1: Find library ID
+mcp__plugin_context7_context7__resolve-library-id
+# Step 2: Query docs
+mcp__plugin_context7_context7__query-docs
+```
+**Example**: Looking up MapLibre GL JS API
+```
+1. resolve-library-id: query="MapLibre GL JS", libraryName="maplibre-gl"
+2. query-docs: libraryId="/maplibre/maplibre-gl-js", query="add GeoJSON layer"
+```
+
+#### Serena (Code Intelligence)
+```
+find_symbol           # Find symbol definitions
+find_referencing_symbols  # Find all references
+get_symbols_overview  # Get file/project symbols
+rename_symbol         # Safe refactoring
+replace_symbol_body   # Replace implementation
+```
+
+#### Claude-in-Chrome (Browser Automation)
+```
+mcp__claude-in-chrome__tabs_context_mcp  # Get current tabs
+mcp__claude-in-chrome__computer          # Screenshots, clicks, typing
+mcp__claude-in-chrome__read_page         # Accessibility tree
+mcp__claude-in-chrome__navigate          # URL navigation
+mcp__claude-in-chrome__javascript_tool   # Execute JS
+```
+
+### Disabled MCPs (Not Needed)
+
+| MCP | Reason |
+|-----|--------|
+| **GitHub MCP** | Requires Copilot subscription; use `gh` CLI instead |
+| **jdtls-lsp** | No Java code in FloodSafe |
+
+### MCP Configuration Notes
+
+1. **Serena**: Uses pip-installed `serena` command (fixed from uvx)
+   - Config: `~/.claude/plugins/cache/.../serena/.mcp.json`
+   - Command: `serena start-mcp-server`
+
+2. **LSP Plugins** (typescript-lsp, pyright-lsp): May have race condition on startup
+   - Config: `.lsp.json` in project root
+   - Restart Claude if LSP not connecting
+
+### Best Practices
+
+1. **Database Work**: Use Supabase MCP for production, direct SQL for local dev
+2. **Docs Lookup**: Use Context7 instead of web search for library APIs
+3. **UI Implementation**: Use Figma MCP when designs are available
+4. **E2E Testing**: Use Claude-in-Chrome for browser automation
+5. **Refactoring**: Use Serena for safe symbol renaming across codebase
 
 ---
 
@@ -269,6 +341,39 @@ volumes:
      - ./apps/ml-service/models:/app/models  # Bind mount - shares local files
    ```
 
+#### Pydantic-Settings v2 and List Types
+**CRITICAL**: `List[str]` fields fail to parse non-JSON env vars, even with `field_validator(mode="before")`.
+
+**Problem**: Setting `BACKEND_CORS_ORIGINS=https://example.com` fails with:
+```
+pydantic_settings.exceptions.SettingsError: error parsing value for field "BACKEND_CORS_ORIGINS"
+```
+
+**Root Cause**: Pydantic-settings JSON-parses `List[str]` fields BEFORE validators run. The validator never gets a chance to handle comma-separated or single URLs.
+
+**Wrong Fix**: Changing type to `Union[str, List[str]]` and adding a property wrapper. This is a shortcut that doesn't address the root cause.
+
+**Proper Fix**: Use `Annotated[List[str], NoDecode]` from `pydantic_settings` to disable pre-parsing:
+```python
+from pydantic_settings import BaseSettings, NoDecode
+from typing_extensions import Annotated
+
+class Settings(BaseSettings):
+    BACKEND_CORS_ORIGINS: Annotated[List[str], NoDecode] = ["http://localhost:5175"]
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        # Now this validator actually runs!
+        if isinstance(v, str):
+            if "," in v:
+                return [url.strip() for url in v.split(",")]
+            return [v.strip()]
+        return v
+```
+
+**Reference**: [GitHub Issue #7749](https://github.com/pydantic/pydantic/issues/7749)
+
 ---
 
 ## Development Philosophy
@@ -314,58 +419,16 @@ status: COMPLETE
 ### @community (COMPLETE)
 ```yaml
 files:
-  Backend:
-  - apps/backend/src/api/comments.py - Comments CRUD API
-  - apps/backend/src/api/reports.py - Vote endpoints with deduplication
-  - apps/backend/src/infrastructure/models.py - ReportVote, Comment models
-  - apps/backend/src/domain/models.py - CommentCreate, CommentResponse, VoteResponse DTOs
+  - apps/backend/src/api/comments.py, reports.py - Voting + comments API
+  - apps/frontend/src/components/ReportCard.tsx - Card with voting/comments
+  - apps/frontend/src/components/screens/AlertsScreen.tsx - Community filter
 
-  Frontend:
-  - apps/frontend/src/components/screens/AlertsScreen.tsx - Community filter shows ReportCard
-  - apps/frontend/src/components/ReportCard.tsx - Reusable report card with voting/comments
-  - apps/frontend/src/lib/api/hooks.ts - useUpvoteReport, useDownvoteReport, useComments, useAddComment
-
-ui_architecture: |
-  Community reports are integrated INTO the Alerts screen via filter tabs.
-  NOT a separate screen/tab. Filter tabs: All, Official, News, Social, Community.
-  When "Community" filter selected, shows ReportCard components with voting/comments.
-
-database_models:
-  ReportVote:
-    - Tracks user votes for deduplication
-    - Unique constraint on (user_id, report_id)
-    - vote_type: 'upvote' or 'downvote'
-  Comment:
-    - report_id, user_id, content (max 500 chars), created_at
-    - Index on (report_id, created_at) for efficient fetching
-
-api_endpoints:
-  Voting:
-    - POST /api/reports/{id}/upvote - Toggle upvote (auth required)
-    - POST /api/reports/{id}/downvote - Toggle downvote (auth required)
-    - Deduplication: Clicking same vote removes it, opposite vote switches
-  Comments:
-    - GET /api/reports/{id}/comments - List comments (oldest first)
-    - POST /api/reports/{id}/comments - Add comment (auth, rate limited 5/min)
-    - DELETE /api/comments/{id} - Delete own comment or admin
-    - GET /api/reports/{id}/comments/count - Lightweight count endpoint
-
-features:
-  - Vote deduplication via ReportVote table
-  - Vote toggle (click again to remove)
-  - Comment count displayed on report cards
-  - Real-time UI updates via query invalidation
-  - Rate limiting: max 5 comments per minute per user
-  - Community filter in AlertsScreen (NOT separate tab)
-
-comment_count_implementation: |
-  Comment counts are calculated dynamically in list_reports() using
-  get_comment_counts() helper which fetches counts for all reports in
-  a single efficient query. This avoids data consistency issues vs
-  storing count on Report model.
+key_points:
+  - Community tab is a FILTER in AlertsScreen (not separate screen)
+  - Vote deduplication via ReportVote table (unique user_id + report_id)
+  - Rate limiting: max 5 comments/minute/user
 
 migration: python -m apps.backend.src.scripts.migrate_add_community_features
-status: COMPLETE
 ```
 
 ### @alerts
@@ -432,218 +495,58 @@ patterns:
 ### @hotspots (COMPLETE)
 ```yaml
 files:
-  ML Service:
-  - apps/ml-service/src/api/hotspots.py - 90 Delhi waterlogging hotspots (62 MCD + 28 OSM)
+  - apps/ml-service/src/api/hotspots.py - 90 Delhi hotspots (62 MCD + 28 OSM)
   - apps/ml-service/src/data/fhi_calculator.py - FHI calculation
-  - apps/ml-service/data/delhi_waterlogging_hotspots.json - Location data with source field
+  - apps/ml-service/data/delhi_waterlogging_hotspots.json - Location data
+  - apps/backend/src/api/hotspots.py - API proxy with caching
 
-  Backend:
-  - apps/backend/src/api/hotspots.py - API proxy with caching, source/verified fields
-  - apps/backend/verify_hotspot_spatial.py - Spatial differentiation test
+FHI_formula: |
+  FHI = (0.35×P + 0.18×I + 0.12×S + 0.12×A + 0.08×R + 0.15×E) × T
+  CUSTOM HEURISTIC - weights empirically tuned, not from research
+  Rain-gate: If <5mm/3d, FHI capped at 0.15 (prevents false alarms)
 
-  Frontend:
-  - apps/frontend/src/lib/api/hooks.ts - useHotspots hook (30min cache), HotspotFeature types
-  - apps/frontend/src/components/MapComponent.tsx:710-857 - Layer rendering
-
-hotspot_composition:
-  total: 90
-  sources:
-    - mcd_reports: 62 (verified - original MCD Delhi validated)
-    - osm_underpass: 28 (unverified - ML-predicted high-risk underpasses)
-
-architecture:
-  FHI (Flood Hazard Index) - CUSTOM HEURISTIC (NOT from published research):
-  - Formula: FHI = (0.35×P + 0.18×I + 0.12×S + 0.12×A + 0.08×R + 0.15×E) × T
-  - NOTE: Weights (0.35, 0.18, etc.) are empirically tuned, not from academic papers
-  - P: Precipitation forecast with probability correction (1.5-2.25x)
-  - I: Hourly max intensity
-  - S: Soil saturation (urban hybrid: 70% drainage + 30% soil)
-  - A: Antecedent conditions (3-day rainfall)
-  - R: Runoff potential (pressure-based)
-  - E: Elevation risk (inverted: low elev = high risk)
-  - T: Monsoon modifier (1.2x June-Sept, 1.0x otherwise)
-  - Rain-gate: If <5mm/3d, FHI capped at 0.15 (prevents false alarms)
-
-color_priority: |
-  FHI color PRIMARY (live weather), fallback to ML risk (static terrain)
-  - MapLibre expression: ['coalesce', ['get', 'fhi_color'], ['get', 'risk_color']]
-  - Dry weather: All green (0.15 FHI) - correct behavior
-  - During rain: Colors vary by location (spatial differentiation)
-
-verification:
-  - Run: python apps/backend/verify_hotspot_spatial.py
-  - Tests: 90 unique coordinates, elevation variation, FHI distribution
-  - Expected: PASS with 40+ unique elevations across 70m+ range
-
-status: COMPLETE - 90 hotspots with source/verified fields, FHI-first coloring
+color_priority: FHI first (live weather), fallback to ML risk (static)
+verification: python apps/backend/verify_hotspot_spatial.py
 ```
 
-### @ml-predictions (PARTIAL - XGBoost works, Ensemble broken)
+### @ml-predictions (PARTIAL)
 ```yaml
 files:
-  ML Service:
-  - apps/ml-service/src/features/extractor.py - 37-dim feature extraction (was 40, reverted)
-  - apps/ml-service/src/features/hotspot_features.py - 18-dim hotspot features
-  - apps/ml-service/src/api/predictions.py - /forecast-grid endpoint
-  - apps/ml-service/src/models/xgboost_hotspot.py - XGBoost hotspot model (TRAINED)
-  - apps/ml-service/src/models/lstm_model.py - LSTM architecture (NOT TRAINED)
-  - apps/ml-service/src/models/lightgbm_model.py - LightGBM code (NOT TRAINED)
-  - apps/ml-service/data/grid_predictions_cache.json - Pre-computed fallback
+  - apps/ml-service/src/models/xgboost_hotspot.py - XGBoost model (TRAINED)
+  - apps/ml-service/src/features/hotspot_features.py - 18-dim features
+  - apps/ml-service/src/features/extractor.py - 37-dim features
+  - apps/ml-service/models/xgboost_hotspot/xgboost_model.json - Trained weights
 
-  Frontend:
-  - apps/frontend/src/components/MapComponent.tsx - Heatmap layer
+model_status:
+  XGBoost (90 hotspots):
+    - Known Hotspots: WORKS (AUC 0.98, weather-sensitive)
+    - New Locations: LIMITED (AUC 0.70-0.82, needs 0.85)
+    - USE FOR: Dynamic risk at 90 known Delhi hotspots
+    - DO NOT USE FOR: Discovering new locations
 
-trained_models:
-  XGBoost Hotspot Model v2.1 (90 HOTSPOTS):
-    - Location: apps/ml-service/models/xgboost_hotspot/xgboost_model.json
-    - Trained: 2025-12-26 (retrained with 90 hotspots)
-    - Training Data: 570 samples (90 hotspots + 100 negatives × 3 monsoon dates)
-    - PURPOSE 1 - Dynamic Risk at Known Hotspots: WORKS
-      - Standard CV AUC: 0.9868 ± 0.017 (exceeds 0.85 target)
-      - Precision: 0.917, Recall: 0.974, F1: 0.945
-      - Model responds to weather changes for same location
-    - PURPOSE 2 - Generalize to New Locations: LIMITED
-      - Location-Aware CV AUC: 0.7535 ± 0.033 (below 0.85 target)
-      - NOTE: AUC varies 0.70-0.82 depending on random negative samples
-      - Temporal consistency gap: 0.041 (PASSES <0.10)
-    - Features: 18-dim (elevation, slope, TPI, TRI, TWI, SPI, rainfall, land cover, SAR)
-    - Top predictors: built_up_pct (15.7%), sar_vv_mean (10.3%), sar_vh_mean (8.8%)
-    - Next target: 300+ locations for AUC ≥0.85
+  Ensemble (LSTM/GNN/LightGBM): BROKEN - never trained, returns fallback 0.1
 
-broken_models:
-  ConvLSTM/GNN/LightGBM Ensemble:
-    - Status: Architecture exists, NEVER TRAINED
-    - /forecast endpoint returns hardcoded 0.1 probability (fallback)
-    - No trained weights in models/ensemble/ directory
-    - Silently fails - users see low risk for all predictions
+features:
+  Hotspot (18-dim): elevation, slope, TPI, TRI, TWI, SPI, rainfall, land cover, SAR
+  General (37-dim): Dynamic World, WorldCover, Sentinel-2, Terrain, Precip, Temporal, GloFAS
 
-feature_extractors:
-  Hotspot (18-dim): elevation, slope, TPI, TRI, TWI, SPI, rainfall stats, land cover, SAR, monsoon
-  General (37-dim): Dynamic World (9), WorldCover (6), Sentinel-2 (5), Terrain (6), Precip (5), Temporal (4), GloFAS (2)
-
-training_data:
-  - hotspot_training_data.npz: 570 samples × 18-dim (90 hotspots + 100 negatives × 3 dates)
-  - delhi_monsoon_5years_*.npz: 605 samples × 37-dim (for future ensemble training)
-
-verification_results:
-  Run: python apps/ml-service/scripts/verify_xgboost_model.py
-  Date: 2025-12-26 (retrained with 90 hotspots)
-
-  Standard CV:
-    - AUC: 0.9868 ± 0.017
-    - Precision: 0.917, Recall: 0.974, F1: 0.945
-    - All folds PASS 0.85 target
-
-  Location-Aware CV (HONEST - GroupKFold):
-    - AUC: 0.7535 ± 0.033 (below 0.85 target)
-    - Same location NEVER in train+test
-    - Per-fold: 0.726, 0.714, 0.755, 0.766, 0.807
-    - NOTE: AUC varies 0.70-0.82 due to random negative sampling
-
-  Temporal Split (PASSES):
-    - 2022 -> 2023: AUC 0.956
-    - 2023 -> 2022: AUC 0.997
-    - Gap: 0.041 (< 0.10 threshold)
-
-  Why Still Below 0.85:
-    - 190 unique locations is limited (need 300+)
-    - Model memorizes terrain patterns, struggles to generalize
-    - Fold 1 shows 91 location overlap explains inflated Standard CV
-    - No drainage network data (infrastructure failures invisible)
-
-  Next Phase: Collect 150+ more diverse flood-prone locations
-
-data_imbalance:
-  - Low risk (0.0-0.2): 583 samples (96.4%)
-  - Moderate (0.2-0.5): 18 samples (3.0%)
-  - High (0.5-0.9): 4 samples (0.7%)
-  - Very High (0.9-1.0): 0 samples
-  - NOTE: Only 4 high-risk samples in 5 years - severe imbalance
-
-risk_levels:
-  - 0.0-0.2: Low (green)
-  - 0.2-0.4: Moderate (yellow)
-  - 0.4-0.7: High (orange)
-  - 0.7-1.0: Extreme (red)
-
-what_works:
-  - XGBoost for KNOWN 62 HOTSPOTS - VERIFIED WORKING (weather-sensitive)
-    - Model responds to weather changes (MODERATE sensitivity)
-    - SAR features (cloud-penetrating) drive predictions during monsoon
-    - Predictions vary 0.22-0.89 for same location based on weather
-  - FHI formula (rule-based, custom heuristic) - WORKS for known locations
-  - Pre-computed heatmap cache
-  - Feature extraction pipelines (18-dim and 37-dim)
-
-what_does_not_work:
-  - XGBoost for NEW LOCATIONS - LIMITED (AUC 0.70-0.82, avg ~0.75)
-    - Model memorizes terrain of 90 known hotspots
-    - Cannot reliably generalize to discover new flood-prone areas
-    - AUC varies with random negative sample selection
-    - Solution: Collect 300+ diverse training locations
-
-  - Ensemble Models (LSTM/GNN/LightGBM) - BROKEN
-    - Architecture exists but never trained
-    - /forecast endpoint returns fallback 0.1
-
-what_needs_fixing:
-  Medium Priority:
-    - Train ConvLSTM/GNN/LightGBM ensemble on 37-dim data
-    - Address data imbalance with cost-weighted training
-    - Collect training data from more diverse locations
-
-  Low Priority:
-    - is_monsoon feature has 0% importance (all samples from monsoon)
-    - Consider removing or replacing with month encoding
-
-status: |
-  XGBoost Hotspot Model - DUAL PURPOSE VERDICT:
-  - PURPOSE 1 (Known Hotspots): WORKS - model responds to weather
-  - PURPOSE 2 (New Locations): FAILS - AUC 0.71, cannot generalize
-  USE FOR: Dynamic risk calculation at 62 known Delhi waterlogging hotspots
-  DO NOT USE FOR: Discovering new flood-prone locations
-  Ensemble models (LSTM/GNN/LightGBM) are BROKEN - return fallback 0.1
-  NOTE: FHI is a CUSTOM HEURISTIC, not from published research
+verification: python apps/ml-service/scripts/verify_xgboost_model.py
+next: Collect 300+ diverse locations for better generalization
 ```
 
 ### @routing (COMPLETE)
 ```yaml
 files:
-  Backend:
   - apps/backend/src/domain/services/routing_service.py - Safe route calculation
-  - apps/backend/src/domain/services/hotspot_routing.py - Hotspot avoidance module
-  - apps/backend/src/api/routes_api.py - POST /routes/compare endpoint
-  - apps/backend/src/domain/models.py - HotspotAnalysis, NearbyHotspot Pydantic models
+  - apps/backend/src/domain/services/hotspot_routing.py - Hotspot avoidance
+  - apps/frontend/src/components/NavigationPanel.tsx - Route planning UI
 
-  Frontend:
-  - apps/frontend/src/components/NavigationPanel.tsx - Route planning UI (Sheet)
-  - apps/frontend/src/components/RouteComparisonCard.tsx - Normal vs FloodSafe comparison
-  - apps/frontend/src/types.ts - HotspotAnalysis, NearbyHotspot TypeScript interfaces
+strategy: |
+  HARD AVOID (300m threshold):
+  - LOW/MODERATE FHI: Allow (warning only)
+  - HIGH/EXTREME FHI: Must reroute around
 
-architecture:
-  HARD AVOID Strategy (300m proximity threshold):
-  - LOW FHI: Allow - no penalty
-  - MODERATE FHI: Allow - show warning only
-  - HIGH FHI: AVOID - route must reroute around
-  - EXTREME FHI: AVOID - route must reroute around
-
-  Route Comparison Flow:
-  1. User enters origin/destination in NavigationPanel
-  2. POST /routes/compare with city code
-  3. Backend fetches hotspots for Delhi (not Bangalore)
-  4. Analyzes both normal and FloodSafe routes
-  5. Returns hotspot_analysis with nearby_hotspots
-  6. Frontend shows checkmarks on selected route + hotspot warnings
-
-features:
-  - Visible X close button on NavigationPanel
-  - Loading spinner during route calculation
-  - Checkmark badges on selected route cards
-  - Hotspot analysis section with FHI color dots
-  - "Must reroute" warnings for HIGH/EXTREME hotspots
-  - Flood zone opacity increased to 0.5
-
-status: COMPLETE - Hotspot-aware routing with HARD AVOID strategy
+flow: POST /routes/compare → analyze hotspots → normal vs FloodSafe comparison
 ```
 
 ### @e2e-testing (COMPLETE)
@@ -719,110 +622,34 @@ status: |
   NEXT: Add verified_reporter role with auto-elevated trust scores
 ```
 
-### @photo-verification (GPS + ML Classification COMPLETE)
+### @photo-verification (GPS + ML COMPLETE)
 ```yaml
 files:
-  GPS Verification:
   - apps/backend/src/api/reports.py:241-288 - EXIF GPS extraction
-  - apps/backend/src/domain/services/validation_service.py - IoT cross-validation
+  - apps/ml-service/src/models/mobilenet_flood_classifier.py - MobileNet
+  - apps/ml-service/models/sohail_flood_model.h5 - Trained weights
 
-  ML Classification:
-  - apps/ml-service/src/models/mobilenet_flood_classifier.py - MobileNet architecture
-  - apps/ml-service/src/api/image_classification.py - /classify-flood endpoint
-  - apps/ml-service/models/sohail_flood_model.h5 - Pre-trained weights (28MB, 55 layers)
-  - apps/backend/src/api/ml.py - Backend proxy endpoint
-  - apps/frontend/src/lib/api/hooks.ts - useClassifyFloodImage() hook
-
-current_verification:
-  GPS:
-    1. Extract GPS from photo EXIF metadata (PIL)
-    2. Compare photo GPS to reported location
-    3. If distance > 100m, set location_verified=False
-    4. Cross-validate with nearby IoT sensors (1km radius)
-    5. Calculate iot_validation_score (0-100)
-
-  ML Classification:
-    1. Frontend sends image to POST /api/ml/classify-flood
-    2. Backend proxies to ML service at :8002/api/v1/classify-flood
-    3. MobileNet model classifies flood vs no_flood
-    4. Returns: {is_flood, confidence, flood_probability, class_name}
-    5. Threshold: 0.3 (safety-first to minimize false negatives)
-
-ml_model_details:
-  architecture: MobileNet with custom binary classification head
-  input: 224x224 RGB images
-  output: flood probability (0-1)
-  threshold: 0.3 (low to catch more potential floods)
-  training: apps/ml-service/scripts/train_flood_binary.py
-  weights: models/sohail_flood_model.h5
-
-what_does_NOT_exist:
-  - Water depth estimation from photos
-  - Fake/manipulated image detection
-  - Actual photo storage (uses mock URLs)
-
-photo_storage: |
-  MOCKED - reports.py:267: media_url = f"https://mock-storage.com/{image.filename}"
-  Photos are processed but NOT stored to S3/Blob
-
-status: |
-  GPS verification: COMPLETE
-  ML flood classification: COMPLETE
-  MISSING: Depth estimation, fake detection, real storage
+gps: Extract EXIF → compare to location → set location_verified if >100m
+ml: MobileNet (224x224) → flood/no_flood, threshold 0.3 (safety-first)
+storage: MOCKED - uses mock URLs, no real S3/Blob storage
+missing: Depth estimation, fake detection, real storage
 ```
 
-### @whatsapp (MVP)
+### @whatsapp (MVP COMPLETE)
 ```yaml
 files:
-  Backend:
-  - apps/backend/src/api/webhook.py - WhatsApp webhook handler with conversation flow
+  - apps/backend/src/api/webhook.py - WhatsApp webhook handler
   - apps/backend/src/domain/services/notification_service.py - TwilioNotificationService
-  - apps/backend/src/infrastructure/models.py - WhatsAppSession model
-  - apps/backend/src/scripts/migrate_add_whatsapp_sessions.py - Migration script
-  - apps/backend/src/core/config.py - Twilio settings
 
-features:
-  Inbound (SOS):
-    - Receive location pins from WhatsApp → Create SOS reports
-    - Signature validation (X-Twilio-Signature)
-    - User account linking flow (create or link to existing)
-    - Conversation state tracking (WhatsAppSession table)
-    - TwiML XML responses
+inbound: Location pin → SOS report, account linking, conversation state
+outbound: Alerts to watch areas via Twilio
+commands: Send location (SOS), LINK, STATUS, START/STOP
 
-  Outbound (Alerts):
-    - TwilioNotificationService implements INotificationService
-    - Send WhatsApp alerts to users in watch areas
-    - Respects user.notification_whatsapp preference
-    - Graceful fallback when Twilio not configured
-
-conversation_flow: |
-  1. User sends location pin
-  2. SOS report created immediately
-  3. AlertService.check_watch_areas_for_report() runs
-  4. Users in watch areas get WhatsApp notification
-  5. If user not linked, prompted: "1. Create account / 2. Stay anonymous"
-  6. Email input → Creates/links FloodSafe account
-
-commands:
-  - Send location = Submit SOS
-  - LINK = Connect FloodSafe account
-  - STATUS = Check account status
-  - START/STOP = Subscribe/unsubscribe alerts
-
-setup:
-  1. Create Twilio account at https://www.twilio.com/try-twilio
-  2. Go to Messaging → Try it out → Send a WhatsApp message (sandbox)
-  3. Copy TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to .env
-  4. Set TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
-  5. Use ngrok for local testing: ngrok http 8000
-  6. Configure sandbox webhook URL in Twilio Console
-  7. Run migration: python -m apps.backend.src.scripts.migrate_add_whatsapp_sessions
-
-status: MVP COMPLETE
-  - Inbound SOS reports: WORKING
-  - User account linking: WORKING
-  - Outbound alerts: WORKING (requires Twilio config)
-  - Conversation state: WORKING (30min session timeout)
+setup: |
+  1. Get Twilio sandbox creds → .env (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+  2. Set TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+  3. ngrok http 8000 → configure webhook URL in Twilio Console
+  4. Run migration: python -m apps.backend.src.scripts.migrate_add_whatsapp_sessions
 ```
 
 ### @mobile (NOT STARTED)
@@ -902,77 +729,27 @@ watch_area: Connaught Place
 
 ## Current Priorities (Roadmap)
 
-### Tier 1: Community Intelligence (COMPLETE)
-- [x] Report submission E2E
-- [x] Reports on map + auto-update
-- [x] User profiles - My Reports
-- [x] Alert mechanism MVP
-- [x] Onboarding system
-- [x] HomeScreen live data
-- [x] Authentication (Email/Password + Google + Phone)
-- [x] E2E Testing Suite (Playwright)
+### Tier 1: Community Intelligence ✅ COMPLETE
+Reports, map, alerts, onboarding, auth (Email/Google/Phone), E2E tests
 
-### Tier 2: ML/AI Foundation (PARTIAL - See Dual Purpose Analysis)
-
-**What Works (Verified 2025-12-24):**
-- [x] XGBoost for KNOWN 62 HOTSPOTS - WEATHER SENSITIVE
-  - Model responds to weather changes (MODERATE sensitivity)
-  - SAR VV/VH features drive predictions (r=0.35-0.36)
-  - Predictions vary 0.22-0.89 based on rainfall/SAR
-  - Verification: python apps/ml-service/scripts/test_xgboost_weather_sensitivity.py
-- [x] FHI rule-based risk calculation (CUSTOM HEURISTIC, not from published research)
-- [x] Hotspot feature extractor (18-dim)
-- [x] General feature extractor (37-dim)
-- [x] Pre-computed heatmap cache
-- [x] Historical Floods Panel (Delhi NCR 1969-2023)
-- [x] Hotspots with live weather (FHI formula)
-
-**XGBoost Dual Purpose Verdict:**
-- PURPOSE 1 (Known Hotspots): WORKS - responds to weather
-- PURPOSE 2 (New Locations): LIMITED - AUC 0.70-0.82 (needs 0.85)
-- USE FOR: Dynamic risk at 90 known Delhi waterlogging hotspots
-- DO NOT USE FOR: Discovering new flood-prone locations
-
-**Training Data:**
-- [x] hotspot_training_data.npz: 570 samples × 18-dim (47% positive)
-- 190 unique locations (90 hotspots + 100 negatives × 3 dates)
-- is_monsoon feature has 0% importance (all samples from monsoon)
-
-**What's Broken:**
-- [ ] XGBoost spatial generalization - Need 300+ diverse locations to discover new hotspots
-- [ ] ConvLSTM/GNN/LightGBM Ensemble - Architecture exists but NEVER TRAINED
-- [ ] /forecast endpoint silently returns hardcoded 0.1 probability (fallback)
-- [ ] Data imbalance (only 4 high-risk events in 5 years) - needs cost-weighted training
+### Tier 2: ML/AI Foundation (PARTIAL)
+- [x] XGBoost for 90 known hotspots (weather-sensitive)
+- [x] FHI formula, feature extractors, heatmap cache
+- [x] Historical Floods Panel, Photo classification (MobileNet)
+- [ ] Ensemble models (LSTM/GNN) - NOT TRAINED
+- [ ] Better generalization (need 300+ locations)
 
 ### Tier 3: Smart Sensors & Edge AI
-- [ ] IoT sensor registration + pairing workflow
-- [ ] IoT authentication on /ingest endpoint
-- [ ] Edge ANN model for local flood prediction (ESP32/RPi)
-- [ ] Sensor-to-cloud sync with offline buffering
-- [ ] Real-time sensor status dashboard
+IoT registration, authentication, edge ANN, offline sync
 
 ### Tier 4: Photo Intelligence
-- [x] Photo ML: Flood vs non-flood classification (MobileNet, threshold 0.3)
-- [ ] Water depth estimation from images
-- [ ] Fake/manipulated image detection
-- [ ] Real photo storage (S3/Blob, replace mock URLs)
-- [ ] Photo verification confidence score
+Water depth estimation, fake detection, real storage (S3)
 
-### Tier 5: Messaging & Reach
-- [ ] WhatsApp Bot: Onboarding, preferences, watch areas
-- [ ] WhatsApp Bot: Alert delivery
-- [ ] SMS fallback for non-WhatsApp users
-- [ ] Notification service (implement INotificationService)
+### Tier 5: Messaging
+WhatsApp bot (onboarding, alerts), SMS fallback
 
 ### Tier 6: Mobile Native
-- [ ] Capacitor wrapper for Android/iOS
-- [ ] PWA manifest + service worker
-- [ ] Offline mode with sync
-- [ ] Push notifications (Firebase Cloud Messaging)
-- [ ] Background location tracking
+Capacitor, PWA, offline mode, push notifications
 
-### Tier 7: Scale & Intelligence
-- [ ] Multi-language (i18n) - Hindi, Kannada
-- [ ] GNN spatial modeling
-- [ ] Flood simulation engine
-- [ ] City expansion (Mumbai, Chennai, Kolkata)
+### Tier 7: Scale
+Multi-language (Hindi, Kannada), GNN, city expansion

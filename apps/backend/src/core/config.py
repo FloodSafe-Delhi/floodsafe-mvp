@@ -1,7 +1,7 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 from pydantic import field_validator
 from typing import List, Union
-import os
+from typing_extensions import Annotated
 import json
 
 class Settings(BaseSettings):
@@ -15,8 +15,11 @@ class Settings(BaseSettings):
     # For production, set env var: BACKEND_CORS_ORIGINS=https://your-frontend.vercel.app (single URL)
     # OR: BACKEND_CORS_ORIGINS=https://url1.com,https://url2.com (comma-separated)
     # OR: BACKEND_CORS_ORIGINS=["https://your-frontend.vercel.app"] (JSON array)
-    # Type is Union to accept string from env, then converted to list by validator
-    BACKEND_CORS_ORIGINS: Union[str, List[str]] = "http://localhost:5175,http://localhost:8000"
+    # NoDecode prevents pydantic-settings from JSON-parsing before our validator runs
+    BACKEND_CORS_ORIGINS: Annotated[List[str], NoDecode] = [
+        "http://localhost:5175",
+        "http://localhost:8000",
+    ]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
@@ -40,14 +43,6 @@ class Settings(BaseSettings):
             if v.strip():
                 return [v.strip()]
         return []
-
-    @property
-    def cors_origins_list(self) -> List[str]:
-        """Get CORS origins as a list (handles both string and list cases)."""
-        if isinstance(self.BACKEND_CORS_ORIGINS, list):
-            return self.BACKEND_CORS_ORIGINS
-        # Parse string if validator didn't already convert
-        return self.parse_cors_origins(self.BACKEND_CORS_ORIGINS)
 
     # Flag to detect if we're in production (check if DATABASE_URL changed from default)
     @property

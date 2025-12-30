@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from pydantic import field_validator
+from typing import List, Union
 import os
+import json
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "FloodSafe API"
@@ -11,11 +13,35 @@ class Settings(BaseSettings):
 
     # CORS Configuration
     # For production, set env var: BACKEND_CORS_ORIGINS=["https://your-frontend.vercel.app"]
-    # Pydantic will automatically parse JSON array from env var
+    # OR: BACKEND_CORS_ORIGINS=https://your-frontend.vercel.app (single URL)
+    # OR: BACKEND_CORS_ORIGINS=https://url1.com,https://url2.com (comma-separated)
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5175",  # Vite Frontend (dev only)
         "http://localhost:8000",  # Swagger UI (dev only)
     ]
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        """Parse CORS origins from various formats: JSON array, comma-separated, or single URL."""
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            # Try JSON array first: ["url1", "url2"]
+            if v.startswith("["):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
+            # Try comma-separated: url1,url2
+            if "," in v:
+                return [url.strip() for url in v.split(",") if url.strip()]
+            # Single URL
+            if v.strip():
+                return [v.strip()]
+        return []
 
     # Flag to detect if we're in production (check if DATABASE_URL changed from default)
     @property

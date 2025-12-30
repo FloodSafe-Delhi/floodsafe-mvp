@@ -1,0 +1,60 @@
+# FloodSafe ML Service - FHI-Only Deployment (Lightweight)
+#
+# This Dockerfile creates a minimal image (~100MB vs 1.4GB+) for
+# FHI (Flood Hazard Index) calculation using Open-Meteo API.
+#
+# Features:
+# - Live FHI calculation using Open-Meteo weather API (free, no auth)
+# - 90 Delhi waterlogging hotspots with dynamic risk levels
+#
+# NOT included (to keep image small):
+# - GEE (Google Earth Engine)
+# - Heavy ML models (PyTorch, TensorFlow)
+# - Image classification (MobileNet/YOLO)
+# - Geospatial libraries (GDAL, GEOS)
+
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# No system dependencies needed for FHI-only deployment!
+# (No GDAL, GEOS, OpenGL required)
+
+# Copy requirements first for Docker cache optimization
+COPY requirements-fhi.txt .
+RUN pip install --no-cache-dir -r requirements-fhi.txt
+
+# Copy only necessary source files
+COPY src/__init__.py src/
+COPY src/main_fhi.py src/
+COPY src/core/__init__.py src/core/
+COPY src/core/config.py src/core/
+COPY src/api/__init__.py src/api/
+COPY src/api/hotspots.py src/api/
+COPY src/data/__init__.py src/data/
+COPY src/data/fhi_calculator.py src/data/
+
+# Copy hotspots JSON data
+COPY data/delhi_waterlogging_hotspots.json data/
+
+# Create optional directories (for cache, etc.)
+RUN mkdir -p /tmp/ml-cache
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV GEE_ENABLED=false
+
+# Koyeb sets PORT automatically, but default to 8002 for local testing
+ENV PORT=8002
+
+# Expose port (Koyeb uses $PORT env var)
+EXPOSE 8002
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import httpx; r = httpx.get('http://localhost:${PORT}/health'); exit(0 if r.status_code == 200 else 1)"
+
+# Run the FHI-only application
+# Note: Koyeb injects PORT env var, so use shell form to expand it
+CMD uvicorn src.main_fhi:app --host 0.0.0.0 --port ${PORT}

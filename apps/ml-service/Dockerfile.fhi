@@ -24,14 +24,22 @@ WORKDIR /app
 COPY requirements-fhi.txt .
 RUN pip install --no-cache-dir -r requirements-fhi.txt
 
-# Copy only necessary source files
+# Copy source structure
 COPY src/__init__.py src/
 COPY src/main_fhi.py src/
+
+# Core config
 COPY src/core/__init__.py src/core/
 COPY src/core/config.py src/core/
+
+# API layer (only hotspots)
 COPY src/api/__init__.py src/api/
 COPY src/api/hotspots.py src/api/
-COPY src/data/__init__.py src/data/
+
+# Data layer - create minimal __init__.py that only exports FHI
+RUN mkdir -p src/data
+RUN echo '"""Data layer - FHI only."""' > src/data/__init__.py
+RUN echo 'from .fhi_calculator import calculate_fhi_for_location, FHICalculator, get_fhi_calculator' >> src/data/__init__.py
 COPY src/data/fhi_calculator.py src/data/
 
 # Copy hotspots JSON data

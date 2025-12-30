@@ -2,10 +2,11 @@ from contextlib import asynccontextmanager
 import logging
 
 from fastapi import FastAPI
-from .infrastructure import models
-from .infrastructure.database import engine
+from .infrastructure import models  # noqa: F401 - ensures models are loaded
 
-models.Base.metadata.create_all(bind=engine)
+# NOTE: Database schema is now managed by Alembic migrations.
+# Run `alembic upgrade head` to apply migrations.
+# See apps/backend/alembic/ for migration files.
 
 from .api import webhook, reports, users, sensors, otp, watch_areas, daily_routes, reputation, leaderboards, badges, routes_api, auth, alerts, search, predictions, saved_routes, historical_floods, hotspots, external_alerts, rainfall, gamification, comments, ml
 from .domain.services.external_alerts import start_scheduler, stop_scheduler

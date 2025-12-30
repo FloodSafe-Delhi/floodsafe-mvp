@@ -4,9 +4,12 @@ Email Service for FloodSafe
 Handles sending verification emails using SendGrid.
 Falls back to console logging if SendGrid is not configured.
 """
+import logging
 from typing import Optional
 
 from src.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class EmailService:
@@ -27,13 +30,13 @@ class EmailService:
                 try:
                     from sendgrid import SendGridAPIClient
                     self._client = SendGridAPIClient(settings.SENDGRID_API_KEY)
-                    print("[EMAIL] SendGrid client initialized")
+                    logger.info("SendGrid client initialized")
                 except ImportError:
-                    print("[EMAIL] sendgrid package not installed, using mock mode")
+                    logger.warning("sendgrid package not installed, using mock mode")
                 except Exception as e:
-                    print(f"[EMAIL] Failed to initialize SendGrid: {e}")
+                    logger.error(f"Failed to initialize SendGrid: {e}")
             else:
-                print("[EMAIL] SENDGRID_API_KEY not set, using mock mode")
+                logger.warning("SENDGRID_API_KEY not set, using mock email mode")
         return self._client
 
     async def send_verification_email(
@@ -85,14 +88,14 @@ class EmailService:
             response = client.send(message)
 
             if response.status_code in (200, 201, 202):
-                print(f"[EMAIL] Verification email sent to {email}")
+                logger.info(f"Verification email sent to {email}")
                 return True
             else:
-                print(f"[EMAIL] SendGrid returned status {response.status_code}")
+                logger.warning(f"SendGrid returned status {response.status_code}")
                 return False
 
         except Exception as e:
-            print(f"[EMAIL] Error sending email: {e}")
+            logger.error(f"Error sending email: {e}")
             return False
 
     def _build_verification_link(self, token: str) -> str:

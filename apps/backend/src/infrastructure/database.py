@@ -75,7 +75,11 @@ def get_connect_args(url: URL) -> dict:
         return {}
     else:
         # Cloud database (Supabase, etc.) - require SSL
-        return {"sslmode": "require"}
+        # Also set search_path to include 'tiger' schema where PostGIS is installed
+        return {
+            "sslmode": "require",
+            "options": "-c search_path=public,tiger,extensions"
+        }
 
 
 # Sync engine (for existing endpoints)
@@ -97,7 +101,11 @@ try:
     # For asyncpg, SSL is passed differently
     host = database_url.host or ""
     is_cloud = "localhost" not in host and "127.0.0.1" not in host and host != "db"
-    async_connect_args = {"ssl": "require"} if is_cloud else {}
+    # asyncpg uses server_settings for search_path
+    async_connect_args = {
+        "ssl": "require",
+        "server_settings": {"search_path": "public,tiger,extensions"}
+    } if is_cloud else {}
     async_engine = create_async_engine(async_url, echo=False, connect_args=async_connect_args)
     AsyncSessionLocal = async_sessionmaker(
         async_engine, class_=AsyncSession, expire_on_commit=False

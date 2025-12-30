@@ -1,11 +1,11 @@
 """
 Supabase Storage service for report photos.
 
-This module provides a clean abstraction for uploading images to Supabase Storage,
-with graceful fallback to mock URLs if not configured.
+This module provides a clean abstraction for uploading images to Supabase Storage.
+Raises explicit errors if storage is not configured - no silent fallbacks.
 
 Usage:
-    from ..infrastructure.storage import get_storage_service, StorageError
+    from ..infrastructure.storage import get_storage_service, StorageError, StorageNotConfiguredError
 
     storage = get_storage_service()
     public_url, path = await storage.upload_image(content, filename, content_type, user_id)
@@ -26,6 +26,11 @@ class StorageError(Exception):
     pass
 
 
+class StorageNotConfiguredError(StorageError):
+    """Raised when storage is not configured. This is a deployment issue, not a user error."""
+    pass
+
+
 class SupabaseStorageService:
     """
     Handles file uploads to Supabase Storage.
@@ -33,7 +38,7 @@ class SupabaseStorageService:
     Features:
     - Uploads images to a public bucket for easy access
     - Generates unique paths to avoid collisions
-    - Gracefully falls back to mock URLs if not configured
+    - Raises explicit errors if not configured (no silent fallbacks)
     - Supports image deletion for cleanup
     """
 
@@ -95,11 +100,14 @@ class SupabaseStorageService:
             Tuple of (public_url, storage_path)
 
         Raises:
-            StorageError: If upload fails and cannot fallback
+            StorageNotConfiguredError: If Supabase storage is not configured
+            StorageError: If upload fails
         """
         if not self.is_configured:
-            logger.warning("Supabase storage not configured, returning mock URL")
-            return f"https://mock-storage.com/{filename}", f"mock/{filename}"
+            logger.error("Supabase storage not configured! Set SUPABASE_URL and SUPABASE_SERVICE_KEY env vars.")
+            raise StorageNotConfiguredError(
+                "Photo storage not configured. Please contact support - this is a deployment issue."
+            )
 
         path = self._generate_path(filename, user_id)
         upload_url = f"{self.url}/storage/v1/object/{self.bucket}/{path}"
@@ -148,12 +156,8 @@ class SupabaseStorageService:
             True if deleted successfully, False otherwise
         """
         if not self.is_configured:
-            logger.debug("Supabase not configured, skipping delete")
-            return True
-
-        if path.startswith("mock/"):
-            logger.debug("Mock path, skipping delete")
-            return True
+            logger.warning("Supabase not configured, cannot delete image")
+            return False
 
         delete_url = f"{self.url}/storage/v1/object/{self.bucket}/{path}"
 
@@ -184,8 +188,8 @@ class SupabaseStorageService:
         Returns:
             Public URL string
         """
-        if path.startswith("mock/"):
-            return f"https://mock-storage.com/{path.replace('mock/', '')}"
+        if not self.is_configured:
+            raise StorageNotConfiguredError("Storage not configured, cannot generate URL")
         return f"{self.url}/storage/v1/object/public/{self.bucket}/{path}"
 
 

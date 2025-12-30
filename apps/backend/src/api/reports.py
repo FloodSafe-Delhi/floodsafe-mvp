@@ -18,7 +18,7 @@ from .deps import get_current_user, get_current_user_optional
 from ..domain.services.reputation_service import ReputationService
 from ..core.utils import get_exif_data, get_lat_lon
 from ..core.config import settings
-from ..infrastructure.storage import get_storage_service, StorageError
+from ..infrastructure.storage import get_storage_service, StorageError, StorageNotConfiguredError
 from math import radians, sin, cos, sqrt, atan2
 from ..domain.services.otp_service import get_otp_service
 from ..domain.services.validation_service import ReportValidationService
@@ -352,10 +352,20 @@ async def create_report(
             )
             media_metadata["storage_path"] = storage_path
             logger.info(f"Uploaded report photo to storage: {storage_path}")
+        except StorageNotConfiguredError as e:
+            # Deployment issue - explicit error, no silent fallback
+            logger.error(f"Storage not configured: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Photo storage service is not configured. Please contact support."
+            )
         except StorageError as e:
-            # Graceful fallback to mock URL if storage fails
-            logger.warning(f"Storage upload failed, using mock URL: {e}")
-            media_url = f"https://mock-storage.com/{image.filename}"
+            # Upload failed - explicit error, no silent fallback
+            logger.error(f"Storage upload failed: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Failed to upload photo. Please try again later."
+            )
 
         # 2.5. ML-based flood image verification (YOLO classifier)
         # Validates if the photo actually shows a flood scene

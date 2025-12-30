@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     TWILIO_SMS_NUMBER: str = ""                  # e.g., "+1234567890" (for SMS fallback)
     TWILIO_WEBHOOK_URL: str = ""                 # Your public webhook URL for signature validation
 
+    # Supabase Storage Configuration (for report photos)
+    SUPABASE_URL: str = ""                        # e.g., "https://udblirsscaghsepuxxqv.supabase.co"
+    SUPABASE_SERVICE_KEY: str = ""                # Service role key from Supabase Dashboard -> API
+    SUPABASE_STORAGE_BUCKET: str = "report-photos"  # Bucket name for report photos
+
     class Config:
         case_sensitive = True
         env_file = ".env"

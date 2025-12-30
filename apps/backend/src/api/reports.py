@@ -18,6 +18,7 @@ from .deps import get_current_user, get_current_user_optional
 from ..domain.services.reputation_service import ReputationService
 from ..core.utils import get_exif_data, get_lat_lon
 from ..core.config import settings
+from ..infrastructure.storage import get_storage_service, StorageError
 from math import radians, sin, cos, sqrt, atan2
 from ..domain.services.otp_service import get_otp_service
 from ..domain.services.validation_service import ReportValidationService
@@ -340,9 +341,21 @@ async def create_report(
                 location_verified = False
                 logger.warning(f"Report photo GPS ({img_lat:.6f}, {img_lng:.6f}) is {distance:.1f}m from reported location ({latitude:.6f}, {longitude:.6f})")
 
-        # TODO: Upload to S3/Blob Storage and get URL
-        # media_url = s3_upload(content)
-        media_url = f"https://mock-storage.com/{image.filename}"
+        # Upload to Supabase Storage
+        storage_service = get_storage_service()
+        try:
+            media_url, storage_path = await storage_service.upload_image(
+                content=content,
+                filename=image.filename or f"report_{datetime.utcnow().timestamp()}.jpg",
+                content_type=image.content_type or "image/jpeg",
+                user_id=str(user_id)
+            )
+            media_metadata["storage_path"] = storage_path
+            logger.info(f"Uploaded report photo to storage: {storage_path}")
+        except StorageError as e:
+            # Graceful fallback to mock URL if storage fails
+            logger.warning(f"Storage upload failed, using mock URL: {e}")
+            media_url = f"https://mock-storage.com/{image.filename}"
 
         # 2.5. ML-based flood image verification (YOLO classifier)
         # Validates if the photo actually shows a flood scene

@@ -5,6 +5,7 @@ import logging
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
+from geoalchemy2 import WKTElement
 
 from ..infrastructure.database import get_db
 from ..infrastructure import models
@@ -27,13 +28,13 @@ def create_watch_area(watch_area: WatchAreaCreate, db: Session = Depends(get_db)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Create PostGIS point from lat/lng
+        # Create PostGIS point from lat/lng using WKTElement for proper geometry conversion
         point_wkt = f"POINT({watch_area.longitude} {watch_area.latitude})"
 
         new_watch_area = models.WatchArea(
             user_id=watch_area.user_id,
             name=watch_area.name,
-            location=point_wkt,
+            location=WKTElement(point_wkt, srid=4326),
             radius=watch_area.radius
         )
 

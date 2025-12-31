@@ -28,7 +28,8 @@ RUN pip install --no-cache-dir -r requirements-fhi.txt
 
 # Install TFLite Runtime for image classification (~3MB model, ~5MB runtime)
 # TFLite has no executable stack issues unlike ONNX Runtime
-RUN pip install --no-cache-dir tflite-runtime pillow>=10.0.0
+# Note: Need version 2.14+ to support FULLY_CONNECTED opcode v12
+RUN pip install --no-cache-dir tflite-runtime==2.14.0 pillow>=10.0.0
 
 # Copy source structure
 COPY src/__init__.py src/

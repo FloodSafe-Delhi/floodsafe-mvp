@@ -28,7 +28,11 @@ RUN pip install --no-cache-dir -r requirements-fhi.txt
 
 # Install TFLite Runtime for image classification (~3MB model, ~5MB runtime)
 # TFLite has no executable stack issues unlike ONNX Runtime
-# Note: Need version 2.14+ to support FULLY_CONNECTED opcode v12
+#
+# CRITICAL: Model MUST be converted with matching TensorFlow version!
+# - tflite-runtime 2.14.0 supports up to FULLY_CONNECTED opcode v11
+# - Model converted with TF 2.17+ produces opcode v12 (incompatible!)
+# - Use scripts/convert_tf214.py to convert model with TF 2.14.x
 RUN pip install --no-cache-dir tflite-runtime==2.14.0 pillow>=10.0.0
 
 # Copy source structure

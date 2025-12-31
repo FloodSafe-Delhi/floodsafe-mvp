@@ -35,6 +35,8 @@
 
 13. **DOCUMENT IMPORTANT FINDINGS** - Add significant discoveries to REALISATIONS.md. Record gotchas, edge cases, and non-obvious behaviors.
 
+14. **NO SILENT FALLBACKS - REPORT FAILURES** - When something fails, STOP and report the error to the user. Never silently fall back to a degraded mode. The user needs to know what broke so they can fix the root cause, not have problems hidden behind workarounds.
+
 ---
 
 ## LARGE DATA FILE HANDLING (MANDATORY)

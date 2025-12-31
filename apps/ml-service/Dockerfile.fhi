@@ -27,7 +27,8 @@ COPY requirements-fhi.txt .
 RUN pip install --no-cache-dir -r requirements-fhi.txt
 
 # Install ONNX Runtime for image classification (~50MB)
-RUN pip install --no-cache-dir onnxruntime==1.16.0 pillow>=10.0.0
+# Note: onnxruntime 1.16+ has executable stack issues on Koyeb, use 1.15.1
+RUN pip install --no-cache-dir onnxruntime==1.15.1 pillow>=10.0.0
 
 # Copy source structure
 COPY src/__init__.py src/

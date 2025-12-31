@@ -86,16 +86,34 @@ class TFLiteFloodClassifier:
         """
         try:
             # Try tflite_runtime first (lighter), fall back to tensorflow
+            runtime_type = None
             try:
                 from tflite_runtime.interpreter import Interpreter
+                runtime_type = "tflite_runtime"
             except ImportError:
                 from tensorflow.lite.python.interpreter import Interpreter
+                runtime_type = "tensorflow.lite"
 
             path = Path(path)
             if not path.exists():
                 raise FileNotFoundError(f"TFLite model not found: {path}")
 
+            # Log file info for debugging
+            file_size = path.stat().st_size
             logger.info(f"Loading TFLite model from {path}...")
+            logger.info(f"  Runtime: {runtime_type}")
+            logger.info(f"  File size: {file_size / 1024 / 1024:.2f} MB")
+
+            # Check FlatBuffer magic bytes
+            with open(path, 'rb') as f:
+                header = f.read(8)
+                magic = header[4:8]
+                if magic != b'TFL3':
+                    raise RuntimeError(
+                        f"Invalid TFLite file: expected TFL3 magic bytes, got {magic!r}. "
+                        "Model may be corrupted or wrong format."
+                    )
+                logger.info(f"  Magic bytes: TFL3 (valid)")
 
             # Create interpreter
             self.interpreter = Interpreter(model_path=str(path))
@@ -113,11 +131,17 @@ class TFLiteFloodClassifier:
 
             return self
 
-        except ImportError:
-            logger.error("TFLite Runtime not installed. Run: pip install tflite-runtime")
+        except ImportError as e:
+            logger.error(f"TFLite Runtime import failed: {e}")
+            logger.error("Install with: pip install tflite-runtime==2.14.0")
+            raise
+        except FileNotFoundError:
             raise
         except Exception as e:
-            logger.error(f"Failed to load TFLite model: {e}")
+            # Log full traceback for debugging
+            import traceback
+            logger.error(f"Failed to load TFLite model: {type(e).__name__}: {e}")
+            logger.error(f"Traceback:\n{traceback.format_exc()}")
             raise RuntimeError(f"Could not load TFLite model: {e}")
 
     def _preprocess(self, image: Any) -> np.ndarray:
@@ -283,25 +307,38 @@ def get_classifier() -> TFLiteFloodClassifier:
     """
     Get or create singleton classifier instance.
 
+    CRITICAL: Only caches AFTER successful load to prevent
+    returning broken instances from failed load attempts.
+
     Returns:
         Loaded TFLiteFloodClassifier instance
 
     Raises:
-        RuntimeError: If model file not found
+        RuntimeError: If model file not found or load fails
     """
     global _classifier_instance
 
-    if _classifier_instance is None:
-        model_path = Path(__file__).parent.parent.parent / "models" / "flood_classifier.tflite"
+    # Check if already loaded AND working (is_loaded checks interpreter != None)
+    if _classifier_instance is not None and _classifier_instance.is_loaded:
+        return _classifier_instance
 
-        if not model_path.exists():
-            raise RuntimeError(
-                f"TFLite model not found at {model_path}. "
-                "Run: python scripts/convert_to_tflite.py"
-            )
+    # Reset to None to force re-attempt if previous load failed
+    _classifier_instance = None
 
-        _classifier_instance = TFLiteFloodClassifier()
-        _classifier_instance.load(model_path)
+    model_path = Path(__file__).parent.parent.parent / "models" / "flood_classifier.tflite"
+
+    if not model_path.exists():
+        raise RuntimeError(
+            f"TFLite model not found at {model_path}. "
+            "Run: python scripts/convert_tf214.py in TF 2.14 environment"
+        )
+
+    # Create and load in local variable first - only cache after SUCCESS
+    classifier = TFLiteFloodClassifier()
+    classifier.load(model_path)  # Must succeed before caching
+
+    # Only cache after successful load
+    _classifier_instance = classifier
 
     return _classifier_instance
 

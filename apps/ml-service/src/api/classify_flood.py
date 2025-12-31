@@ -2,7 +2,7 @@
 Flood Image Classification API.
 
 Provides endpoints for classifying images as flood/no_flood using
-ONNX-based MobileNet classifier.
+TFLite-based MobileNet classifier (~3MB, no security restrictions).
 
 CRITICAL SAFETY REQUIREMENT:
 - Uses low threshold (0.3) to minimize false negatives
@@ -51,14 +51,14 @@ def _get_classifier():
         return _classifier
 
     try:
-        from ..models.onnx_flood_classifier import get_classifier
+        from ..models.tflite_flood_classifier import get_classifier
         _classifier = get_classifier()
         _model_loaded = True
-        logger.info("ONNX flood classifier loaded successfully")
+        logger.info("TFLite flood classifier loaded successfully")
         return _classifier
     except Exception as e:
         _load_error = str(e)
-        logger.error(f"Failed to load ONNX classifier: {e}")
+        logger.error(f"Failed to load TFLite classifier: {e}")
         return None
 
 
@@ -93,7 +93,7 @@ async def classifier_health():
     return HealthResponse(
         status="healthy" if _model_loaded else "degraded",
         model_loaded=_model_loaded,
-        model_type="onnx" if _model_loaded else "none",
+        model_type="tflite" if _model_loaded else "none",
         error=_load_error if not _model_loaded else None
     )
 

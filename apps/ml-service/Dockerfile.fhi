@@ -1,17 +1,17 @@
 # FloodSafe ML Service - Lightweight Deployment (FHI + Image Classification)
 #
-# This Dockerfile creates a lightweight image (~150MB) for:
+# This Dockerfile creates a lightweight image (~100MB) for:
 # - FHI (Flood Hazard Index) calculation using Open-Meteo API
-# - Flood image classification using ONNX Runtime (MobileNet)
+# - Flood image classification using TFLite Runtime (MobileNet)
 #
 # Features:
 # - Live FHI calculation using Open-Meteo weather API (free, no auth)
 # - 90 Delhi waterlogging hotspots with dynamic risk levels
-# - Flood image classification (ONNX MobileNet, ~50MB vs 500MB TensorFlow)
+# - Flood image classification (TFLite MobileNet, ~3MB model)
 #
 # NOT included (to keep image small):
 # - GEE (Google Earth Engine)
-# - TensorFlow (replaced with ONNX Runtime)
+# - TensorFlow (replaced with TFLite Runtime)
 # - PyTorch
 # - Geospatial libraries (GDAL, GEOS)
 
@@ -26,9 +26,9 @@ WORKDIR /app
 COPY requirements-fhi.txt .
 RUN pip install --no-cache-dir -r requirements-fhi.txt
 
-# Install ONNX Runtime for image classification (~50MB)
-# Note: onnxruntime 1.16+ has executable stack issues on Koyeb, use 1.15.1
-RUN pip install --no-cache-dir onnxruntime==1.15.1 pillow>=10.0.0
+# Install TFLite Runtime for image classification (~3MB model, ~5MB runtime)
+# TFLite has no executable stack issues unlike ONNX Runtime
+RUN pip install --no-cache-dir tflite-runtime pillow>=10.0.0
 
 # Copy source structure
 COPY src/__init__.py src/
@@ -43,10 +43,10 @@ COPY src/api/__init__.py src/api/
 COPY src/api/hotspots.py src/api/
 COPY src/api/classify_flood.py src/api/
 
-# Models layer (ONNX classifier)
+# Models layer (TFLite classifier)
 RUN mkdir -p src/models
 RUN echo '"""Models layer."""' > src/models/__init__.py
-COPY src/models/onnx_flood_classifier.py src/models/
+COPY src/models/tflite_flood_classifier.py src/models/
 
 # Data layer - create minimal __init__.py that only exports FHI
 RUN mkdir -p src/data
@@ -57,9 +57,9 @@ COPY src/data/fhi_calculator.py src/data/
 # Copy hotspots JSON data
 COPY data/delhi_waterlogging_hotspots.json data/
 
-# Copy ONNX model for flood classification
+# Copy TFLite model for flood classification (~3MB)
 RUN mkdir -p models
-COPY models/flood_classifier.onnx models/
+COPY models/flood_classifier.tflite models/
 
 # Create optional directories (for cache, etc.)
 RUN mkdir -p /tmp/ml-cache

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, MapPin, Camera, Award, Mic, MicOff, AlertCircle, X, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Camera, Award, Mic, MicOff, AlertCircle, X, Loader2, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
@@ -14,6 +14,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '../ui/tooltip';
 import { WaterDepth, VehiclePassability, LocationWithAddress, PhotoData } from '../../types';
 import { useReportMutation } from '../../lib/api/hooks';
 import { useUserReady } from '../../contexts/UserContext';
+import { useCurrentCity } from '../../contexts/CityContext';
+import { getCityCenterOrDefault } from '../../lib/cityCoordinates';
 import { toast } from 'sonner';
 import MapPicker from '../MapPicker';
 import PhotoCapture from '../PhotoCapture';
@@ -113,6 +115,10 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const reportMutation = useReportMutation();
     const { userId } = useUserReady();
+    const currentCity = useCurrentCity();
+
+    // Track if using city center fallback (for UI indicator)
+    const [usingFallbackLocation, setUsingFallbackLocation] = useState(false);
 
     const totalSteps = 4;
     const progressValue = (step / totalSteps) * 100;
@@ -345,31 +351,40 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
             },
             (error) => {
                 setLocationLoading(false);
-                let errorMsg = 'Failed to get location';
+                console.log('GPS error:', error.code, error.message);
 
+                // Use city center as fallback for all error types
+                const cityInfo = getCityCenterOrDefault(currentCity);
+
+                // Set approximate location based on city preference
+                setLocation({
+                    latitude: cityInfo.lat,
+                    longitude: cityInfo.lng,
+                    accuracy: cityInfo.radiusKm * 1000  // Convert km to meters for accuracy field
+                });
+                setLocationName(cityInfo.displayName);
+                setUsingFallbackLocation(true);
+                setLocationError('');  // Clear error since we have fallback
+
+                // Show appropriate message based on error type
                 switch (error.code) {
                     case error.PERMISSION_DENIED:
-                        errorMsg = 'Location permission denied. Please enable location access in your browser settings.';
-                        toast.error(errorMsg);
+                        toast.info(`Using ${cityInfo.displayName} as location. Tap the map to set exact location.`, {
+                            duration: 5000,
+                        });
                         break;
                     case error.POSITION_UNAVAILABLE:
-                        errorMsg = 'Location information unavailable. Please check your GPS/network connection.';
-                        toast.error(errorMsg);
-                        break;
                     case error.TIMEOUT:
-                        errorMsg = 'Location request timed out. Please try again.';
-                        toast.error(errorMsg);
-                        break;
                     default:
-                        errorMsg = 'An unknown error occurred while getting your location.';
-                        toast.error(errorMsg);
+                        toast.info(`GPS unavailable. Using ${cityInfo.displayName} as location. Tap the map to refine.`, {
+                            duration: 5000,
+                        });
+                        break;
                 }
-
-                setLocationError(errorMsg);
             },
             options
         );
-    }, []);
+    }, [currentCity]);
 
     // Real-time validation
     useEffect(() => {
@@ -525,6 +540,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
         setLocationName(selectedLocation.locationName);
         setLocationError('');
         setLocationLoading(false);
+        setUsingFallbackLocation(false);  // Clear fallback flag when user manually selects
         locationManuallySetRef.current = true; // Mark as manually set to prevent GPS override
         toast.success('Location selected from map');
     };
@@ -740,11 +756,20 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                     </div>
                                 ) : null}
 
-                                {location && location.accuracy > GPS_ACCURACY_POOR && (
+                                {location && location.accuracy > GPS_ACCURACY_POOR && !usingFallbackLocation && (
                                     <Alert>
                                         <AlertTriangle className="h-4 w-4 text-yellow-600" />
                                         <AlertDescription className="text-xs">
                                             Low GPS accuracy. For better results, move to an open area away from buildings.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+
+                                {usingFallbackLocation && (
+                                    <Alert className="bg-amber-50 border-amber-200">
+                                        <Info className="h-4 w-4 text-amber-600" />
+                                        <AlertDescription className="text-xs text-amber-800">
+                                            Using approximate location ({locationName}). Tap "Select from Map" below to set your exact location.
                                         </AlertDescription>
                                     </Alert>
                                 )}

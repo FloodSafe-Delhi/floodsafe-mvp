@@ -1,17 +1,17 @@
 """
-FloodSafe ML Service - FHI-Only Deployment (Lightweight).
+FloodSafe ML Service - Lightweight Deployment (FHI + Image Classification).
 
-This is a minimal FastAPI service that ONLY provides:
+This is a lightweight FastAPI service that provides:
 - FHI (Flood Hazard Index) calculation using Open-Meteo API
 - Hotspots endpoint with live FHI data
+- Flood image classification using ONNX Runtime (MobileNet)
 
 This version does NOT include:
 - GEE (Google Earth Engine) integration
-- Image classification (MobileNet/YOLO)
+- TensorFlow (replaced with ONNX Runtime ~50MB)
 - Full ensemble ML models (LSTM/GNN/LightGBM)
-- XGBoost model (optional - can be added if weights are bundled)
 
-Total deployment size: ~50MB (vs 1.4GB+ for full service)
+Total deployment size: ~150MB (vs 1.4GB+ for full service)
 """
 
 import os
@@ -52,8 +52,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Import hotspots router (only API we need)
+# Import routers
 from .api.hotspots import router as hotspots_router, initialize_hotspots_router
+from .api.classify_flood import router as classify_router, initialize_classifier
 
 # Include hotspots router
 app.include_router(
@@ -62,15 +63,25 @@ app.include_router(
     tags=["hotspots"],
 )
 
+# Include flood classification router
+app.include_router(
+    classify_router,
+    prefix="/api/v1/classify-flood",
+    tags=["classification"],
+)
+
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup."""
     logger.info("=" * 60)
-    logger.info("Starting FloodSafe ML Service (FHI-Only Mode)...")
+    logger.info("Starting FloodSafe ML Service (Lightweight Mode)...")
     logger.info("=" * 60)
 
-    # Initialize hotspots service (loads JSON data, no ML model needed)
+    hotspot_count = 0
+    classifier_loaded = False
+
+    # Initialize hotspots service (loads JSON data)
     try:
         logger.info("Initializing hotspots service...")
         initialize_hotspots_router()
@@ -84,13 +95,29 @@ async def startup_event():
         logger.error(f"[ERROR] Hotspots initialization failed: {e}")
         raise
 
+    # Initialize flood classifier (ONNX model)
+    try:
+        logger.info("Initializing flood classifier (ONNX)...")
+        initialize_classifier()
+
+        # Check if model loaded
+        from .api import classify_flood
+        classifier_loaded = classify_flood._model_loaded
+        if classifier_loaded:
+            logger.info("  Flood classifier: ONNX MobileNet loaded")
+        else:
+            logger.warning(f"  Flood classifier: NOT loaded ({classify_flood._load_error})")
+    except Exception as e:
+        logger.warning(f"[WARN] Classifier initialization failed: {e}")
+        # Don't raise - classifier is optional, hotspots are primary
+
     # Startup summary
     logger.info("=" * 60)
-    logger.info("ML Service (FHI-Only) startup complete")
+    logger.info("ML Service (Lightweight) startup complete")
     logger.info(f"  Hotspots: {hotspot_count} locations")
     logger.info(f"  FHI: Open-Meteo API (live weather)")
+    logger.info(f"  Flood Classifier: {'ONNX (loaded)' if classifier_loaded else 'not available'}")
     logger.info(f"  GEE: disabled")
-    logger.info(f"  ML Models: disabled (FHI-only mode)")
     logger.info(f"  Docs: /api/v1/docs")
     logger.info("=" * 60)
 
@@ -104,19 +131,26 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     """Root endpoint."""
+    # Check classifier status
+    try:
+        from .api import classify_flood
+        classifier_loaded = classify_flood._model_loaded
+    except Exception:
+        classifier_loaded = False
+
     return {
-        "service": "FloodSafe ML Service (FHI-Only)",
-        "version": "1.0.0-fhi",
+        "service": "FloodSafe ML Service (Lightweight)",
+        "version": "1.1.0",
         "status": "running",
-        "mode": "fhi-only",
+        "mode": "lightweight",
         "docs": "/api/v1/docs",
         "health": "/health",
         "features": {
             "fhi": True,
             "hotspots": True,
+            "image_classification": classifier_loaded,
             "gee": False,
-            "ml_models": False,
-            "image_classification": False,
+            "ensemble_models": False,
         },
     }
 
@@ -126,13 +160,24 @@ async def health():
     """Health check endpoint."""
     from .api import hotspots
 
+    # Check classifier status
+    try:
+        from .api import classify_flood
+        classifier_loaded = classify_flood._model_loaded
+        classifier_error = classify_flood._load_error
+    except Exception:
+        classifier_loaded = False
+        classifier_error = "import failed"
+
     return {
         "status": "healthy",
-        "service": "FloodSafe ML Service (FHI-Only)",
-        "mode": "fhi-only",
+        "service": "FloodSafe ML Service (Lightweight)",
+        "mode": "lightweight",
         "hotspots_loaded": len(hotspots.hotspots_data) > 0,
         "hotspots_count": len(hotspots.hotspots_data),
         "fhi_source": "open-meteo",
+        "classifier_loaded": classifier_loaded,
+        "classifier_error": classifier_error if not classifier_loaded else None,
     }
 
 

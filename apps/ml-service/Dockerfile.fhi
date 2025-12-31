@@ -1,16 +1,18 @@
-# FloodSafe ML Service - FHI-Only Deployment (Lightweight)
+# FloodSafe ML Service - Lightweight Deployment (FHI + Image Classification)
 #
-# This Dockerfile creates a minimal image (~100MB vs 1.4GB+) for
-# FHI (Flood Hazard Index) calculation using Open-Meteo API.
+# This Dockerfile creates a lightweight image (~150MB) for:
+# - FHI (Flood Hazard Index) calculation using Open-Meteo API
+# - Flood image classification using ONNX Runtime (MobileNet)
 #
 # Features:
 # - Live FHI calculation using Open-Meteo weather API (free, no auth)
 # - 90 Delhi waterlogging hotspots with dynamic risk levels
+# - Flood image classification (ONNX MobileNet, ~50MB vs 500MB TensorFlow)
 #
 # NOT included (to keep image small):
 # - GEE (Google Earth Engine)
-# - Heavy ML models (PyTorch, TensorFlow)
-# - Image classification (MobileNet/YOLO)
+# - TensorFlow (replaced with ONNX Runtime)
+# - PyTorch
 # - Geospatial libraries (GDAL, GEOS)
 
 FROM python:3.10-slim
@@ -24,6 +26,9 @@ WORKDIR /app
 COPY requirements-fhi.txt .
 RUN pip install --no-cache-dir -r requirements-fhi.txt
 
+# Install ONNX Runtime for image classification (~50MB)
+RUN pip install --no-cache-dir onnxruntime==1.16.0 pillow>=10.0.0
+
 # Copy source structure
 COPY src/__init__.py src/
 COPY src/main_fhi.py src/
@@ -32,9 +37,15 @@ COPY src/main_fhi.py src/
 COPY src/core/__init__.py src/core/
 COPY src/core/config.py src/core/
 
-# API layer (only hotspots)
+# API layer (hotspots + image classification)
 COPY src/api/__init__.py src/api/
 COPY src/api/hotspots.py src/api/
+COPY src/api/classify_flood.py src/api/
+
+# Models layer (ONNX classifier)
+RUN mkdir -p src/models
+RUN echo '"""Models layer."""' > src/models/__init__.py
+COPY src/models/onnx_flood_classifier.py src/models/
 
 # Data layer - create minimal __init__.py that only exports FHI
 RUN mkdir -p src/data
@@ -44,6 +55,10 @@ COPY src/data/fhi_calculator.py src/data/
 
 # Copy hotspots JSON data
 COPY data/delhi_waterlogging_hotspots.json data/
+
+# Copy ONNX model for flood classification
+RUN mkdir -p models
+COPY models/flood_classifier.onnx models/
 
 # Create optional directories (for cache, etc.)
 RUN mkdir -p /tmp/ml-cache

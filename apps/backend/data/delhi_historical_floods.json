@@ -21,7 +21,7 @@
         "injured": 0,
         "displaced": 0,
         "duration_days": 22,
-        "main_cause": "floods",
+        "main_cause": "heavy rains",
         "area_affected": ""
       }
     },
@@ -93,7 +93,7 @@
         "injured": 0,
         "displaced": 0,
         "duration_days": 7,
-        "main_cause": "moderate",
+        "main_cause": "heavy rains",
         "area_affected": ""
       }
     },
@@ -117,7 +117,7 @@
         "injured": 0,
         "displaced": 0,
         "duration_days": 7,
-        "main_cause": "severe",
+        "main_cause": "heavy rains",
         "area_affected": ""
       }
     },
@@ -141,7 +141,7 @@
         "injured": 0,
         "displaced": 0,
         "duration_days": 7,
-        "main_cause": "very severe",
+        "main_cause": "heavy rains",
         "area_affected": ""
       }
     },
@@ -165,7 +165,7 @@
         "injured": 0,
         "displaced": 0,
         "duration_days": 1,
-        "main_cause": "moderate floods",
+        "main_cause": "heavy rains",
         "area_affected": ""
       }
     },
@@ -477,7 +477,7 @@
         "injured": 0,
         "displaced": 0,
         "duration_days": 7,
-        "main_cause": "severe",
+        "main_cause": "heavy rains",
         "area_affected": ""
       }
     },

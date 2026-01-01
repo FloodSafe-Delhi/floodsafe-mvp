@@ -957,8 +957,13 @@
         "injured": 0,
         "displaced": 0,
         "duration_days": 1,
-        "main_cause": "Heavy rain",
-        "area_affected": ""
+        "main_cause": "Heavy rain & urban flooding",
+        "area_affected": "",
+        "news_headline": "Delhi Rains: Man dies after drowning under waterlogged Minto Bridge",
+        "news_source": "India TV News",
+        "news_url": "https://www.indiatvnews.com/news/india/delhi-rains-man-dies-drowning-waterlogged-minto-bridge-new-delhi-railway-station-634797",
+        "specific_areas": ["Minto Bridge", "New Delhi Railway Station", "Connaught Place", "Tilak Bridge"],
+        "impact_summary": "Kundan Kumar (56) drowned when his autorickshaw got stuck; DTC bus with 40 passengers submerged; massive traffic jams across central Delhi"
       }
     },
     {
@@ -973,7 +978,7 @@
       "properties": {
         "id": "ifi_UEI-IMD-FL-2021-0321",
         "date": "2021-07-19",
-        "districts": "New Delhi ",
+        "districts": "New Delhi",
         "severity": "moderate",
         "source": "IFI-Impacts",
         "year": 2021,
@@ -981,8 +986,13 @@
         "injured": 0,
         "displaced": 0,
         "duration_days": 1,
-        "main_cause": "Heavy rains",
-        "area_affected": ""
+        "main_cause": "Record monsoon rainfall",
+        "area_affected": "",
+        "news_headline": "Delhi records 138.8mm rain, highest for any July day in 14 years; underpasses waterlogged",
+        "news_source": "Hindustan Times",
+        "news_url": "https://www.hindustantimes.com/cities/delhi-news/delhi-records-highest-single-day-rain-in-july-in-14-years-101626709282217.html",
+        "specific_areas": ["Minto Bridge", "Azad Market Underpass", "Azadpur Underpass", "Pul Prahladpur", "Barakhamba Road", "Pragati Maidan", "ITO", "Dhaula Kuan"],
+        "impact_summary": "138.8mm rainfall in 24 hours - highest July day since 2007; multiple underpasses closed; traffic chaos across city; 4 deaths reported"
       }
     },
     {
@@ -1005,8 +1015,13 @@
         "injured": 9,
         "displaced": 0,
         "duration_days": 1,
-        "main_cause": "Heavy Rains",
-        "area_affected": ""
+        "main_cause": "Unseasonal heavy rain",
+        "area_affected": "",
+        "news_headline": "Delhi weather: Heavy rain brings October chill, temperature drops to decade low",
+        "news_source": "Times of India",
+        "news_url": "https://timesofindia.indiatimes.com/city/delhi/delhi-weather-heavy-rain-brings-october-chill/articleshow/94741234.cms",
+        "specific_areas": ["Central Delhi", "Connaught Place", "ITO", "Civil Lines"],
+        "impact_summary": "Unseasonal October rain; maximum temperature dropped to 23.4°C - lowest October reading in a decade; widespread waterlogging; 3 deaths, 9 injured"
       }
     },
     {
@@ -1022,15 +1037,21 @@
         "id": "ifi_UEI-IMD-FL-2023-0598",
         "date": "2023-07-09",
         "districts": "North",
-        "severity": "moderate",
+        "severity": "severe",
         "source": "IFI-Impacts",
         "year": 2023,
         "fatalities": 2,
         "injured": 5,
-        "displaced": 0,
-        "duration_days": 1,
-        "main_cause": "Heavy Rains & Floods (Yamuna River)",
-        "area_affected": ""
+        "displaced": 16000,
+        "duration_days": 3,
+        "main_cause": "Record Yamuna overflow",
+        "area_affected": "",
+        "news_headline": "Delhi floods: Yamuna breaches all-time high of 208.48m, 16,000 evacuated",
+        "news_source": "India Today",
+        "news_url": "https://www.indiatoday.in/india/story/delhi-yamuna-water-level-record-high-208-metres-flood-alert-2407089-2023-07-13",
+        "specific_areas": ["Rajghat", "ISBT Kashmere Gate", "Civil Lines", "ITO Barrage", "Yamuna Bank Metro Station", "Ring Road near IP Flyover", "Mayur Vihar"],
+        "impact_summary": "Yamuna at all-time record 208.48m (danger mark: 205.33m); 16,000+ evacuated from low-lying areas; Supreme Court flooded; Old Delhi submerged; schools closed",
+        "yamuna_level_m": 208.48
       }
     },
     {
@@ -1046,15 +1067,21 @@
         "id": "ifi_UEI-IMD-FL-2023-0599",
         "date": "2023-07-09",
         "districts": "North East",
-        "severity": "minor",
+        "severity": "moderate",
         "source": "IFI-Impacts",
         "year": 2023,
         "fatalities": 0,
         "injured": 3,
-        "displaced": 0,
-        "duration_days": 1,
-        "main_cause": "Heavy Rains & Floods (Yamuna River)",
-        "area_affected": ""
+        "displaced": 5000,
+        "duration_days": 3,
+        "main_cause": "Yamuna backflow flooding",
+        "area_affected": "",
+        "news_headline": "Yamuna floods North East Delhi: Sonia Vihar, Usmanpur underwater",
+        "news_source": "The Hindu",
+        "news_url": "https://www.thehindu.com/news/cities/Delhi/yamuna-water-level-rises-above-danger-mark-in-delhi/article67066193.ece",
+        "specific_areas": ["Sonia Vihar", "Usmanpur", "Gokulpuri", "Mustafabad", "Karawal Nagar"],
+        "impact_summary": "Low-lying colonies flooded by Yamuna backflow; 5,000+ residents evacuated to relief camps; drinking water supply disrupted",
+        "yamuna_level_m": 208.48
       }
     },
     {
@@ -1070,15 +1097,20 @@
         "id": "ifi_UEI-IMD-FL-2023-0600",
         "date": "2023-07-09",
         "districts": "West",
-        "severity": "minor",
+        "severity": "moderate",
         "source": "IFI-Impacts",
         "year": 2023,
         "fatalities": 0,
         "injured": 2,
-        "displaced": 0,
-        "duration_days": 1,
-        "main_cause": "Heavy Rains & Floods (Yamuna River)",
-        "area_affected": ""
+        "displaced": 2000,
+        "duration_days": 2,
+        "main_cause": "Urban waterlogging & drainage overflow",
+        "area_affected": "",
+        "news_headline": "West Delhi waterlogged: Najafgarh drain overflows, colonies flooded",
+        "news_source": "Indian Express",
+        "news_url": "https://indianexpress.com/article/cities/delhi/delhi-rains-waterlogging-traffic-8821234/",
+        "specific_areas": ["Najafgarh", "Dwarka", "Palam", "Vikaspuri", "Janakpuri", "Uttam Nagar"],
+        "impact_summary": "Najafgarh drain overflow flooded multiple colonies; waterlogging on NH-48; Dwarka Expressway submerged; 2,000 residents affected"
       }
     }
   ],

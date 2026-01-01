@@ -1,4 +1,4 @@
-import { X, Calendar, AlertTriangle, Users, Clock, MapPin } from 'lucide-react';
+import { X, Calendar, AlertTriangle, Users, Clock, MapPin, ExternalLink, Newspaper, Droplets } from 'lucide-react';
 
 // Custom scrollbar styles - FORCED visible
 const scrollbarStyles = `
@@ -39,6 +39,13 @@ interface HistoricalFlood {
     displaced: number;
     duration_days: number | null;
     main_cause: string;
+    // Enriched fields (available for recent events)
+    news_headline?: string;
+    news_source?: string;
+    news_url?: string;
+    specific_areas?: string[];
+    impact_summary?: string;
+    yamuna_level_m?: number;
 }
 
 interface HistoricalFloodsPanelProps {
@@ -227,52 +234,121 @@ export default function HistoricalFloodsPanel({
                                 <div className="space-y-2">
                                     {events.map((flood) => {
                                         const colors = severityColors[flood.severity] || severityColors.minor;
+                                        const hasEnrichedData = flood.news_headline || flood.impact_summary;
                                         return (
                                             <div
                                                 key={flood.id}
                                                 className={`p-3 rounded-lg border ${colors.border} ${colors.bg}`}
                                             >
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className="font-semibold text-gray-900">
-                                                                {formatDate(flood.date)}
-                                                            </span>
-                                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors.text} ${colors.bg} border ${colors.border}`}>
-                                                                {flood.severity}
-                                                            </span>
-                                                        </div>
-                                                        <p className="text-sm text-gray-600 mb-2">
-                                                            <strong>Cause:</strong> {flood.main_cause || 'Not specified'}
+                                                {/* Header: Date + Severity + Fatalities */}
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="font-semibold text-gray-900">
+                                                        {formatDate(flood.date)}
+                                                    </span>
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors.text} ${colors.bg} border ${colors.border}`}>
+                                                        {flood.severity}
+                                                    </span>
+                                                    {flood.fatalities > 0 && (
+                                                        <span className="text-xs text-red-600 font-medium">
+                                                            {flood.fatalities} deaths
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* News Headline (enriched) */}
+                                                {flood.news_headline && (
+                                                    <div className="mb-2">
+                                                        <p className="text-sm font-medium text-gray-800 italic border-l-2 border-purple-400 pl-2">
+                                                            "{flood.news_headline}"
                                                         </p>
-                                                        <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                                                            {flood.fatalities > 0 && (
-                                                                <span className="flex items-center gap-1">
-                                                                    <Users className="w-3 h-3" />
-                                                                    {flood.fatalities} fatalities
-                                                                </span>
-                                                            )}
-                                                            {flood.injured > 0 && (
-                                                                <span className="flex items-center gap-1">
-                                                                    <AlertTriangle className="w-3 h-3" />
-                                                                    {flood.injured} injured
-                                                                </span>
-                                                            )}
-                                                            {flood.duration_days && flood.duration_days > 0 && (
-                                                                <span className="flex items-center gap-1">
-                                                                    <Clock className="w-3 h-3" />
-                                                                    {flood.duration_days} days
-                                                                </span>
-                                                            )}
-                                                            {flood.districts && flood.districts !== 'nan' && (
-                                                                <span className="flex items-center gap-1">
-                                                                    <MapPin className="w-3 h-3" />
-                                                                    {flood.districts.split(',').slice(0, 3).join(', ')}
-                                                                    {flood.districts.split(',').length > 3 && '...'}
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                        {flood.news_source && (
+                                                            <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                                                                <Newspaper className="w-3 h-3" />
+                                                                <span>{flood.news_source}</span>
+                                                                {flood.news_url && (
+                                                                    <a
+                                                                        href={flood.news_url}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="text-purple-600 hover:text-purple-800 flex items-center gap-0.5 ml-1"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        <ExternalLink className="w-3 h-3" />
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
+                                                )}
+
+                                                {/* Cause (if no headline) */}
+                                                {!flood.news_headline && (
+                                                    <p className="text-sm text-gray-600 mb-2">
+                                                        <strong>Cause:</strong> {flood.main_cause || 'Not specified'}
+                                                    </p>
+                                                )}
+
+                                                {/* Impact Summary (enriched) */}
+                                                {flood.impact_summary && (
+                                                    <p className="text-xs text-gray-600 mb-2 bg-white/50 rounded p-1.5">
+                                                        {flood.impact_summary}
+                                                    </p>
+                                                )}
+
+                                                {/* Specific Areas (enriched) */}
+                                                {flood.specific_areas && flood.specific_areas.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mb-2">
+                                                        <MapPin className="w-3 h-3 text-gray-400 mt-0.5" />
+                                                        {flood.specific_areas.slice(0, 4).map((area, idx) => (
+                                                            <span
+                                                                key={idx}
+                                                                className="text-xs px-1.5 py-0.5 bg-white/70 rounded text-gray-600 border border-gray-200"
+                                                            >
+                                                                {area}
+                                                            </span>
+                                                        ))}
+                                                        {flood.specific_areas.length > 4 && (
+                                                            <span className="text-xs text-gray-400">
+                                                                +{flood.specific_areas.length - 4} more
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Stats Row */}
+                                                <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                                                    {flood.displaced > 0 && (
+                                                        <span className="flex items-center gap-1">
+                                                            <Users className="w-3 h-3" />
+                                                            {flood.displaced.toLocaleString()} displaced
+                                                        </span>
+                                                    )}
+                                                    {flood.injured > 0 && (
+                                                        <span className="flex items-center gap-1">
+                                                            <AlertTriangle className="w-3 h-3" />
+                                                            {flood.injured} injured
+                                                        </span>
+                                                    )}
+                                                    {flood.yamuna_level_m && (
+                                                        <span className="flex items-center gap-1 text-blue-600 font-medium">
+                                                            <Droplets className="w-3 h-3" />
+                                                            Yamuna: {flood.yamuna_level_m}m
+                                                        </span>
+                                                    )}
+                                                    {flood.duration_days && flood.duration_days > 1 && (
+                                                        <span className="flex items-center gap-1">
+                                                            <Clock className="w-3 h-3" />
+                                                            {flood.duration_days} days
+                                                        </span>
+                                                    )}
+                                                    {/* Show districts only for non-enriched entries */}
+                                                    {!hasEnrichedData && flood.districts && flood.districts !== 'nan' && (
+                                                        <span className="flex items-center gap-1">
+                                                            <MapPin className="w-3 h-3" />
+                                                            {flood.districts.split(',').slice(0, 3).join(', ')}
+                                                            {flood.districts.split(',').length > 3 && '...'}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         );

@@ -19,10 +19,6 @@ COPY src/ ./src/
 COPY models/ ./models/
 COPY data/ ./data/
 
-# Copy other necessary files
-COPY alembic.ini ./
-COPY alembic/ ./alembic/
-
 # Railway uses PORT env var; fallback to 8000 for local dev
 ENV PORT=8000
 

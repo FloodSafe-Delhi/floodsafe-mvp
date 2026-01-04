@@ -1,18 +1,16 @@
 """
-Backend API wrapper for waterlogging hotspot predictions.
+Backend API for waterlogging hotspot predictions.
 
-Proxies requests to the ML service with caching.
-Falls back to static data when ML service is disabled.
+Uses embedded ML models (XGBoost + FHI) for real-time risk calculation.
+Falls back to static data when ML is disabled.
 """
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
-import httpx
 import logging
 import json
-import os
 
 from ..core.config import settings
 
@@ -20,7 +18,23 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# Path to static hotspot data (for when ML service is disabled)
+# Lazy-loaded service instance
+_hotspots_service = None
+
+
+def _get_hotspots_service():
+    """Get or create the hotspots service instance."""
+    global _hotspots_service
+
+    if _hotspots_service is None:
+        from ..domain.ml.hotspots_service import HotspotsService
+        _hotspots_service = HotspotsService()
+        _hotspots_service.initialize()
+
+    return _hotspots_service
+
+
+# Path to static hotspot data (for when ML is completely disabled)
 def _get_static_hotspots_path() -> Optional[Path]:
     """Get path to static hotspots data file."""
     # Check backend's data directory first
@@ -28,24 +42,19 @@ def _get_static_hotspots_path() -> Optional[Path]:
     if backend_data.exists():
         return backend_data
 
-    # Fallback to ml-service data
-    ml_data = Path(__file__).resolve().parent.parent.parent.parent / "ml-service" / "data" / "delhi_waterlogging_hotspots.json"
-    if ml_data.exists():
-        return ml_data
-
     return None
 
 
 def _load_static_hotspots() -> Dict[str, Any]:
     """
-    Load static hotspot data when ML service is disabled.
+    Load static hotspot data when ML is completely disabled.
     Returns GeoJSON FeatureCollection with baseline risk levels.
     """
     data_path = _get_static_hotspots_path()
     if not data_path:
         raise HTTPException(
             status_code=503,
-            detail="Hotspot data file not found. Deploy with data files or enable ML service.",
+            detail="Hotspot data file not found. Deploy with data files.",
         )
 
     try:
@@ -94,8 +103,8 @@ def _load_static_hotspots() -> Dict[str, Any]:
             continue
 
         # Determine source and verification status
-        source = hotspot.get("source", "mcd_reports")  # Default to MCD for legacy data
-        verified = source == "mcd_reports"  # MCD reports are verified, OSM underpasses are not
+        source = hotspot.get("source", "mcd_reports")
+        verified = source == "mcd_reports"
 
         feature = {
             "type": "Feature",
@@ -111,14 +120,14 @@ def _load_static_hotspots() -> Dict[str, Any]:
                 "risk_probability": risk_prob,
                 "risk_level": risk_level,
                 "risk_color": risk_color,
-                "fhi": None,  # No live FHI without ML service
+                "fhi": None,
                 "fhi_color": None,
                 "historical_severity": severity,
                 "elevation_m": hotspot.get("elevation_m"),
-                "static_data": True,  # Flag indicating this is static data
-                "source": source,  # 'mcd_reports' or 'osm_underpass'
-                "verified": verified,  # True for MCD-validated, False for ML-predicted
-                "osm_id": hotspot.get("osm_id"),  # OSM way/node ID for underpasses
+                "static_data": True,
+                "source": source,
+                "verified": verified,
+                "osm_id": hotspot.get("osm_id"),
             }
         }
         features.append(feature)
@@ -131,143 +140,96 @@ def _load_static_hotspots() -> Dict[str, Any]:
         "metadata": {
             "total_hotspots": len(features),
             "source": "static",
-            "ml_service_enabled": False,
+            "ml_enabled": False,
             "fhi_available": False,
             "generated_at": datetime.now().isoformat(),
             "note": "Live FHI calculations unavailable. Showing baseline risk from historical data."
         }
     }
 
-# Simple in-memory cache
-_hotspots_cache: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL_SECONDS = 1800  # 30 minutes (hotspots change with rainfall)
-
-
-def _is_cache_valid(cache_entry: Dict[str, Any]) -> bool:
-    """Check if cache entry is still valid."""
-    if "timestamp" not in cache_entry:
-        return False
-    age = (datetime.now() - cache_entry["timestamp"]).total_seconds()
-    return age < CACHE_TTL_SECONDS
-
 
 @router.get("/all")
 async def get_all_hotspots(
-    include_rainfall: bool = Query(True, description="Include current rainfall factor"),
+    include_rainfall: bool = Query(True, description="Include current rainfall factor (via FHI)"),
     test_fhi_override: str = Query(None, description="Override FHI for testing: 'high', 'extreme', or 'mixed'"),
 ):
     """
-    Get all 62 Delhi waterlogging hotspots with current risk levels.
+    Get all Delhi waterlogging hotspots with current risk levels.
 
     Returns GeoJSON FeatureCollection with:
     - Point features for each hotspot
-    - Properties: id, name, zone, risk_probability, risk_level, risk_color
+    - Properties: id, name, zone, risk_probability, risk_level, risk_color, fhi
 
-    Risk is dynamically adjusted based on current rainfall when ML service is enabled.
-    Falls back to static baseline data when ML service is disabled.
+    Risk is dynamically adjusted based on current weather when ML is enabled.
+    Falls back to static baseline data when ML is disabled.
     """
-    # If ML service is disabled, return static data
-    if not settings.ML_SERVICE_ENABLED:
-        logger.info("ML service disabled, serving static hotspot data")
+    # If ML is completely disabled, return static data
+    if not settings.ML_ENABLED:
+        logger.info("ML disabled, serving static hotspot data")
         return _load_static_hotspots()
 
-    # Check cache (skip cache in test mode to ensure fresh test values)
-    cache_key = f"hotspots_all_{include_rainfall}"
-    if not test_fhi_override and cache_key in _hotspots_cache:
-        cache_entry = _hotspots_cache[cache_key]
-        if _is_cache_valid(cache_entry):
-            logger.info("Cache hit for hotspots")
-            return cache_entry["data"]
-
-    # Call ML service
     try:
-        params = {"include_rainfall": include_rainfall}
-        if test_fhi_override:
-            params["test_fhi_override"] = test_fhi_override
-            logger.info(f"Using test FHI override: {test_fhi_override}")
-
-        # Increased timeout for parallel FHI calculation (62 hotspots)
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.get(
-                f"{settings.ML_SERVICE_URL}/api/v1/hotspots/all",
-                params=params,
-            )
-
-            if response.status_code != 200:
-                logger.error(f"ML service error: {response.status_code} - {response.text}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"ML service error: {response.text}",
-                )
-
-            result = response.json()
-
-            # Cache the result (but not in test mode)
-            if not test_fhi_override:
-                _hotspots_cache[cache_key] = {
-                    "data": result,
-                    "timestamp": datetime.now(),
-                }
-
-            logger.info(f"Hotspots fetched: {len(result.get('features', []))} locations" +
-                       (f" (TEST MODE: {test_fhi_override})" if test_fhi_override else ""))
-            return result
-
-    except httpx.TimeoutException:
-        logger.error("ML service timeout")
-        raise HTTPException(
-            status_code=504,
-            detail="ML service request timed out",
+        # Use embedded ML service
+        service = _get_hotspots_service()
+        result = await service.get_all_hotspots(
+            include_fhi=include_rainfall,  # FHI uses weather data including rainfall
+            test_fhi_override=test_fhi_override,
         )
-    except httpx.RequestError as e:
-        logger.error(f"ML service request failed: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"ML service unavailable: {str(e)}",
-        )
+
+        feature_count = len(result.get("features", []))
+        logger.info(f"Hotspots returned: {feature_count} locations" +
+                   (f" (TEST MODE: {test_fhi_override})" if test_fhi_override else ""))
+
+        return result
+
+    except RuntimeError as e:
+        logger.error(f"Hotspots service error: {e}")
+        # Fallback to static data on service error
+        logger.info("Falling back to static hotspot data")
+        return _load_static_hotspots()
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/hotspot/{hotspot_id}")
-async def get_hotspot_risk(hotspot_id: int):
+async def get_hotspot_risk(
+    hotspot_id: int,
+    include_fhi: bool = Query(True, description="Include FHI calculation"),
+):
     """
     Get risk details for a specific hotspot by ID.
 
     Args:
-        hotspot_id: Hotspot identifier (1-62)
+        hotspot_id: Hotspot identifier
+        include_fhi: Include Flood Hazard Index calculation
 
     Returns:
         Hotspot details with current risk assessment
     """
-    if not settings.ML_SERVICE_ENABLED:
+    if not settings.ML_ENABLED:
         raise HTTPException(
             status_code=503,
-            detail="ML service is not enabled",
+            detail="ML is not enabled",
         )
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                f"{settings.ML_SERVICE_URL}/api/v1/hotspots/hotspot/{hotspot_id}",
+        service = _get_hotspots_service()
+        result = await service.get_hotspot_by_id(hotspot_id, include_fhi=include_fhi)
+
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Hotspot {hotspot_id} not found",
             )
 
-            if response.status_code == 404:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Hotspot {hotspot_id} not found",
-                )
+        return result
 
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"ML service error: {response.text}",
-                )
-
-            return response.json()
-
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Request timed out")
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"ML service unavailable: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting hotspot {hotspot_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/risk-at-point")
@@ -278,7 +240,7 @@ async def get_risk_at_point(
     """
     Get flood risk for any point in Delhi.
 
-    Uses proximity to known hotspots and current rainfall.
+    Uses proximity to known hotspots and current weather.
 
     Args:
         lat: Latitude (must be within Delhi bounds)
@@ -287,65 +249,91 @@ async def get_risk_at_point(
     Returns:
         Risk assessment for the point
     """
-    if not settings.ML_SERVICE_ENABLED:
+    if not settings.ML_ENABLED:
         raise HTTPException(
             status_code=503,
-            detail="ML service is not enabled",
+            detail="ML is not enabled",
         )
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                f"{settings.ML_SERVICE_URL}/api/v1/hotspots/risk-at-point",
-                json={"latitude": lat, "longitude": lng},
-            )
+        service = _get_hotspots_service()
 
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"ML service error: {response.text}",
-                )
+        # Find nearest hotspot
+        min_distance = float("inf")
+        nearest_hotspot = None
 
-            return response.json()
+        for h in service.hotspots_data:
+            h_lat = h.get("lat") or h.get("latitude")
+            h_lng = h.get("lng") or h.get("longitude")
+            if h_lat is None or h_lng is None:
+                continue
 
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Request timed out")
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"ML service unavailable: {str(e)}")
+            dist = service.haversine_distance(lat, lng, h_lat, h_lng)
+            if dist < min_distance:
+                min_distance = dist
+                nearest_hotspot = h
+
+        # Calculate risk based on proximity
+        if min_distance < 0.5:
+            base_risk = 0.7  # Close to known hotspot
+        elif min_distance < 1.0:
+            base_risk = 0.5
+        elif min_distance < 2.0:
+            base_risk = 0.35
+        elif min_distance < 5.0:
+            base_risk = 0.2
+        else:
+            base_risk = 0.1
+
+        # Determine risk level and color
+        from ..domain.ml.xgboost_hotspot import get_risk_level
+        risk_level, risk_color = get_risk_level(base_risk)
+
+        return {
+            "latitude": lat,
+            "longitude": lng,
+            "risk_probability": round(base_risk, 3),
+            "risk_level": risk_level,
+            "risk_color": risk_color,
+            "nearest_hotspot": nearest_hotspot.get("name") if nearest_hotspot else None,
+            "distance_to_hotspot_km": round(min_distance, 2) if nearest_hotspot else None,
+        }
+
+    except Exception as e:
+        logger.error(f"Error calculating risk at point: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/health")
 async def hotspots_health():
     """Check hotspots service health."""
-    if not settings.ML_SERVICE_ENABLED:
+    if not settings.ML_ENABLED:
         # Check if static data is available
         static_path = _get_static_hotspots_path()
         return {
             "status": "static_fallback",
-            "ml_service_enabled": False,
+            "ml_enabled": False,
             "static_data_available": static_path is not None,
             "static_data_path": str(static_path) if static_path else None,
-            "note": "Serving baseline hotspot data. Live FHI requires ML service.",
+            "note": "Serving baseline hotspot data. Live FHI disabled.",
         }
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{settings.ML_SERVICE_URL}/api/v1/hotspots/health"
-            )
-            ml_health = response.json()
+        service = _get_hotspots_service()
+        health = service.get_health_status()
 
-            return {
-                "status": "healthy",
-                "ml_service_enabled": True,
-                "hotspots_loaded": ml_health.get("hotspots_loaded"),
-                "total_hotspots": ml_health.get("total_hotspots"),
-                "model_trained": ml_health.get("model_trained"),
-            }
+        return {
+            "status": "healthy" if health["hotspots_loaded"] else "degraded",
+            "ml_enabled": True,
+            "hotspots_loaded": health["hotspots_loaded"],
+            "total_hotspots": health["total_hotspots"],
+            "model_trained": health["model_trained"],
+            "predictions_cached": health["predictions_cached"],
+        }
 
     except Exception as e:
         return {
-            "status": "degraded",
-            "ml_service_enabled": True,
+            "status": "error",
+            "ml_enabled": True,
             "error": str(e),
         }

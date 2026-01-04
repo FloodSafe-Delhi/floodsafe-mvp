@@ -65,9 +65,11 @@ class Settings(BaseSettings):
     # Mapbox (for routing)
     MAPBOX_ACCESS_TOKEN: str = ""
 
-    # ML Service Integration
-    ML_SERVICE_URL: str = "http://localhost:8002"
-    ML_SERVICE_ENABLED: bool = True
+    # Embedded ML Configuration
+    # ML models are now embedded in backend (no separate ML service)
+    ML_ENABLED: bool = True                # Enable embedded ML models (XGBoost + TFLite)
+    ML_MODELS_DIR: str = "./models"        # Path to model files
+    ML_DATA_DIR: str = "./data"            # Path to data files (hotspots JSON)
 
     # ML Routing Integration (gradual rollout)
     ML_ROUTING_ENABLED: bool = False       # Enable ML predictions in route comparison

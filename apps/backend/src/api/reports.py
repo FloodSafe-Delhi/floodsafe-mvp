@@ -367,36 +367,39 @@ async def create_report(
                 detail="Failed to upload photo. Please try again later."
             )
 
-        # 2.5. ML-based flood image verification (YOLO classifier)
+        # 2.5. ML-based flood image verification (TFLite classifier)
         # Validates if the photo actually shows a flood scene
-        if settings.ML_SERVICE_ENABLED:
+        if settings.ML_ENABLED:
             try:
-                async with httpx.AsyncClient() as client:
-                    # Reset file position for reading
-                    files = {"image": (image.filename, content, image.content_type or "image/jpeg")}
-                    response = await client.post(
-                        f"{settings.ML_SERVICE_URL}/api/v1/classify-flood",
-                        files=files,
-                        timeout=10.0
-                    )
-                    if response.status_code == 200:
-                        ml_result = response.json()
-                        media_metadata["ml_classification"] = ml_result.get("classification")
-                        media_metadata["ml_confidence"] = ml_result.get("confidence")
-                        media_metadata["ml_is_flood"] = ml_result.get("is_flood")
-                        media_metadata["ml_needs_review"] = ml_result.get("needs_review")
-                        media_metadata["ml_verification_score"] = ml_result.get("verification_score")
+                from ..domain.ml.tflite_classifier import get_classifier
+                from io import BytesIO
 
-                        # Flag suspicious reports (non-flood images with high confidence)
-                        if not ml_result.get("is_flood") and ml_result.get("confidence", 0) > 0.8:
-                            media_metadata["needs_review"] = True
-                            logger.warning(
-                                f"Report photo doesn't look like flood (confidence: {ml_result.get('confidence'):.2%})"
-                            )
-                    else:
-                        logger.warning(f"ML classification returned status {response.status_code}")
-            except httpx.TimeoutException:
-                logger.warning("ML classification timed out - continuing without verification")
+                classifier = get_classifier()
+                ml_result = classifier.predict(BytesIO(content))
+
+                media_metadata["ml_classification"] = ml_result.get("classification")
+                media_metadata["ml_confidence"] = ml_result.get("confidence")
+                media_metadata["ml_is_flood"] = ml_result.get("is_flood")
+                media_metadata["ml_needs_review"] = ml_result.get("needs_review")
+
+                # Calculate verification score based on confidence
+                if ml_result.get("is_flood"):
+                    verification_score = int(ml_result.get("flood_probability", 0.5) * 100)
+                else:
+                    verification_score = int(ml_result.get("probabilities", {}).get("no_flood", 0.5) * 100)
+                if ml_result.get("needs_review"):
+                    verification_score = max(30, verification_score - 20)
+                media_metadata["ml_verification_score"] = verification_score
+
+                # Flag suspicious reports (non-flood images with high confidence)
+                if not ml_result.get("is_flood") and ml_result.get("confidence", 0) > 0.8:
+                    media_metadata["needs_review"] = True
+                    logger.warning(
+                        f"Report photo doesn't look like flood (confidence: {ml_result.get('confidence'):.2%})"
+                    )
+
+            except RuntimeError as e:
+                logger.warning(f"ML classifier not loaded: {e} - continuing without verification")
             except Exception as e:
                 logger.warning(f"ML classification failed: {e} - continuing without verification")
 

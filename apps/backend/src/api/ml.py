@@ -1,19 +1,19 @@
 """
-ML Service Proxy API
+ML API - Embedded flood image classification.
 
-Proxies ML classification requests from frontend to ML service.
-This allows frontend to use a single backend URL (works in both local dev and Docker).
+Uses TFLite-based MobileNet classifier for flood detection.
+No external ML service dependency - runs entirely in backend.
 
-The frontend runs in the browser and cannot access Docker's internal network,
-so we proxy through the backend which can reach ml-service:8002 in Docker.
+Safety-first approach: Low threshold (0.3) to minimize false negatives.
+Better to flag a non-flood image for review than miss a real flood.
 """
 
 import logging
 from typing import Optional
+from io import BytesIO
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
-import httpx
 
 from ..core.config import settings
 
@@ -21,9 +21,28 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Lazy-loaded classifier instance
+_classifier = None
+
+
+def _get_classifier():
+    """Get or create the TFLite classifier instance."""
+    global _classifier
+
+    if _classifier is None:
+        try:
+            from ..domain.ml.tflite_classifier import get_classifier
+            _classifier = get_classifier()
+            logger.info("TFLite flood classifier loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load TFLite classifier: {e}")
+            raise RuntimeError(f"Classifier not available: {e}")
+
+    return _classifier
+
 
 class ClassificationResult(BaseModel):
-    """Flood image classification result from ML service."""
+    """Flood image classification result."""
     classification: str  # "flood" or "no_flood"
     confidence: float  # 0.0-1.0
     flood_probability: float  # 0.0-1.0
@@ -49,16 +68,16 @@ async def classify_flood_image(
     """
     Classify uploaded image as flood or not flood.
 
-    Proxies request to ML service for MobileNet classification.
-    Uses low threshold (0.3) to minimize false negatives - safety first.
+    Uses embedded TFLite MobileNet classifier.
+    Low threshold (0.3) to minimize false negatives - safety first.
 
     Returns:
         ClassificationResult with classification, confidence, and review flags
     """
-    if not settings.ML_SERVICE_ENABLED:
+    if not settings.ML_ENABLED:
         raise HTTPException(
             status_code=503,
-            detail="ML service is disabled. Set ML_SERVICE_ENABLED=true to enable."
+            detail="ML is disabled. Set ML_ENABLED=true to enable."
         )
 
     # Validate file type
@@ -69,54 +88,54 @@ async def classify_flood_image(
         )
 
     try:
+        # Get classifier
+        classifier = _get_classifier()
+
+        # Read image content
         content = await image.read()
 
-        async with httpx.AsyncClient() as client:
-            files = {
-                "image": (
-                    image.filename or "image.jpg",
-                    content,
-                    image.content_type or "image/jpeg"
-                )
-            }
+        # Classify image
+        result = classifier.predict(BytesIO(content))
 
-            response = await client.post(
-                f"{settings.ML_SERVICE_URL}/api/v1/classify-flood",
-                files=files,
-                timeout=15.0  # Slightly longer timeout for model inference
-            )
+        # Calculate verification score (0-100)
+        # Higher confidence = higher verification score
+        if result["is_flood"]:
+            # For floods, high probability = high score
+            verification_score = int(result["flood_probability"] * 100)
+        else:
+            # For non-floods, high no_flood probability = high score
+            verification_score = int(result["probabilities"]["no_flood"] * 100)
 
-            if response.status_code == 503:
-                raise HTTPException(
-                    status_code=503,
-                    detail="ML classifier not loaded. Model weights may be missing."
-                )
+        # Reduce score if needs review (uncertain classification)
+        if result["needs_review"]:
+            verification_score = max(30, verification_score - 20)
 
-            if response.status_code != 200:
-                logger.error(f"ML service returned {response.status_code}: {response.text}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"ML classification failed: {response.text}"
-                )
-
-            return response.json()
-
-    except httpx.TimeoutException:
-        logger.warning("ML classification timed out")
-        raise HTTPException(
-            status_code=504,
-            detail="ML classification timed out. Please try again."
+        return ClassificationResult(
+            classification=result["classification"],
+            confidence=result["confidence"],
+            flood_probability=result["flood_probability"],
+            is_flood=result["is_flood"],
+            needs_review=result["needs_review"],
+            verification_score=verification_score,
+            probabilities=result["probabilities"],
         )
-    except httpx.ConnectError:
-        logger.error(f"Cannot connect to ML service at {settings.ML_SERVICE_URL}")
+
+    except RuntimeError as e:
+        # Classifier not loaded
+        logger.error(f"Classifier error: {e}")
         raise HTTPException(
             status_code=503,
-            detail="ML service unavailable. Please try again later."
+            detail=f"ML classifier not available: {str(e)}"
         )
-    except HTTPException:
-        raise
+    except ValueError as e:
+        # Image processing error
+        logger.error(f"Image processing error: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not process image: {str(e)}"
+        )
     except Exception as e:
-        logger.error(f"ML classification error: {e}")
+        logger.error(f"Classification error: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Classification failed: {str(e)}"
@@ -130,38 +149,34 @@ async def classifier_health():
 
     Returns whether the classifier model is loaded and ready.
     """
-    if not settings.ML_SERVICE_ENABLED:
+    if not settings.ML_ENABLED:
         return ClassifierHealth(
             status="disabled",
             model_loaded=False,
-            message="ML service is disabled in configuration"
+            message="ML is disabled in configuration"
         )
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{settings.ML_SERVICE_URL}/api/v1/classify-flood/health",
-                timeout=5.0
-            )
+        classifier = _get_classifier()
 
-            if response.status_code == 200:
-                return response.json()
-
-            return ClassifierHealth(
-                status="error",
-                model_loaded=False,
-                message=f"ML service returned {response.status_code}"
-            )
-
-    except httpx.ConnectError:
+        info = classifier.get_model_info()
         return ClassifierHealth(
-            status="unavailable",
+            status="healthy" if classifier.is_loaded else "not_loaded",
+            model_loaded=classifier.is_loaded,
+            model_path=info.get("model_path"),
+            threshold=info.get("threshold"),
+            message=f"TFLite classifier ready ({info.get('architecture', 'unknown')})"
+        )
+
+    except RuntimeError as e:
+        return ClassifierHealth(
+            status="error",
             model_loaded=False,
-            message=f"Cannot connect to ML service at {settings.ML_SERVICE_URL}"
+            message=str(e)
         )
     except Exception as e:
         return ClassifierHealth(
             status="error",
             model_loaded=False,
-            message=str(e)
+            message=f"Unexpected error: {str(e)}"
         )

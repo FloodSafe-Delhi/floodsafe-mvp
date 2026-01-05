@@ -200,16 +200,36 @@ class HotspotsService:
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            # Process results
+            # Process results and track failures
+            exception_count = 0
+            unknown_count = 0
             for result in results:
                 if isinstance(result, Exception):
                     logger.error(f"FHI calculation exception: {result}")
+                    exception_count += 1
                     continue
                 idx, fhi_data = result
                 fhi_results[idx] = fhi_data
+                # Track "unknown" results (API failures that returned defaults)
+                if fhi_data.get("fhi_level") == "unknown":
+                    unknown_count += 1
 
             elapsed = (datetime.now() - start_time).total_seconds()
-            logger.info(f"Parallel FHI calculation completed: {len(fhi_results)}/{len(self.hotspots_data)} in {elapsed:.2f}s")
+            success_count = len(fhi_results) - unknown_count
+            total_count = len(self.hotspots_data)
+
+            # Log failure rate for monitoring
+            failure_rate = 1 - (success_count / total_count) if total_count > 0 else 0
+            if failure_rate > 0.1:  # >10% failures - warn
+                logger.warning(
+                    f"HIGH FHI failure rate: {failure_rate*100:.1f}% "
+                    f"({total_count - success_count}/{total_count} failed/unknown) in {elapsed:.2f}s"
+                )
+            else:
+                logger.info(
+                    f"FHI calculation completed: {success_count}/{total_count} successful "
+                    f"({unknown_count} unknown, {exception_count} exceptions) in {elapsed:.2f}s"
+                )
 
         # Build GeoJSON features
         features = []
@@ -404,7 +424,7 @@ class HotspotsService:
         hotspot: Dict,
         idx: int,
         semaphore: asyncio.Semaphore,
-        timeout_seconds: float = 10.0,
+        timeout_seconds: float = 30.0,  # Increased from 10s to allow for retries
     ) -> Tuple[int, Dict]:
         """
         Calculate FHI for a single hotspot with timeout and semaphore limiting.

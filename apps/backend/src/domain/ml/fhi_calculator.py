@@ -25,11 +25,17 @@ Key Calibrations for Urban Delhi:
 import httpx
 import asyncio
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import logging
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+
+# Retry configuration
+MAX_RETRY_ATTEMPTS = 3
+BASE_RETRY_DELAY = 0.5  # seconds
+MAX_RETRY_DELAY = 5.0   # seconds
 
 
 class FHICalculationError(Exception):
@@ -107,10 +113,101 @@ class FHICalculator:
     # Cache settings
     CACHE_TTL_SECONDS = 3600  # 1 hour
 
-    def __init__(self, timeout_seconds: float = 10.0):
+    def __init__(self, timeout_seconds: float = 15.0):
         """Initialize FHI calculator."""
         self._timeout = timeout_seconds
         self._cache: Dict[str, tuple] = {}  # (FHIResult, timestamp)
+
+    async def _fetch_with_retry(
+        self,
+        url: str,
+        params: Dict[str, Any],
+        max_attempts: int = MAX_RETRY_ATTEMPTS,
+    ) -> Dict[str, Any]:
+        """
+        Fetch from Open-Meteo API with exponential backoff retry.
+
+        Handles:
+        - HTTP 429 (Too Many Requests) - rate limiting
+        - HTTP 503 (Service Unavailable) - temporary outages
+        - Timeout exceptions - network delays
+        - Other transient HTTP errors
+
+        Args:
+            url: API endpoint URL
+            params: Query parameters
+            max_attempts: Maximum retry attempts (default 3)
+
+        Returns:
+            JSON response as dictionary
+
+        Raises:
+            FHICalculationError: If all retries exhausted
+        """
+        last_error: Optional[Exception] = None
+
+        for attempt in range(max_attempts):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    response = await client.get(url, params=params)
+
+                    # Handle rate limiting specifically
+                    if response.status_code == 429:
+                        wait_time = min(2 ** attempt, MAX_RETRY_DELAY)
+                        logger.warning(
+                            f"Open-Meteo rate limited (429), waiting {wait_time:.1f}s "
+                            f"(attempt {attempt + 1}/{max_attempts})"
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                    # Handle service unavailable
+                    if response.status_code == 503:
+                        wait_time = min(2 ** attempt, MAX_RETRY_DELAY)
+                        logger.warning(
+                            f"Open-Meteo service unavailable (503), waiting {wait_time:.1f}s "
+                            f"(attempt {attempt + 1}/{max_attempts})"
+                        )
+                        await asyncio.sleep(wait_time)
+                        continue
+
+                    response.raise_for_status()
+                    return response.json()
+
+            except httpx.TimeoutException as e:
+                last_error = e
+                if attempt < max_attempts - 1:
+                    wait_time = BASE_RETRY_DELAY * (2 ** attempt)
+                    logger.debug(
+                        f"Open-Meteo timeout, retrying in {wait_time:.1f}s "
+                        f"(attempt {attempt + 1}/{max_attempts})"
+                    )
+                    await asyncio.sleep(wait_time)
+                continue
+
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                # Don't retry client errors (4xx except 429)
+                if 400 <= e.response.status_code < 500 and e.response.status_code != 429:
+                    raise FHICalculationError(f"Client error: {e.response.status_code}")
+
+                if attempt < max_attempts - 1:
+                    wait_time = BASE_RETRY_DELAY * (2 ** attempt)
+                    logger.debug(
+                        f"Open-Meteo HTTP error {e.response.status_code}, retrying in {wait_time:.1f}s"
+                    )
+                    await asyncio.sleep(wait_time)
+                continue
+
+            except Exception as e:
+                last_error = e
+                if attempt < max_attempts - 1:
+                    wait_time = BASE_RETRY_DELAY * (2 ** attempt)
+                    logger.debug(f"Open-Meteo request failed: {e}, retrying in {wait_time:.1f}s")
+                    await asyncio.sleep(wait_time)
+                continue
+
+        raise FHICalculationError(f"Failed after {max_attempts} attempts: {last_error}")
 
     async def calculate_fhi(self, lat: float, lng: float) -> FHIResult:
         """
@@ -330,29 +427,30 @@ class FHICalculator:
 
     async def _fetch_elevation(self, lat: float, lng: float) -> float:
         """
-        Fetch elevation from Open-Meteo.
+        Fetch elevation from Open-Meteo with automatic retry.
 
         Args:
             lat: Latitude
             lng: Longitude
 
         Returns:
-            Elevation in meters
+            Elevation in meters (default 220m for Delhi if API fails)
         """
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.get(
+        try:
+            data = await self._fetch_with_retry(
                 self.ELEVATION_URL,
                 params={"latitude": lat, "longitude": lng}
             )
-            response.raise_for_status()
-            data = response.json()
-
             elevation_list = data.get("elevation", [220])
             return elevation_list[0] if elevation_list else 220
+        except FHICalculationError:
+            # Log and return Delhi default elevation
+            logger.warning(f"Elevation fetch failed for ({lat:.4f}, {lng:.4f}), using default 220m")
+            return 220.0
 
     async def _fetch_weather(self, lat: float, lng: float) -> Dict:
         """
-        Fetch weather data from Open-Meteo.
+        Fetch weather data from Open-Meteo with automatic retry.
 
         Args:
             lat: Latitude
@@ -370,10 +468,7 @@ class FHICalculator:
             "timezone": "auto",
         }
 
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            response = await client.get(self.FORECAST_URL, params=params)
-            response.raise_for_status()
-            return response.json()
+        return await self._fetch_with_retry(self.FORECAST_URL, params=params)
 
     def _get_from_cache(self, cache_key: str) -> Optional[FHIResult]:
         """Get result from cache if valid."""

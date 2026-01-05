@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import ExifReader from 'exifreader';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -123,8 +123,8 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
             },
             onError: (error) => {
                 console.log('ML classification unavailable:', error);
-                // Don't block - just clear validating state
-                onPhotoCapture({ ...photoData, mlValidating: false });
+                // Don't block - set failed state so UI shows "unavailable"
+                onPhotoCapture({ ...photoData, mlValidating: false, mlFailed: true });
             },
         });
     }, [classifyMutation, onPhotoCapture]);
@@ -317,6 +317,12 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
                                 <Badge className="bg-gray-500 hover:bg-gray-600 text-white flex items-center gap-1">
                                     <Loader2 className="h-3 w-3 animate-spin" />
                                     Analyzing...
+                                </Badge>
+                            )}
+                            {photo.mlFailed && !photo.mlValidating && !photo.mlClassification && (
+                                <Badge className="bg-gray-400 hover:bg-gray-500 text-white flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Analysis Unavailable
                                 </Badge>
                             )}
                             {photo.mlClassification && !photo.mlValidating && (

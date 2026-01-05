@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMap } from '../lib/map/useMap';
-import { useSensors, useReports, usePredictionGrid, useHistoricalFloods, useHotspots, Sensor, Report } from '../lib/api/hooks';
+import { useSensors, useReports, useHistoricalFloods, useHotspots, Sensor, Report } from '../lib/api/hooks';
+// usePredictionGrid removed - ensemble models not trained (see line 95-105)
 import maplibregl from 'maplibre-gl';
 import { Button } from './ui/button';
 import { Plus, Minus, Navigation, Layers, Train, AlertCircle, MapPin, History, Droplets } from 'lucide-react';
@@ -78,7 +79,7 @@ export default function MapComponent({
         predictions: true,  // ON by default per user decision
         hotspots: true      // Waterlogging hotspots ON by default
     });
-    const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
+    const [_mapBounds, setMapBounds] = useState<MapBounds | null>(null);
     const [showHistoricalPanel, setShowHistoricalPanel] = useState(false);
 
     // User location tracking state
@@ -93,17 +94,21 @@ export default function MapComponent({
     const isDelhiCity = city === 'delhi';
 
     // Fetch ML predictions for heatmap (only for Delhi)
-    const { data: _predictionGrid } = usePredictionGrid({
-        bounds: mapBounds,
-        resolutionKm: 2.0, // 2km resolution for performance
-        horizonDays: 0,    // Today only
-        enabled: isDelhiCity && layersVisible.predictions && !!mapBounds,
-    });
+    // DISABLED: Ensemble models (LSTM/GNN/LightGBM) are not trained yet
+    // This prevents 404 console errors from /api/predictions/grid
+    // Re-enable when ensemble models are trained and available
+    const _predictionGrid = null;
+    // const { data: _predictionGrid } = usePredictionGrid({
+    //     bounds: mapBounds,
+    //     resolutionKm: 2.0, // 2km resolution for performance
+    //     horizonDays: 0,    // Today only
+    //     enabled: isDelhiCity && layersVisible.predictions && !!mapBounds,
+    // });
 
     // Fetch waterlogging hotspots (only for Delhi)
     const { data: hotspotsData, error: hotspotsError } = useHotspots({
         enabled: isDelhiCity,
-        includeRainfall: false  // Faster initial load, FHI calculation already includes weather
+        includeRainfall: true   // Enable live FHI from Open-Meteo weather data
     });
 
     const [isChangingCity, setIsChangingCity] = useState(false);
@@ -1633,8 +1638,8 @@ export default function MapComponent({
                         </Button>
                     </div>
 
-                    {/* Map Legend - Bottom Left */}
-                    <div className="absolute" style={{ bottom: 'calc(144px + env(safe-area-inset-bottom, 0px))', left: '24px', zIndex: 60 }}>
+                    {/* Map Legend - Bottom Right (moved from left to avoid overlap with GPS Test/Search) */}
+                    <div className="absolute" style={{ bottom: 'calc(144px + env(safe-area-inset-bottom, 0px))', right: '80px', zIndex: 60 }}>
                         <MapLegend className="max-w-xs" />
                     </div>
                 </>

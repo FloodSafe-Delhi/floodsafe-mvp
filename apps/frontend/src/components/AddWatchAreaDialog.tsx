@@ -14,7 +14,6 @@ import SearchBar from './SearchBar';
 import { useCreateWatchArea } from '../lib/api/hooks';
 import { useAuth } from '../contexts/AuthContext';
 import { useCityContext } from '../contexts/CityContext';
-import type { SearchLocationResult } from '../types';
 
 interface AddWatchAreaDialogProps {
     open: boolean;

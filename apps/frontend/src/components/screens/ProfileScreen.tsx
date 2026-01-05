@@ -7,8 +7,7 @@ import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Separator } from '../ui/separator';
 import { Avatar, AvatarFallback } from '../ui/avatar';
-import { Progress } from '../ui/progress';
-import { MapPin, Award, Bell, Globe, Settings, LogOut, Edit, Trash2, FileText, Route, ShieldCheck, Shield, UserCheck, Eye, Plus } from 'lucide-react';
+import { MapPin, Bell, Globe, Settings, LogOut, Edit, Trash2, FileText, Route, ShieldCheck, Shield, UserCheck, Eye, Plus } from 'lucide-react';
 import { useUserReports, Report, useDailyRoutes, useDeleteDailyRoute } from '../../lib/api/hooks';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Input } from '../ui/input';
@@ -185,13 +184,13 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const progressToNextLevel = ((user.points % 100) / 100) * 100;
-  const pointsNeeded = 100 - (user.points % 100);
+  const _progressToNextLevel = ((user.points % 100) / 100) * 100;
+  const _pointsNeeded = 100 - (user.points % 100);
   const memberSince = user.created_at
     ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : 'Recently';
-  const reportsCount = user.reports_count ?? 0;
-  const verifiedReportsCount = user.verified_reports_count ?? 0;
+  const _reportsCount = user.reports_count ?? 0;
+  const _verifiedReportsCount = user.verified_reports_count ?? 0;
 
   return (
     <div className="pb-4 min-h-full bg-gray-50">

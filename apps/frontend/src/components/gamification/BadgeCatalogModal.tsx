@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Award, Lock, X, Search } from 'lucide-react';
+import { Award, Lock, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Badge as BadgeUI } from '../ui/badge';
 import { ScrollArea } from '../ui/scroll-area';

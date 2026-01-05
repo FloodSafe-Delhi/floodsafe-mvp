@@ -62,7 +62,8 @@
         "recharts": "^3.4.1",
         "sonner": "^2.0.7",
         "tailwind-merge": "^2.6.0",
-        "vaul": "^1.1.2"
+        "vaul": "^1.1.2",
+        "vite-plugin-pwa": "^1.2.0"
     },
     "devDependencies": {
         "@playwright/test": "^1.57.0",

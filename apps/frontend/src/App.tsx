@@ -13,6 +13,8 @@ import { PrivacyPolicyScreen } from './components/screens/PrivacyPolicyScreen';
 import { TermsScreen } from './components/screens/TermsScreen';
 import { EmailVerifiedScreen } from './components/screens/EmailVerifiedScreen';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { PWAUpdateBanner } from './components/PWAUpdateBanner';
+import { IOSInstallBanner } from './components/IOSInstallBanner';
 import { FloodAlert } from './types';
 import { Toaster } from './components/ui/sonner';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -29,7 +31,6 @@ function FloodSafeApp() {
     const { isAuthenticated, isLoading: authLoading, user } = useAuth();
     const [activeTab, setActiveTab] = useState<Screen>('home');
     const [selectedAlert, setSelectedAlert] = useState<FloodAlert | null>(null);
-    const [isOffline, setIsOffline] = useState(false);
     const [initialRouteDestination, setInitialRouteDestination] = useState<[number, number] | null>(null);
     const [shouldOpenNavigationPanel, setShouldOpenNavigationPanel] = useState(false);
 
@@ -178,11 +179,9 @@ function FloodSafeApp() {
         >
             {renderScreen()}
 
-            <OfflineIndicator
-                isOffline={isOffline}
-                lastUpdate="Just now"
-                onRetry={() => setIsOffline(false)}
-            />
+            {/* PWA Components (PWAUpdateBanner is at root level for immediate SW registration) */}
+            <OfflineIndicator />
+            <IOSInstallBanner />
 
             <Toaster position="top-center" />
         </ResponsiveLayout>
@@ -195,6 +194,9 @@ export default function App() {
             <AuthProvider>
                 <UserProvider>
                     <CityProvider>
+                        {/* PWA Update Banner - renders at root level so SW registers immediately */}
+                        <PWAUpdateBanner />
+
                         <Routes>
                             {/* Email verification callback - accessible without auth */}
                             <Route path="/email-verified" element={

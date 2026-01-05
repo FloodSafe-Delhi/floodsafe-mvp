@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#3B82F6"/>
+
+  <!-- Shield shape -->
+  <path d="M256 80 L380 130 L380 260 Q380 360 256 440 Q132 360 132 260 L132 130 Z"
+        fill="#ffffff"
+        stroke="#1E40AF"
+        stroke-width="8"/>
+
+  <!-- Water wave inside shield -->
+  <path d="M160 280
+           Q190 250, 220 280
+           Q250 310, 280 280
+           Q310 250, 340 280
+           L340 360
+           Q256 410, 172 360
+           L160 280 Z"
+        fill="#60A5FA"/>
+
+  <!-- Water drop -->
+  <path d="M256 160
+           Q280 200, 280 230
+           Q280 260, 256 280
+           Q232 260, 232 230
+           Q232 200, 256 160 Z"
+        fill="#1E40AF"/>
+</svg>

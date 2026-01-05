@@ -3,10 +3,43 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/svg+xml" href="#" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FloodSafe</title>
+
+  <!-- PWA Meta Tags -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#3B82F6" />
+  <meta name="description" content="Community-powered flood monitoring and safe navigation for Delhi" />
+
+  <!-- iOS PWA Support -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FloodSafe" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/pwa-192x192.png" />
+
+  <title>FloodSafe - Real-time Flood Monitoring</title>
+
+  <!-- MapLibre CSS -->
   <link href='https://unpkg.com/maplibre-gl@3.6.0/dist/maplibre-gl.css' rel='stylesheet' />
+
+  <!-- Prevent FOUC (Flash of Unstyled Content) -->
+  <style>
+    html, body, #root {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    /* Safe area padding for iOS notch */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
+  </style>
 </head>
 
 <body>

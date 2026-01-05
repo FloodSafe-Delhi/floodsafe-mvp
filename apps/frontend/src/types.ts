@@ -283,6 +283,7 @@ export interface PhotoData {
     // ML classification results (optional - may not be available)
     mlClassification?: FloodClassificationResult | null;
     mlValidating?: boolean;  // True while ML classification is in progress
+    mlFailed?: boolean;  // True if ML classification failed (service unavailable)
 }
 
 export interface PhotoCaptureProps {

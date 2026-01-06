@@ -15,7 +15,7 @@ import { cn } from '../../lib/utils';
 import { getNestedArray, hasLocationData } from '../../lib/safe-access';
 import { detectCityFromCoordinates, getCityKeyFromCoordinates, type CityKey } from '../../lib/map/cityConfigs';
 import { useAuth } from '../../contexts/AuthContext';
-import { useCurrentCity } from '../../contexts/CityContext';
+import { useCityContext } from '../../contexts/CityContext';
 import { CITIES } from '../../lib/map/cityConfigs';
 import { VerificationReminderBanner } from '../VerificationReminderBanner';
 import {
@@ -61,7 +61,7 @@ export function HomeScreen({
     onNavigateToMapWithRoute
 }: HomeScreenProps) {
     const { user } = useAuth();
-    const currentCity = useCurrentCity();
+    const { city: currentCity, setCity, syncCityToUser } = useCityContext();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>('10m'); // Default 10 minutes
     const [cityFilter, setCityFilter] = useState<CityFilter>(() => {
@@ -215,11 +215,12 @@ export function HomeScreen({
         severe: 'SEVERE FLOOD RISK'
     };
 
-    // Dynamic user area data - Use first watch area or city preference
+    // Dynamic user area data - Use first watch area or current city from context
+    // Now reactive to city changes (dropdown + GPS location)
     const userAreaName = userWatchAreas.length > 0
         ? userWatchAreas[0].name
-        : user?.city_preference
-            ? CITIES[user.city_preference as 'bangalore' | 'delhi']?.displayName || 'Your Area'
+        : currentCity
+            ? CITIES[currentCity]?.displayName || 'Your Area'
             : 'Your Area';
 
     // Calculate risk level for user's area (using filtered alerts)
@@ -300,6 +301,27 @@ export function HomeScreen({
 
     const handleViewAllAlerts = () => {
         onNavigateToAlerts?.();
+    };
+
+    // Handle city dropdown change - update filter, context, and optionally sync to profile
+    const handleCityFilterChange = async (value: string) => {
+        const newFilter = value as CityFilter;
+        setCityFilter(newFilter);
+
+        // If selecting a specific city (not 'all'), also update CityContext and sync to profile
+        if (newFilter !== 'all' && (newFilter === 'delhi' || newFilter === 'bangalore')) {
+            setCity(newFilter);
+            // Sync to user profile if logged in
+            if (user?.id) {
+                try {
+                    await syncCityToUser(user.id, newFilter);
+                    toast.success(`City preference updated to ${CITIES[newFilter].displayName}`);
+                } catch (error) {
+                    console.error('Failed to sync city preference:', error);
+                    // Still update locally even if sync fails
+                }
+            }
+        }
     };
 
     const handleNavigateRoutes = (alert?: FloodAlert) => {
@@ -656,7 +678,7 @@ export function HomeScreen({
                                     <SelectItem value="10m">10 min</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <Select value={cityFilter} onValueChange={(value) => setCityFilter(value as CityFilter)}>
+                            <Select value={cityFilter} onValueChange={handleCityFilterChange}>
                                 <SelectTrigger className="w-auto min-w-[5.5rem] h-8 text-xs bg-slate-50 border-slate-200">
                                     <MapPin className="w-3 h-3 mr-1" />
                                     <SelectValue />

@@ -9,7 +9,8 @@ import MapLegend from './MapLegend';
 import SearchBar from './SearchBar';
 import HistoricalFloodsPanel from './HistoricalFloodsPanel';
 import { useCurrentCity, useCityContext } from '../contexts/CityContext';
-import { isWithinCityBounds, getAvailableCities, getCityConfig, type CityKey } from '../lib/map/cityConfigs';
+import { useAuth } from '../contexts/AuthContext';
+import { isWithinCityBounds, getAvailableCities, getCityConfig, CITIES, type CityKey } from '../lib/map/cityConfigs';
 import { RouteOption, MetroStation } from '../types';
 import { toast } from 'sonner';
 import { parseReportDescription, generateTagHtml } from '../lib/tagParser';
@@ -65,7 +66,8 @@ export default function MapComponent({
 }: MapComponentProps) {
     const mapContainer = useRef<HTMLDivElement>(null);
     const city = useCurrentCity();
-    const { setCity } = useCityContext();
+    const { setCity, syncCityToUser } = useCityContext();
+    const { user } = useAuth();
     const { map, isLoaded } = useMap(mapContainer, city);
     const { data: sensors } = useSensors();
     const { data: reports } = useReports();
@@ -1333,12 +1335,49 @@ export default function MapComponent({
         if (map) map.zoomOut();
     };
 
+    // Detect which city the GPS coordinates belong to
+    const detectCityFromGPS = (lat: number, lng: number): CityKey | null => {
+        // Delhi bounds: roughly 28.4-28.9 lat, 76.8-77.4 lng
+        if (lat >= 28.3 && lat <= 29.0 && lng >= 76.7 && lng <= 77.5) {
+            return 'delhi';
+        }
+        // Bangalore bounds: roughly 12.7-13.3 lat, 77.3-77.9 lng
+        if (lat >= 12.7 && lat <= 13.3 && lng >= 77.3 && lng <= 78.0) {
+            return 'bangalore';
+        }
+        return null;
+    };
+
+    // Update city context and optionally sync to profile based on GPS location
+    const updateCityFromLocation = async (lat: number, lng: number) => {
+        const detectedCity = detectCityFromGPS(lat, lng);
+        if (detectedCity && detectedCity !== city) {
+            setCity(detectedCity);
+            // Sync to user profile if logged in
+            if (user?.id) {
+                try {
+                    await syncCityToUser(user.id, detectedCity);
+                    toast.success(`Switched to ${CITIES[detectedCity].displayName}`, {
+                        description: 'Your area has been updated based on your location',
+                        duration: 3000,
+                    });
+                } catch (error) {
+                    console.error('Failed to sync city preference:', error);
+                    // Still update locally even if sync fails
+                }
+            }
+        }
+    };
+
     const handleMyLocation = () => {
         if (!map) return;
 
         // Use tracked location if available (faster response)
         if (userLocation) {
             const { lat, lng } = userLocation;
+
+            // Detect city from GPS and update context if different
+            updateCityFromLocation(lat, lng);
 
             // Check if user is within current city bounds
             const isWithinBounds = isWithinCityBounds(lng, lat, city);
@@ -1372,6 +1411,9 @@ export default function MapComponent({
                 (position) => {
                     const { longitude, latitude } = position.coords;
                     setUserLocation({ lat: latitude, lng: longitude });
+
+                    // Detect city from GPS and update context if different
+                    updateCityFromLocation(latitude, longitude);
 
                     // Check if user is within current city bounds
                     const isWithinBounds = isWithinCityBounds(longitude, latitude, city);

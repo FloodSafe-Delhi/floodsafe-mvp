@@ -112,6 +112,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
 
     const recognitionRef = useRef<any>(null);
     const isRecordingRef = useRef(false);
+    const lastProcessedIndexRef = useRef(-1); // Track last processed voice result to prevent duplicates
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const reportMutation = useReportMutation();
     const { userId } = useUserReady();
@@ -168,9 +169,9 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                 recognition.maxAlternatives = 1;
 
                 recognition.onresult = (event: SpeechRecognitionEvent) => {
-                    // Only process FINAL results to avoid triple-counting
-                    // Interim results fire multiple times for the same phrase
-                    const startIndex = event.resultIndex || 0;
+                    // Use lastProcessedIndexRef to prevent re-processing results after restarts
+                    // event.resultIndex may be unreliable after recognition.start() is called again
+                    const startIndex = Math.max(event.resultIndex || 0, lastProcessedIndexRef.current + 1);
 
                     for (let i = startIndex; i < event.results.length; i++) {
                         const result = event.results[i];
@@ -182,9 +183,14 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                         // ONLY add final results to prevent duplicates
                         // Interim results are shown in real-time but NOT added to description
                         if (result.isFinal) {
+                            lastProcessedIndexRef.current = i; // Track this as processed
                             const finalTranscript = alternative.transcript.trim();
                             if (finalTranscript) {
                                 setDescription(prev => {
+                                    // De-duplicate: skip if text already ends with this phrase
+                                    if (prev.trim().endsWith(finalTranscript)) {
+                                        return prev;
+                                    }
                                     const newText = prev ? (prev + ' ' + finalTranscript).trim() : finalTranscript;
                                     return newText.slice(0, MAX_DESCRIPTION_LENGTH);
                                 });
@@ -440,11 +446,13 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                 recognitionRef.current.stop();
                 setIsRecording(false);
                 isRecordingRef.current = false;
+                lastProcessedIndexRef.current = -1; // Reset for next recording session
                 toast.success('Voice recording stopped');
             } catch (error) {
                 console.error('Failed to stop voice recognition:', error);
                 setIsRecording(false);
                 isRecordingRef.current = false;
+                lastProcessedIndexRef.current = -1; // Reset even on error
             }
         } else {
             try {

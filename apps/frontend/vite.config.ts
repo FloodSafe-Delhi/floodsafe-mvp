@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt', // Show update prompt to user
+      registerType: 'autoUpdate', // Auto-update without user prompt for immediate deployment visibility
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'FloodSafe - Real-time Flood Monitoring',
@@ -81,7 +81,18 @@ export default defineConfig({
               },
             },
           },
-          // API calls - NetworkFirst with cache fallback
+          // ML classification endpoint - NetworkOnly, no timeout (can take 30s+ on mobile)
+          // Must be defined BEFORE general API rule due to regex matching order
+          {
+            urlPattern: /\/api\/ml\/classify/i,
+            handler: 'NetworkOnly',
+            options: {
+              // No caching - each image classification is unique
+              // No networkTimeoutSeconds - let the request complete naturally
+              // Frontend handles its own timeout via AbortController
+            },
+          },
+          // API calls - NetworkFirst with cache fallback (excludes ML classification above)
           {
             urlPattern: /\/api\/.*/i,
             handler: 'NetworkFirst',
@@ -137,8 +148,8 @@ export default defineConfig({
         ],
         // Precache essential files
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Skip waiting for new service worker
-        skipWaiting: false, // We use 'prompt' strategy, don't auto-skip
+        // Skip waiting for new service worker - immediately activate new SW
+        skipWaiting: true,
         clientsClaim: true,
       },
       devOptions: {

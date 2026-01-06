@@ -15,6 +15,7 @@ import { cn } from '../../lib/utils';
 import { getNestedArray, hasLocationData } from '../../lib/safe-access';
 import { detectCityFromCoordinates, getCityKeyFromCoordinates, type CityKey } from '../../lib/map/cityConfigs';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrentCity } from '../../contexts/CityContext';
 import { CITIES } from '../../lib/map/cityConfigs';
 import { VerificationReminderBanner } from '../VerificationReminderBanner';
 import {
@@ -60,6 +61,7 @@ export function HomeScreen({
     onNavigateToMapWithRoute
 }: HomeScreenProps) {
     const { user } = useAuth();
+    const currentCity = useCurrentCity();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>('10m'); // Default 10 minutes
     const [cityFilter, setCityFilter] = useState<CityFilter>(() => {
@@ -83,8 +85,8 @@ export function HomeScreen({
     // Get user's GPS location with retry mechanism
     useEffect(() => {
         if (!navigator.geolocation) {
-            // Browser doesn't support geolocation - use default
-            const fallbackCoords = user?.city_preference === 'bangalore'
+            // Browser doesn't support geolocation - use city context for fallback
+            const fallbackCoords = currentCity === 'bangalore'
                 ? { latitude: 12.9716, longitude: 77.5946 }
                 : { latitude: 28.6139, longitude: 77.2090 };
             setUserLocation(fallbackCoords);
@@ -99,7 +101,8 @@ export function HomeScreen({
         };
 
         const applyFallback = () => {
-            const fallbackCoords = user?.city_preference === 'bangalore'
+            // Use current city from CityContext (not database preference)
+            const fallbackCoords = currentCity === 'bangalore'
                 ? { latitude: 12.9716, longitude: 77.5946 }
                 : { latitude: 28.6139, longitude: 77.2090 };
             setUserLocation(fallbackCoords);
@@ -127,7 +130,7 @@ export function HomeScreen({
             },
             { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
         );
-    }, [user?.city_preference]);
+    }, [currentCity]);
 
     const { data: sensors, refetch: refetchSensors } = useSensors();
     const { data: reports, refetch: refetchReports } = useReports();

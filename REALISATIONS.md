@@ -1566,4 +1566,645 @@ grep "z-\[100\]" dist/assets/*.css
 
 ---
 
-*Last updated: 2025-12-29*
+---
+
+## 15. Supabase Storage Integration Complete - Production Photo Uploads Working
+
+**Date**: 2025-12-30
+**Context**: Replaced mock photo storage with real Supabase Storage for report photos
+**Result**: Photos now persist to Supabase with public URLs, ML classification still works
+
+### The Problem
+
+Previously, report photo uploads used a mock URL:
+```python
+media_url = f"https://mock-storage.com/{filename}"  # reports.py:343
+```
+
+Images were processed for ML classification but immediately discarded - users saw upload success but photos were lost forever.
+
+### The Solution
+
+Implemented `SupabaseStorageService` in `apps/backend/src/infrastructure/storage.py`:
+
+| Component | Implementation |
+|-----------|---------------|
+| Upload path | `reports/{user_id}/{timestamp}_{uuid}_{filename}` |
+| Public URL | `{SUPABASE_URL}/storage/v1/object/public/report-photos/{path}` |
+| Bucket | `report-photos` (public, 10MB limit, images only) |
+| Auth | Service Role key (bypasses RLS for server-side uploads) |
+
+### Key Design Decision: Explicit Errors Over Silent Fallbacks
+
+User explicitly requested: "instead of graceful fallbacks, just give an error term when such a scene happens bro"
+
+**Implemented**:
+- `StorageNotConfiguredError` - Raised when `SUPABASE_URL` or `SUPABASE_SERVICE_KEY` not set
+- HTTP 503 response - "Photo storage service is not configured. Please contact support."
+- No silent mock URL fallbacks - failure is explicit and visible
+
+### Environment Variables Added
+
+```bash
+SUPABASE_URL=https://udblirsscaghsepuxxqv.supabase.co
+SUPABASE_SERVICE_KEY=eyJhbGc...  # Service role key (SECRET - never expose in frontend!)
+SUPABASE_STORAGE_BUCKET=report-photos
+```
+
+### Verification Results
+
+| Test | Result |
+|------|--------|
+| Upload photo | ✅ Returns Supabase URL |
+| URL accessible | ✅ HTTP 200, image renders |
+| ML classification | ✅ Still works (processes before upload) |
+| Database storage | ✅ `media_url` contains `supabase.co` |
+
+**Example working URL**:
+```
+https://udblirsscaghsepuxxqv.supabase.co/storage/v1/object/public/report-photos/reports/ac128317-dc4f-4108-a85e-720b6de60bc8/20251230_174005_c05c034e_test_flood.jpg
+```
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `apps/backend/src/core/config.py` | Added 3 Supabase config vars |
+| `apps/backend/src/infrastructure/storage.py` | **NEW** - SupabaseStorageService |
+| `apps/backend/src/api/reports.py` | Integrated storage service, explicit error handling |
+| `.env.example` | Documented new env vars |
+
+### Supabase Bucket Configuration
+
+Created via Supabase MCP:
+```sql
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('report-photos', 'report-photos', true, 10485760,
+        ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+```
+
+### Key Insight
+
+> **Service Role Key vs Anon Key**: The service role key bypasses Row Level Security (RLS), allowing server-side uploads without per-user auth. This is appropriate for backend services but MUST NEVER be exposed to frontend code.
+
+---
+
+## 16. GeoAlchemy2 Requires Shapely Extra for Geometry Operations
+
+**Date**: 2025-12-30
+**Issue**: Reports listing endpoint returned HTTP 500
+**Error**: "This feature needs the optional Shapely dependency"
+
+### The Symptom
+
+```bash
+curl .../api/reports/?latitude=28.6139&longitude=77.2090&radius=50000
+# Returns: 500 Internal Server Error
+```
+
+Koyeb logs showed:
+```
+Error listing reports: This feature needs the optional Shapely dependency.
+Please install it with 'pip install geoalchemy2[shapely]'.
+```
+
+### The Root Cause
+
+`requirements.txt` had:
+```
+geoalchemy2>=0.14.0
+```
+
+But should have been:
+```
+geoalchemy2[shapely]>=0.14.0
+```
+
+### Why Shapely is Needed
+
+GeoAlchemy2 uses Shapely to convert PostGIS geometry objects to Python objects:
+- `to_shape()` - Converts WKB to Shapely geometry
+- `.x`, `.y` properties - Access coordinates
+- Spatial operations like `.buffer()`, `.contains()`
+
+Without Shapely, GeoAlchemy2 can only return raw Well-Known Binary (WKB) bytes, which breaks Python code expecting geometry objects.
+
+### The Fix
+
+```diff
+- geoalchemy2>=0.14.0
++ geoalchemy2[shapely]>=0.14.0
+```
+
+### Key Insight
+
+> **Optional dependencies in Python packages** are specified with `[extra]` syntax. GeoAlchemy2 makes Shapely optional to reduce install size for users who only need basic SQL generation. But any application doing Python-side geometry operations needs the extra.
+
+### Prevention
+
+For any package with geometry/spatial operations, always check if extras are needed:
+```bash
+pip show geoalchemy2  # Lists optional features
+```
+
+---
+
+## 17. E2E Verification Complete - Production System Status
+
+**Date**: 2025-12-30
+**Context**: Comprehensive E2E testing of deployed FloodSafe production system
+**Result**: All critical features working, documented gaps confirmed as known limitations
+
+### Test Environment
+
+| Component | URL |
+|-----------|-----|
+| Frontend | `https://floodsafe-mvp-frontend.vercel.app` |
+| Backend | `https://floodsafe-backend-floodsafe-dda84554.koyeb.app` |
+| ML Service | `https://floodsafe-ml-floodsafe-9b7acbea.koyeb.app` |
+| Database | Supabase `udblirsscaghsepuxxqv` |
+| Test Account | `storage_test@floodsafe.test` / `TestPassword123!` |
+
+### E2E Test Results Summary
+
+| Feature | Status | Evidence |
+|---------|--------|----------|
+| Email Login | ✅ PASS | Returns access_token, refresh_token |
+| Report Submission | ✅ PASS | Photo uploaded to Supabase, ML classified |
+| Reports Listing | ✅ PASS | GeoJSON with Shapely-converted geometry |
+| Hotspots (90) | ✅ PASS | FHI scores calculated, rain-gate active |
+| Watch Areas | ✅ PASS | PostGIS ST_DWithin spatial queries |
+| Add Comment | ✅ PASS | Returns comment with username |
+| Get Comments | ✅ PASS | Lists all comments for report |
+| Upvote/Downvote | ✅ PASS | Toggle works, count updates |
+| Self-Vote Prevention | ✅ PASS | "Cannot vote on your own report" |
+| Vote Toggle Off | ✅ PASS | Second click removes vote |
+| Vote Switch | ✅ PASS | Upvote → Downvote works |
+
+### Hotspots FHI Verification
+
+**Endpoint**: `GET /api/v1/hotspots/all?include_fhi=true`
+
+| Metric | Value |
+|--------|-------|
+| Total hotspots | 90 |
+| Response type | GeoJSON FeatureCollection |
+| FHI score range | 0.15 (rain-gate active due to <5mm rainfall in 3 days) |
+| Source | Open-Meteo weather API |
+
+### Comments & Voting API Verification
+
+**Add Comment**:
+```bash
+POST /api/reports/{id}/comments
+Body: {"content": "E2E Test Comment"}
+Response: 201 with comment object
+```
+
+**Voting Toggle Test**:
+| Action | Upvotes | Downvotes | user_vote |
+|--------|---------|-----------|-----------|
+| Initial | 0 | 0 | null |
+| Upvote | 1 | 0 | "upvote" |
+| Upvote again (toggle off) | 0 | 0 | null |
+| Downvote | 0 | 1 | "downvote" |
+
+### Known Gaps (Confirmed, Not Bugs)
+
+| Gap | Status | Notes |
+|-----|--------|-------|
+| Alert notifications | 📝 EXPECTED | Alerts stored but no push/SMS/email |
+| Daily routes | 📝 EXPECTED | Table scaffolded for future feature |
+| Badges | 🟡 DEFERRED | Not seeded per user decision |
+| Voice input | 📝 SKIPPED | Not implemented per user decision |
+
+### Key Insight
+
+> **E2E testing revealed the value of triple verification**: UI → API → Database.
+> A feature "working in UI" doesn't mean the data persisted correctly.
+> Always verify at the database level for critical operations like photo uploads.
+
+### Recommendations for Future E2E Tests
+
+1. **Automate with Playwright**: Current tests were manual curl commands
+2. **Add database assertions**: Query Supabase to verify state changes
+3. **Include negative tests**: Rate limiting, auth failures, validation errors
+4. **Monitor response times**: Performance baseline for regression detection
+
+---
+
+## 4. TFLite Runtime Deployment - Version Compatibility Maze
+
+**Date**: 2025-12-31
+**Task**: Deploy TFLite flood classifier to Koyeb production
+
+### The Problem Chain
+
+Deploying a simple MobileNet classifier took **3 separate bug fixes** because of cascading version incompatibilities:
+
+| Issue | Error | Root Cause | Fix |
+|-------|-------|------------|-----|
+| 1. ONNX opcode | "executable stack" | Security restriction | Switch to TFLite |
+| 2. TFLite opcode v12 | "FULLY_CONNECTED v12 not found" | TF 2.17+ incompatible with tflite-runtime 2.14 | Re-convert with TF 2.14 |
+| 3. NumPy 2.x | "NumPy 1.x module in NumPy 2.x" | Pillow pulled NumPy 2.2.6 | Pin numpy<2.0 |
+| 4. Singleton bug | Health OK but classify fails | Broken instance cached | Fix singleton pattern |
+
+### Critical Insight: TFLite Version Matching
+
+```
+tflite-runtime 2.14.0 (PyPI latest) requires:
+├── Model converted with TensorFlow 2.14.x (not 2.17+!)
+├── NumPy <2.0 (compiled with 1.x ABI)
+└── Correct singleton pattern to not cache failures
+```
+
+**There is NO tflite-runtime 2.17+ on PyPI.** Version 2.14.0 is the latest.
+
+### Singleton Pattern Gotcha
+
+This innocent-looking code has a critical bug:
+
+```python
+# BUG: If load() fails, broken instance is cached!
+if _instance is None:
+    _instance = Classifier()  # ← Instance created BEFORE load
+    _instance.load(path)      # ← If this fails, instance exists but broken!
+return _instance              # ← Returns broken instance on next call!
+```
+
+**Fix**: Only cache AFTER successful load:
+```python
+if _instance is None or not _instance.is_loaded:
+    classifier = Classifier()
+    classifier.load(path)      # Must succeed...
+    _instance = classifier     # ...before caching
+return _instance
+```
+
+### Tools Created
+
+1. **`scripts/Dockerfile.convert`**: Docker env with exact TF 2.14.0
+2. **`scripts/convert_tf214.py`**: Conversion with version verification
+3. Enhanced logging in `tflite_flood_classifier.py` with traceback
+
+### Key Takeaways
+
+1. **ML model deployment ≠ ML model training** - Different dependency constraints
+2. **tflite-runtime version determines EVERYTHING** - opcode support AND NumPy ABI
+3. **Read runtime logs first** - "CreateWrapperFromFile" → NumPy mismatch
+4. **Test the full flow** - Health check ≠ actual inference working
+
+---
+
+## 18. E2E Tests Need Database Assertions, Not Just API Checks
+
+**Date**: 2026-01-01
+**Context**: Improving E2E test suite reliability
+
+### The Problem
+
+Our E2E tests were verifying behavior via API responses:
+```typescript
+const response = await fetch('/api/reports');
+const reports = await response.json();
+console.log(`Reports: ${reports.length}`);  // API says 1 report
+// But is it actually in the database?
+```
+
+**Gap**: API returning success ≠ Data persisted correctly.
+
+Scenarios where API could lie:
+1. Response built from request data (echoed back without save)
+2. Write succeeded but read from stale cache
+3. Transaction committed but then rolled back
+4. FK violations caught after API returned
+
+### The Solution: Direct Database Assertions
+
+Created `apps/frontend/scripts/e2e-utils/` with:
+
+1. **`types.ts`**: TypeScript interfaces matching Supabase schema
+2. **`db-assertions.ts`**: Class for direct database verification
+
+```typescript
+// After API returns success, verify directly in database:
+const dbReport = await ctx.dbAssert.verifyReportCreated(userId);
+if (!dbReport) {
+  throw new Error('Report NOT in database after API success!');
+}
+logDbSuccess(`Report verified: ${dbReport.id}`);
+```
+
+### Key Design Decisions
+
+| Decision | Why |
+|----------|-----|
+| Use Supabase REST API | Portable - works in CI without MCP |
+| Require service role key | Bypass RLS for test assertions |
+| Class-based design | Tracks test user ID across phases |
+| FK-aware cleanup | Delete in correct order to avoid constraint violations |
+
+### Cleanup Order (Foreign Keys)
+
+```
+1. alerts (→ reports, watch_areas)
+2. report_votes (→ reports, users)
+3. comments (→ reports, users)
+4. reports (→ users)
+5. watch_areas (→ users)
+6. refresh_tokens (→ users)
+7. email_verification_tokens (→ users)
+8. reputation_history (→ users)
+9. users
+```
+
+### Environment Setup
+
+```bash
+# .env (for E2E tests only)
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=xxx  # Never commit!
+CLEANUP_TEST_DATA=true         # Auto-cleanup after run
+```
+
+### Key Insight
+
+> **"Feature working in UI" doesn't mean "data persisted correctly"**
+>
+> Always verify at the database level for critical operations:
+> - User registration
+> - Report submission
+> - Watch area creation
+> - Profile updates
+
+### Files Created/Modified
+
+- `apps/frontend/scripts/e2e-utils/types.ts` - DB record types
+- `apps/frontend/scripts/e2e-utils/db-assertions.ts` - Verification utilities
+- `apps/frontend/scripts/e2e-full-test.ts` - Enhanced with DB assertions
+- `apps/frontend/.env.example` - Added E2E config section
+
+---
+
+## 15. External API Calls Need Retry Logic (Open-Meteo FHI)
+
+**Date**: 2026-01-05
+**Problem**: FHI (Flood Hazard Index) showing "unknown" for ~10-30% of hotspots
+**Root Cause**: No retry logic on Open-Meteo API calls, tight timeouts
+
+### The Symptom
+
+Some hotspots displayed gray "unknown" risk level instead of calculated FHI:
+- Inconsistent: sometimes 85/90 loaded, sometimes 70/90
+- No pattern - different hotspots failed each time
+- Backend logs showed various transient errors
+
+### Root Causes Found
+
+1. **No retry logic**: API calls failed immediately on any error
+   ```python
+   # BAD: No retry, one failure = permanent failure
+   response = await client.get(url, params=params)
+   response.raise_for_status()  # Fails immediately!
+   ```
+
+2. **Timeout too tight**: 10s for 2 API calls (elevation + weather)
+   - Each call can take 5-10s under load
+   - No room for network variability
+
+3. **No rate limit handling**: Open-Meteo free tier has limits
+   - HTTP 429 (Too Many Requests) → immediate failure
+   - No backoff strategy
+
+### The Fix
+
+**Exponential backoff retry** (`fhi_calculator.py:121-210`):
+
+```python
+async def _fetch_with_retry(self, url: str, params: dict, max_attempts: int = 3):
+    for attempt in range(max_attempts):
+        try:
+            response = await client.get(url, params=params)
+
+            # Handle rate limiting specifically
+            if response.status_code == 429:
+                wait_time = min(2 ** attempt, 5)  # 1s, 2s, 4s, max 5s
+                await asyncio.sleep(wait_time)
+                continue
+
+            response.raise_for_status()
+            return response.json()
+
+        except (httpx.TimeoutException, httpx.HTTPStatusError):
+            if attempt < max_attempts - 1:
+                wait_time = 0.5 * (2 ** attempt)  # 0.5s, 1s, 2s
+                await asyncio.sleep(wait_time)
+            continue
+
+    raise FHICalculationError(f"Failed after {max_attempts} attempts")
+```
+
+**Timeout increase** (`hotspots_service.py:407`):
+- 10s → 30s to allow for retries
+
+**Failure rate logging** (`hotspots_service.py:221-231`):
+- Warn if >10% failures for debugging
+
+### Results
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Success rate | 70-90% | **100%** |
+| Unknown FHI | 10-30% | **0%** |
+| Retry coverage | None | 3 attempts |
+| Timeout | 10s | 30s |
+
+### Key Insight
+
+> **External APIs are unreliable by default**
+>
+> When calling third-party APIs (weather services, geocoding, etc.):
+> 1. Always implement retry with exponential backoff
+> 2. Handle rate limits (429) explicitly
+> 3. Add logging for failure rates
+> 4. Set timeouts that account for retries
+>
+> A 99% reliable API called 90 times still fails ~1 time on average.
+> With 3 retries, failure drops to ~(0.01)³ = 0.0001%
+
+### Files Modified
+
+- `apps/backend/src/domain/ml/fhi_calculator.py` - Added `_fetch_with_retry()` method
+- `apps/backend/src/domain/ml/hotspots_service.py` - Increased timeout, added failure logging
+
+---
+
+## 14. Frontend/Backend Parameter Mismatch Causes Silent Report Failures
+
+**Date**: 2026-01-06
+**Problem**: Report submission silently failing in PWA
+
+### Root Cause
+
+Frontend was sending form data parameters that backend endpoint didn't accept:
+
+**Frontend (hooks.ts) sent:**
+```typescript
+photo_latitude: photo.gps.lat,        // ❌ Backend didn't accept
+photo_longitude: photo.gps.lng,       // ❌ Backend didn't accept
+photo_location_verified: photo.isLocationVerified  // ❌ Backend didn't accept
+```
+
+**Backend (reports.py) was missing these parameters in its signature.**
+
+### Key Insight
+
+> **FastAPI Form() parameters must match exactly**
+>
+> Unlike JSON bodies, FastAPI with Form() parameters can behave unexpectedly
+> with extra fields depending on validation settings. Always ensure frontend
+> FormData fields match backend endpoint parameters exactly.
+
+### Fix Applied
+
+Added the three missing parameters to backend endpoint:
+```python
+photo_latitude: Optional[float] = Form(None),
+photo_longitude: Optional[float] = Form(None),
+photo_location_verified: Optional[bool] = Form(None),
+```
+
+Modified logic to use frontend-provided verification if available, otherwise
+fall back to EXIF extraction. Frontend captures GPS at photo time, which is
+more accurate than post-hoc EXIF extraction.
+
+### Prevention
+
+- When adding new FormData fields in frontend, immediately add matching Form()
+  parameters in backend
+- Test report submission after any form field changes
+- Watch for silent failures in browser network tab
+
+---
+
+## 15. "My Location" Button Behavior is Correct (Not a Bug)
+
+**Date**: 2026-01-06
+**User Report**: "My Location button goes to Delhi when city is set to Bangalore"
+
+### Investigation Result
+
+**NOT A BUG** - The button correctly navigates to user's actual GPS location.
+
+### Why It Appears Broken
+
+User is physically in Delhi but app is set to Bangalore. The "My Location"
+button correctly flies to their actual GPS location (Delhi), which is
+expected behavior.
+
+The toast warning "Outside Bangalore" proves city context IS working correctly.
+
+### Key Insight
+
+> **"My Location" ≠ "City Center"**
+>
+> The My Location button shows your actual GPS position, not the center of
+> your selected city. If you're physically in a different city, the button
+> will navigate there.
+>
+> This is correct behavior - the app cannot teleport you.
+
+---
+
+## 16. GPS Test Panel Visible in Production
+
+**Date**: 2026-01-06
+**Problem**: Development GPS testing panel visible in PWA
+
+### Root Cause
+
+`VITE_ENABLE_GPS_TESTING=true` was set in `.env` file which gets bundled into
+production builds. Vercel didn't have this variable set, so it used the local
+.env value.
+
+### Fix Applied
+
+Set `VITE_ENABLE_GPS_TESTING=false` in `.env` file.
+
+### Key Insight
+
+> **Vite env vars are build-time, not runtime**
+>
+> VITE_ prefixed environment variables are embedded into the JavaScript bundle
+> at build time. They cannot be changed without rebuilding.
+>
+> For development-only features:
+> 1. Set to `false` in `.env` (production default)
+> 2. Override to `true` in `.env.development` or `.env.local` (git-ignored)
+
+---
+
+## 17. PWA Update Behavior After Deployments
+
+**Date**: 2026-01-06
+**Question**: "How do deployments affect PWA apps? Auto-reload?"
+
+### How It Works
+
+1. **Backend deploys (Koyeb)**: API changes take effect immediately
+2. **Frontend deploys (Vercel)**: Assets are rebuilt and served, but...
+3. **PWA Service Worker**: Caches assets locally for offline use
+
+### Update Flow
+
+1. Service worker checks for updates on page load
+2. If new version found, downloads in background
+3. User sees "Update available" prompt (or auto-reloads based on config)
+4. Until update applied, user sees **cached version**
+
+### Key Insight
+
+> **PWA users may be on old frontend while backend is updated**
+>
+> This can cause API contract mismatches. Always maintain backward
+> compatibility for at least one deploy cycle.
+>
+> To force update:
+> - User: Clear browser cache
+> - Deploy: Trigger Vercel rebuild
+> - Code: Increment service worker version in vite.config.ts
+
+---
+
+## 18. ML Classification Endpoint is Healthy But May Not Be Called
+
+**Date**: 2026-01-06
+**Issue**: "Report button doesn't run ML TFLite for photos"
+
+### Verification
+
+```bash
+curl https://floodsafe-backend-floodsafe-dda84554.koyeb.app/api/ml/classify-flood/health
+# Returns: {"status":"healthy","model_loaded":true,...}
+```
+
+ML endpoint IS working. Backend has TFLite model loaded.
+
+### Possible Causes in PWA
+
+1. **VITE_API_URL not set** - Check Vercel env vars
+2. **PWA cached old frontend** - API calls might go to wrong URL
+3. **Silent error handling** - PhotoCapture.tsx catches errors silently
+
+### Key Insight
+
+> **Always check both ends when API calls fail**
+>
+> 1. First: Verify backend endpoint is healthy (curl /health)
+> 2. Then: Check frontend is calling correct URL (browser network tab)
+> 3. Then: Check for CORS issues (browser console)
+> 4. Then: Check error handling (is it silent?)
+
+---
+
+*Last updated: 2026-01-06*

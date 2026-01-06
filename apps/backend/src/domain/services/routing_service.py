@@ -1428,13 +1428,14 @@ class RoutingService:
             return None
 
     async def _calculate_safest_route(
-        self, origin, destination, mode, flood_zones, hotspots, fastest_route
+        self, origin, destination, mode, flood_zones, hotspots, fastest_route,
+        city_code: str = 'BLR'
     ) -> Optional[Dict]:
         """Calculate safest route avoiding all HIGH/EXTREME hotspots."""
         try:
             safe_result = await self.calculate_safe_routes(
                 origin, destination,
-                city_code='DEL',  # Hardcoded for now
+                city_code=city_code,
                 mode=mode,
                 max_routes=1
             )
@@ -1577,7 +1578,7 @@ class RoutingService:
         self,
         origin: Tuple[float, float],
         destination: Tuple[float, float],
-        city_code: str = 'DEL',
+        city_code: str = 'BLR',  # Default to BLR (safer - no Delhi-specific assumptions)
         mode: str = 'driving',
         test_fhi_override: str = None,
     ) -> Dict:
@@ -1604,7 +1605,8 @@ class RoutingService:
 
         # 3. SAFEST route (existing FloodSafe logic)
         safest_result = await self._calculate_safest_route(
-            origin, destination, mode, flood_zones, hotspots, fastest_result
+            origin, destination, mode, flood_zones, hotspots, fastest_result,
+            city_code=city_code
         )
 
         # Determine recommendation

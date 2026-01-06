@@ -285,6 +285,10 @@ async def create_report(
     phone_verification_token: Optional[str] = Form(None),  # Optional for MVP/demo mode
     water_depth: Optional[str] = Form(None),
     vehicle_passability: Optional[str] = Form(None),
+    # Photo GPS coordinates extracted by frontend (preferred if available)
+    photo_latitude: Optional[float] = Form(None),
+    photo_longitude: Optional[float] = Form(None),
+    photo_location_verified: Optional[bool] = Form(None),
     image: UploadFile = File(...),  # MANDATORY - changed from File(None)
     db: Session = Depends(get_db)
 ):
@@ -324,22 +328,33 @@ async def create_report(
         exif_data = get_exif_data(img)
         img_lat, img_lng = get_lat_lon(exif_data)
 
-        # Initialize location_verified flag
-        location_verified = True
-
-        if not img_lat or not img_lng:
-            # No GPS in photo - flag as not location verified (don't block)
-            location_verified = False
-            logger.warning(f"Report photo has no GPS coordinates")
+        # Use frontend-provided location verification if available (more accurate for camera captures)
+        # Frontend captures GPS at photo time, which is more reliable than EXIF extraction
+        if photo_location_verified is not None:
+            location_verified = photo_location_verified
+            # Use frontend-provided photo GPS if available
+            if photo_latitude is not None and photo_longitude is not None:
+                media_metadata["gps"] = {"lat": photo_latitude, "lng": photo_longitude}
+                logger.info(f"Using frontend-provided photo GPS: ({photo_latitude:.6f}, {photo_longitude:.6f}), verified={photo_location_verified}")
+            elif img_lat and img_lng:
+                media_metadata["gps"] = {"lat": img_lat, "lng": img_lng}
         else:
-            media_metadata["gps"] = {"lat": img_lat, "lng": img_lng}
+            # Fallback: Extract GPS from EXIF and verify server-side
+            location_verified = True
 
-            # 3. GPS validation: Check if photo GPS matches reported location within tolerance
-            distance = haversine_distance(img_lat, img_lng, latitude, longitude)
-            if distance > LOCATION_VERIFICATION_TOLERANCE_METERS:
-                # GPS mismatch - flag as not location verified (don't block, allow with warning)
+            if not img_lat or not img_lng:
+                # No GPS in photo - flag as not location verified (don't block)
                 location_verified = False
-                logger.warning(f"Report photo GPS ({img_lat:.6f}, {img_lng:.6f}) is {distance:.1f}m from reported location ({latitude:.6f}, {longitude:.6f})")
+                logger.warning(f"Report photo has no GPS coordinates")
+            else:
+                media_metadata["gps"] = {"lat": img_lat, "lng": img_lng}
+
+                # 3. GPS validation: Check if photo GPS matches reported location within tolerance
+                distance = haversine_distance(img_lat, img_lng, latitude, longitude)
+                if distance > LOCATION_VERIFICATION_TOLERANCE_METERS:
+                    # GPS mismatch - flag as not location verified (don't block, allow with warning)
+                    location_verified = False
+                    logger.warning(f"Report photo GPS ({img_lat:.6f}, {img_lng:.6f}) is {distance:.1f}m from reported location ({latitude:.6f}, {longitude:.6f})")
 
         # Upload to Supabase Storage
         storage_service = get_storage_service()

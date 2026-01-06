@@ -102,6 +102,18 @@ async def get_prediction_grid(
 
             if response.status_code != 200:
                 logger.error(f"ML service error: {response.status_code} - {response.text}")
+                # Return empty GeoJSON instead of 404 when ML models aren't available
+                # This gracefully handles the case where ensemble models aren't trained
+                if response.status_code == 404:
+                    logger.warning("ML predictions endpoint not available (model not trained). Returning empty grid.")
+                    return {
+                        "type": "FeatureCollection",
+                        "features": [],
+                        "metadata": {
+                            "model_status": "not_available",
+                            "message": "Prediction models not yet trained for this region"
+                        }
+                    }
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"ML service error: {response.text}",

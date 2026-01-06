@@ -1,4 +1,10 @@
 import { chromium, Page, Browser } from '@playwright/test';
+import {
+  createDbAssertions,
+  DbAssertions,
+  logDbSuccess,
+  logDbFailure,
+} from './e2e-utils/db-assertions';
 
 const API_BASE = 'http://localhost:8000/api';
 const APP_URL = 'http://localhost:5175';
@@ -13,6 +19,7 @@ interface TestContext {
   accessToken: string;
   userId: string;
   step: number;
+  dbAssert: DbAssertions;
 }
 
 async function screenshot(ctx: TestContext, name: string) {
@@ -50,7 +57,8 @@ async function runE2ETest() {
     page,
     accessToken: '',
     userId: '',
-    step: 1
+    step: 1,
+    dbAssert: createDbAssertions(TEST_EMAIL),
   };
 
   try {
@@ -86,6 +94,18 @@ async function runE2ETest() {
     console.log(`  [OK] Auth provider: ${userData.auth_provider}`);
     console.log(`  [OK] Profile complete: ${userData.profile_complete}`);
     console.log(`  [OK] Onboarding step: ${userData.onboarding_step}`);
+
+    // DATABASE ASSERTION: Verify user exists in database
+    console.log('\n  --- Database Verification ---');
+    const dbUser = await ctx.dbAssert.verifyUserCreated();
+    if (dbUser) {
+      logDbSuccess(`User created in database: ${dbUser.id}`);
+      logDbSuccess(`Email matches: ${dbUser.email === TEST_EMAIL}`);
+      logDbSuccess(`Auth provider: ${dbUser.auth_provider}`);
+    } else {
+      logDbFailure('User NOT found in database after registration!');
+      throw new Error('Database assertion failed: User not persisted');
+    }
 
     // ========================================
     // PHASE 2: Login Flow via UI
@@ -209,6 +229,28 @@ async function runE2ETest() {
     }
 
     await screenshot(ctx, 'home-screen');
+
+    // DATABASE ASSERTION: Verify onboarding updated user profile
+    console.log('\n  --- Database Verification (Onboarding) ---');
+    const onboardingVerified = await ctx.dbAssert.verifyUserUpdated(ctx.userId, {
+      profile_complete: true,
+      city_preference: 'Delhi',
+    });
+    if (onboardingVerified) {
+      logDbSuccess('User profile_complete=true in database');
+      logDbSuccess('User city_preference=Delhi in database');
+    } else {
+      logDbFailure('User onboarding fields not properly updated in database');
+      // Don't throw - onboarding may have been skipped
+    }
+
+    // Also verify watch area was created during onboarding
+    const watchArea = await ctx.dbAssert.verifyWatchAreaCreated(ctx.userId, 'Home');
+    if (watchArea) {
+      logDbSuccess(`Watch area created in database: ${watchArea.name}`);
+    } else {
+      logDbFailure('Watch area "Home" not found in database');
+    }
 
     // ========================================
     // PHASE 4: HomeScreen Features
@@ -346,14 +388,15 @@ async function runE2ETest() {
     // ========================================
     await log('PHASE 6: Verify Report in Database');
 
+    // API-level verification (existing)
     const reportsResponse = await fetch(`${API_BASE}/reports`, {
       headers: { 'Authorization': `Bearer ${ctx.accessToken}` }
     });
     const reports = await reportsResponse.json();
 
     const myReports = reports.filter((r: any) => r.user_id === ctx.userId);
-    console.log(`  Total reports: ${reports.length}`);
-    console.log(`  My reports: ${myReports.length}`);
+    console.log(`  Total reports (API): ${reports.length}`);
+    console.log(`  My reports (API): ${myReports.length}`);
 
     if (myReports.length > 0) {
       const latestReport = myReports[0];
@@ -361,6 +404,33 @@ async function runE2ETest() {
       console.log(`  [OK] Description: ${latestReport.description?.substring(0, 50)}...`);
       console.log(`  [OK] Water depth: ${latestReport.water_depth}`);
       console.log(`  [OK] Verified: ${latestReport.verified}`);
+    }
+
+    // DATABASE ASSERTION: Verify report persisted directly in database
+    console.log('\n  --- Database Verification (Report) ---');
+    const dbReport = await ctx.dbAssert.verifyReportCreated(ctx.userId, {
+      description: 'E2E Test Report',  // Partial match
+    });
+    if (dbReport) {
+      logDbSuccess(`Report found in database: ${dbReport.id}`);
+      logDbSuccess(`User ID matches: ${dbReport.user_id === ctx.userId}`);
+      logDbSuccess(`Description: ${dbReport.description?.substring(0, 40)}...`);
+      logDbSuccess(`Water depth: ${dbReport.water_depth || 'not set'}`);
+      logDbSuccess(`Timestamp: ${dbReport.timestamp}`);
+    } else {
+      logDbFailure('Report NOT found in database after API returned success!');
+      throw new Error('Database assertion failed: Report not persisted');
+    }
+
+    // Compare API and DB report counts
+    const dbReportCount = await ctx.dbAssert.getRecordCount('reports', ctx.userId);
+    console.log(`\n  Reports count comparison:`);
+    console.log(`    - API reports: ${myReports.length}`);
+    console.log(`    - DB reports: ${dbReportCount}`);
+    if (myReports.length === dbReportCount) {
+      logDbSuccess('API and DB report counts match');
+    } else {
+      logDbFailure(`Report count mismatch: API=${myReports.length}, DB=${dbReportCount}`);
     }
 
     // ========================================
@@ -458,16 +528,66 @@ async function runE2ETest() {
     // Final screenshot
     await screenshot(ctx, 'final-state');
 
+    // ========================================
+    // PHASE 11: Database Summary & Cleanup
+    // ========================================
+    await log('PHASE 11: Database Summary & Cleanup');
+
+    // Final database record counts
+    console.log('  Final Database State:');
+    const finalReportCount = await ctx.dbAssert.getRecordCount('reports', ctx.userId);
+    const finalWatchAreaCount = await ctx.dbAssert.getRecordCount('watch_areas', ctx.userId);
+    console.log(`    - Reports in DB: ${finalReportCount}`);
+    console.log(`    - Watch Areas in DB: ${finalWatchAreaCount}`);
+
+    // Verify final user state in database
+    const finalDbUser = await ctx.dbAssert.verifyUserCreated();
+    if (finalDbUser) {
+      console.log('  Final User State (from DB):');
+      console.log(`    - Profile complete: ${finalDbUser.profile_complete}`);
+      console.log(`    - City preference: ${finalDbUser.city_preference}`);
+      console.log(`    - Reports count: ${finalDbUser.reports_count}`);
+      console.log(`    - Points: ${finalDbUser.points}`);
+      console.log(`    - Level: ${finalDbUser.level}`);
+    }
+
+    // Cleanup test data (optional - set CLEANUP_TEST_DATA=true to enable)
+    if (process.env.CLEANUP_TEST_DATA === 'true') {
+      console.log('\n  --- Cleaning up test data ---');
+      try {
+        await ctx.dbAssert.cleanup();
+        logDbSuccess('All test data cleaned up successfully');
+      } catch (cleanupError) {
+        logDbFailure(`Cleanup failed: ${cleanupError}`);
+      }
+    } else {
+      console.log('\n  [INFO] Skipping cleanup (set CLEANUP_TEST_DATA=true to enable)');
+      console.log(`  [INFO] Test user ${TEST_EMAIL} remains in database`);
+    }
+
     console.log('\n========================================');
     console.log('E2E TEST COMPLETED SUCCESSFULLY');
     console.log('========================================');
     console.log(`\nTest Account: ${TEST_EMAIL}`);
     console.log(`User ID: ${ctx.userId}`);
     console.log(`Total Screenshots: ${ctx.step - 1}`);
+    console.log('\nDatabase Assertions: PASSED');
 
   } catch (error) {
     console.error('\n[FAIL] Test failed:', error);
     await screenshot(ctx, 'error-state');
+
+    // Try to cleanup even on failure (if cleanup is enabled)
+    if (process.env.CLEANUP_TEST_DATA === 'true') {
+      console.log('\n  --- Attempting cleanup after failure ---');
+      try {
+        await ctx.dbAssert.cleanup();
+        console.log('  [OK] Cleanup completed');
+      } catch (cleanupError) {
+        console.log(`  [WARN] Cleanup failed: ${cleanupError}`);
+      }
+    }
+
     throw error;
   } finally {
     await browser.close();

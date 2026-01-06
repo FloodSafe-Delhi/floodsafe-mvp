@@ -28,17 +28,44 @@ export default function MapLegend({ className }: MapLegendProps) {
                 </Button>
             </div>
 
-            {/* Legend Content */}
+            {/* Legend Content - max-height for mobile scroll */}
             {isExpanded && (
-                <div className="p-3 space-y-3">
-                    {/* Flood Zones */}
+                <div className="p-3 space-y-3 max-h-[50vh] overflow-y-auto">
+                    {/* Waterlogging Hotspots (FHI) - Main feature, shown first */}
                     <div>
-                        <h4 className="text-xs font-medium text-gray-700 mb-2">Flood Zones</h4>
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                            Waterlogging Hotspots (Live)
+                        </h4>
                         <div className="space-y-1.5">
-                            <LegendItem color="#22c55e" label="Low Risk" />
-                            <LegendItem color="#eab308" label="Medium Risk" />
-                            <LegendItem color="#f97316" label="High Risk" />
-                            <LegendItem color="#ef4444" label="Critical" />
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full ring-2 ring-green-300" style={{ backgroundColor: '#22c55e' }}></div>
+                                <span className="text-xs text-gray-600">Low Risk (0-20%)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full ring-2 ring-yellow-300" style={{ backgroundColor: '#eab308' }}></div>
+                                <span className="text-xs text-gray-600">Moderate (20-40%)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full ring-2 ring-orange-300" style={{ backgroundColor: '#f97316' }}></div>
+                                <span className="text-xs text-gray-600">High (40-70%)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full ring-2 ring-red-300" style={{ backgroundColor: '#ef4444' }}></div>
+                                <span className="text-xs text-gray-600">Extreme (70-100%)</span>
+                            </div>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1.5 italic">
+                            Real-time weather conditions
+                        </p>
+                    </div>
+
+                    {/* User Location */}
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-700 mb-2">Your Location</h4>
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse ring-2 ring-blue-300"></div>
+                            <span className="text-xs text-gray-600">Current position</span>
                         </div>
                     </div>
 
@@ -71,51 +98,30 @@ export default function MapLegend({ className }: MapLegendProps) {
 
                     {/* Routes */}
                     <div>
-                        <h4 className="text-xs font-medium text-gray-700 mb-2">Routes</h4>
+                        <h4 className="text-xs font-medium text-gray-700 mb-2">Navigation Routes</h4>
                         <div className="space-y-1.5">
-                            <LegendItem color="#22c55e" label="Safe Route" shape="line" />
-                            <LegendItem color="#ef4444" label="Flooded Route" shape="line" thickness="thick" />
+                            <LegendItem color="#3b82f6" label="Fastest Route" shape="line" />
+                            <LegendItem color="#22c55e" label="Safest Route" shape="line" />
+                            <div className="flex items-center gap-2">
+                                <div className="w-4 h-3 rounded bg-red-500 opacity-50"></div>
+                                <span className="text-xs text-gray-600">Flood area (avoid)</span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Historical Floods */}
+                    {/* Metro Lines */}
                     <div>
-                        <h4 className="text-xs font-medium text-gray-700 mb-2">Historical Floods (1967-2023)</h4>
-                        <div className="space-y-1.5">
-                            <LegendItem color="#22c55e" label="Minor Event" shape="circle" />
-                            <LegendItem color="#eab308" label="Moderate Event" shape="circle" />
-                            <LegendItem color="#ef4444" label="Severe Event" shape="circle" />
-                        </div>
-                        <p className="text-[10px] text-gray-500 mt-1.5">Source: India Flood Inventory</p>
-                    </div>
-
-                    {/* Flood Hazard Index (FHI) */}
-                    <div>
-                        <h4 className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                            Flood Hazard Index (Live)
-                        </h4>
+                        <h4 className="text-xs font-medium text-gray-700 mb-2">Metro</h4>
                         <div className="space-y-1.5">
                             <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#22c55e' }}></div>
-                                <span className="text-xs text-gray-600">Low (0-20%)</span>
+                                <div className="w-6 h-1 rounded bg-indigo-500"></div>
+                                <span className="text-xs text-gray-600">Metro routes</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#eab308' }}></div>
-                                <span className="text-xs text-gray-600">Moderate (20-40%)</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f97316' }}></div>
-                                <span className="text-xs text-gray-600">High (40-70%)</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ef4444' }}></div>
-                                <span className="text-xs text-gray-600">Extreme (70-100%)</span>
+                                <div className="w-3 h-3 rounded-full bg-indigo-600 border-2 border-white shadow-sm"></div>
+                                <span className="text-xs text-gray-600">Metro station</span>
                             </div>
                         </div>
-                        <p className="text-xs text-gray-400 mt-1.5 italic">
-                            Real-time weather conditions
-                        </p>
                     </div>
                 </div>
             )}

@@ -43,6 +43,13 @@ from ..domain.services.whatsapp import (
     process_sos_with_photo, get_severity_from_classification, get_confidence_text,
     handle_risk_command, handle_warnings_command, handle_my_areas_command,
     handle_help_command, handle_status_command, get_readable_location,
+    # Quick Reply Button functions
+    send_welcome_with_buttons,
+    send_after_location_buttons,
+    send_after_report_buttons,
+    send_risk_result_buttons,
+    send_menu_buttons,
+    send_text_message,
 )
 
 router = APIRouter()
@@ -210,6 +217,9 @@ async def handle_whatsapp_webhook(
     NumMedia: Optional[str] = Form("0"),
     MediaUrl0: Optional[str] = Form(None),
     MediaContentType0: Optional[str] = Form(None),
+    # Quick Reply Button parameters (from Content API)
+    ButtonPayload: Optional[str] = Form(None),  # Button ID that was tapped
+    ButtonText: Optional[str] = Form(None),      # Button label text
     db: Session = Depends(get_db)
 ):
     """
@@ -247,6 +257,15 @@ async def handle_whatsapp_webhook(
             # Link user to session
             session.user_id = user.id
             db.commit()
+
+    # ===========================================
+    # HANDLE BUTTON TAPS (Quick Reply Buttons)
+    # ===========================================
+    if ButtonPayload:
+        logger.info(f"Button tap from {phone}: {ButtonPayload} (text: {ButtonText})")
+        return await handle_button_tap(
+            db, session, phone, user, ButtonPayload
+        )
 
     # PRIMARY FLOW: Photo + Location (ideal case)
     if Latitude is not None and Longitude is not None:
@@ -836,4 +855,263 @@ async def finalize_report_without_photo(
             location=location_name,
             alerts_count=alerts_count
         )
+    )
+
+
+# =============================================================================
+# QUICK REPLY BUTTON HANDLING
+# =============================================================================
+
+async def handle_button_tap(
+    db: Session,
+    session: WhatsAppSession,
+    phone: str,
+    user: Optional[User],
+    button_id: str
+) -> Response:
+    """
+    Handle Quick Reply button taps.
+
+    Routes button IDs to appropriate handlers and sends follow-up buttons.
+
+    Button IDs:
+    - report_flood: Start flood report flow
+    - check_risk: Check flood risk
+    - view_alerts: Show current warnings
+    - add_photo: User wants to add photo to pending report
+    - submit_anyway: Submit report without photo
+    - cancel: Cancel current flow, show menu
+    - menu: Show main menu
+    - report_another: Start new report
+    - check_my_location: Check risk at last known location
+    """
+    language = get_user_language(user)
+
+    # Map button IDs to handlers
+    if button_id == "report_flood":
+        return await button_start_report_flow(db, session, phone, language)
+
+    elif button_id == "check_risk":
+        return await button_check_risk(db, session, phone, user, language)
+
+    elif button_id == "view_alerts":
+        return await button_view_alerts(db, user, phone, language)
+
+    elif button_id == "add_photo":
+        return await button_set_awaiting_photo(db, session, phone, language)
+
+    elif button_id == "submit_anyway":
+        return await button_submit_without_photo(db, session, phone, user)
+
+    elif button_id == "cancel":
+        return await button_show_menu(db, session, phone, language)
+
+    elif button_id == "menu":
+        return await button_show_menu(db, session, phone, language)
+
+    elif button_id == "report_another":
+        return await button_start_report_flow(db, session, phone, language)
+
+    elif button_id == "check_my_location":
+        return await button_check_my_location(db, session, phone, user, language)
+
+    else:
+        # Unknown button - show menu
+        logger.warning(f"Unknown button ID: {button_id}")
+        return await button_show_menu(db, session, phone, language)
+
+
+async def button_start_report_flow(
+    db: Session,
+    session: WhatsAppSession,
+    phone: str,
+    language: str
+) -> Response:
+    """
+    Start the flood report flow.
+
+    Tell user to send photo + location.
+    """
+    # Clear any pending state
+    session.state = "idle"
+    session.data = session.data or {}
+    session.updated_at = datetime.utcnow()
+    db.commit()
+
+    # Send TwiML acknowledgment
+    twiml = generate_twiml_response(
+        "📸 To report flooding:\n\n"
+        "1. Take a photo of the flooding\n"
+        "2. Tap + → Location → Send current location\n"
+        "3. Send photo + location together!\n\n"
+        "We'll verify with AI and alert nearby people."
+        if language == "en" else
+        "📸 बाढ़ की रिपोर्ट करने के लिए:\n\n"
+        "1. बाढ़ की फोटो लें\n"
+        "2. + → Location → अपना स्थान भेजें\n"
+        "3. फोटो + स्थान एक साथ भेजें!\n\n"
+        "हम AI से verify करेंगे और पास के लोगों को alert करेंगे।"
+    )
+
+    return twiml
+
+
+async def button_check_risk(
+    db: Session,
+    session: WhatsAppSession,
+    phone: str,
+    user: Optional[User],
+    language: str
+) -> Response:
+    """
+    Check flood risk - ask for location or use last known.
+    """
+    # Check if we have a last known location
+    last_lat = session.data.get("last_lat") if session.data else None
+    last_lng = session.data.get("last_lng") if session.data else None
+
+    if last_lat and last_lng:
+        # Use last known location
+        response = await handle_risk_command(db, user, None, (last_lat, last_lng))
+        return generate_twiml_response(response)
+
+    # Ask for location
+    return generate_twiml_response(
+        "🔍 To check flood risk:\n\n"
+        "Send your location (tap + → Location)\n\n"
+        "Or type a place name:\n"
+        "Example: RISK Connaught Place"
+        if language == "en" else
+        "🔍 बाढ़ जोखिम जांचने के लिए:\n\n"
+        "अपना स्थान भेजें (+ → Location पर tap करें)\n\n"
+        "या जगह का नाम लिखें:\n"
+        "उदाहरण: RISK कनॉट प्लेस"
+    )
+
+
+async def button_view_alerts(
+    db: Session,
+    user: Optional[User],
+    phone: str,
+    language: str
+) -> Response:
+    """
+    Show current flood warnings.
+    """
+    response = await handle_warnings_command(db, user)
+    return generate_twiml_response(response)
+
+
+async def button_set_awaiting_photo(
+    db: Session,
+    session: WhatsAppSession,
+    phone: str,
+    language: str
+) -> Response:
+    """
+    User tapped "Add Photo" - ensure we're in awaiting_photo state.
+    """
+    # Check if there's a pending location
+    if session.data and "pending_lat" in session.data:
+        session.state = "awaiting_photo"
+        session.updated_at = datetime.utcnow()
+        db.commit()
+
+        return generate_twiml_response(
+            "📸 Send your photo now!\n\n"
+            "Just take a photo of the flooding and send it.\n"
+            "We'll add it to your location report."
+            if language == "en" else
+            "📸 अभी अपनी फोटो भेजें!\n\n"
+            "बस बाढ़ की फोटो लें और भेजें।\n"
+            "हम इसे आपकी स्थान रिपोर्ट में जोड़ देंगे।"
+        )
+
+    # No pending location - ask for both
+    return generate_twiml_response(
+        "📸 To add a photo:\n\n"
+        "First send your location, then we'll ask for the photo.\n"
+        "Or send both together (photo + location in one message)!"
+        if language == "en" else
+        "📸 फोटो जोड़ने के लिए:\n\n"
+        "पहले अपना स्थान भेजें, फिर हम फोटो मांगेंगे।\n"
+        "या दोनों एक साथ भेजें (एक मैसेज में फोटो + स्थान)!"
+    )
+
+
+async def button_submit_without_photo(
+    db: Session,
+    session: WhatsAppSession,
+    phone: str,
+    user: Optional[User]
+) -> Response:
+    """
+    Submit the pending report without a photo.
+
+    Same as typing SKIP.
+    """
+    return await finalize_report_without_photo(db, session, phone, user)
+
+
+async def button_show_menu(
+    db: Session,
+    session: WhatsAppSession,
+    phone: str,
+    language: str
+) -> Response:
+    """
+    Show main menu.
+
+    Clears any pending state and shows welcome/menu.
+    """
+    # Clear pending state
+    session.state = "idle"
+    if session.data:
+        # Keep last location for risk checks
+        last_lat = session.data.get("last_lat")
+        last_lng = session.data.get("last_lng")
+        session.data = {}
+        if last_lat:
+            session.data["last_lat"] = last_lat
+            session.data["last_lng"] = last_lng
+    session.updated_at = datetime.utcnow()
+    db.commit()
+
+    # Send menu with buttons
+    # Note: We return TwiML first, then send buttons separately
+    await send_menu_buttons(phone, language)
+
+    return generate_twiml_response(
+        "🏠 Main Menu"
+        if language == "en" else
+        "🏠 मुख्य मेनू"
+    )
+
+
+async def button_check_my_location(
+    db: Session,
+    session: WhatsAppSession,
+    phone: str,
+    user: Optional[User],
+    language: str
+) -> Response:
+    """
+    Check risk at the user's last known location.
+    """
+    last_lat = session.data.get("last_lat") if session.data else None
+    last_lng = session.data.get("last_lng") if session.data else None
+
+    if last_lat and last_lng:
+        response = await handle_risk_command(db, user, None, (last_lat, last_lng))
+        return generate_twiml_response(response)
+
+    # No last location
+    return generate_twiml_response(
+        "📍 No recent location found.\n\n"
+        "Please send your location first:\n"
+        "Tap + → Location → Send current location"
+        if language == "en" else
+        "📍 कोई हालिया स्थान नहीं मिला।\n\n"
+        "कृपया पहले अपना स्थान भेजें:\n"
+        "+ → Location → अपना वर्तमान स्थान भेजें"
     )

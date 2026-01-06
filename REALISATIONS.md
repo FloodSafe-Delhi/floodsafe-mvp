@@ -2207,4 +2207,90 @@ ML endpoint IS working. Backend has TFLite model loaded.
 
 ---
 
+## X. Android Chrome Speech Recognition Emits Expanding Final Results
+
+**Date**: 2026-01-06
+**Issue**: Voice-to-text duplicates words on Android phones but not desktop
+
+### The Symptom
+
+Report descriptions showed repeated expanding phrases:
+> "there there is there is a there is a there is a flood there is a flood near there is a flood near my there is a flood near my house"
+
+### Root Cause
+
+**Android Chrome with `continuous=true` marks partial phrases as FINAL** when there are natural speech pauses.
+
+Unlike desktop where a full phrase becomes one final result, mobile Android may emit:
+1. "there" → FINAL (pause detected)
+2. "there is" → NEW FINAL (another pause)
+3. "there is a flood" → NEW FINAL
+4. etc.
+
+Each becomes a separate result index, bypassing `lastProcessedIndexRef`. The `endsWith` deduplication check fails because the NEW text is LONGER than the previous text.
+
+### The Fix
+
+Added `getOverlapSuffix()` function that:
+1. Normalizes text (lowercase, collapse whitespace) for comparison
+2. Detects when new text STARTS WITH words that match the END of existing text
+3. Returns only the non-overlapping suffix to append
+4. Returns `null` for exact duplicates
+
+This handles:
+- Case differences ("There" vs "there")
+- Whitespace variations
+- Expanding phrases ("there" → "there is a flood")
+
+### Key Insight
+
+> **Mobile speech recognition behavior differs from desktop**.
+>
+> Don't assume `endsWith` deduplication is sufficient - mobile browsers may
+> emit the same content as expanding final results at different indices.
+> Use overlap detection that handles EXTENSIONS, not just SUFFIXES.
+
+**File**: `apps/frontend/src/components/screens/ReportScreen.tsx`
+
+---
+
+## Y. Service Worker Timeout Blocks Long-Running ML Classification
+
+**Date**: 2026-01-06
+**Issue**: ML classification silently fails on mobile with slow networks
+
+### The Symptom
+
+Photo classification worked on desktop but failed silently on mobile. User saw "Analyzing..." then "Analysis Unavailable" with no error message.
+
+### Root Cause
+
+1. **Service Worker has 10s timeout** for all `/api/.*` URLs (`vite.config.ts:94`)
+2. ML classification URL matches this pattern: `/api/ml/classify-flood`
+3. On slow mobile networks (3G/4G), ML can take 15-30 seconds
+4. SW times out at 10s, fetch fails
+5. **Error handler only logged to console** - no toast message
+
+### The Fix
+
+Three-layer fix:
+1. **Exclude ML from SW timeout**: Added separate rule `/api\/ml\/classify/` with `NetworkOnly` handler (no timeout)
+2. **Add explicit frontend timeout**: 45s via AbortController in `useClassifyFloodImage`
+3. **Show user feedback**: Toast messages for timeout, network error, and service unavailable cases
+
+### Key Insight
+
+> **Service Worker caching rules can silently break long-running requests**.
+>
+> When adding new API endpoints that may take longer than typical requests,
+> check if they're affected by SW timeout rules. Exclude them or use
+> `NetworkOnly` handler for requests where caching doesn't make sense.
+
+**Files**:
+- `apps/frontend/vite.config.ts` - SW rule ordering
+- `apps/frontend/src/lib/api/hooks.ts` - AbortController timeout
+- `apps/frontend/src/components/PhotoCapture.tsx` - Toast feedback
+
+---
+
 *Last updated: 2026-01-06*

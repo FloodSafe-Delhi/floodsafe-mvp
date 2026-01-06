@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from geoalchemy2.functions import ST_X, ST_Y
 from uuid import UUID
 from typing import Optional, Literal
 from datetime import datetime, timezone, timedelta
@@ -196,16 +197,24 @@ def get_unified_alerts(
             # Get reports from last 7 days
             cutoff = datetime.now(timezone.utc) - timedelta(days=7)
 
-            # Community reports - we need to filter by city via lat/lng bounds
-            # For now, fetch all recent verified reports
-            reports_query = db.query(Report).filter(
+            # Community reports - query with PostGIS coordinate extraction
+            # Report.location is a Geometry('POINT'), so we use ST_X/ST_Y to extract lng/lat
+            reports_query = db.query(
+                Report,
+                ST_X(Report.location).label('longitude'),
+                ST_Y(Report.location).label('latitude')
+            ).filter(
                 Report.timestamp >= cutoff,
                 Report.verified == True
             ).order_by(
                 Report.timestamp.desc()
             ).limit(limit)
 
-            for report in reports_query.all():
+            for row in reports_query.all():
+                report = row[0]  # Report object
+                longitude = row[1]  # ST_X result
+                latitude = row[2]   # ST_Y result
+
                 # Map water_depth to severity
                 severity = _map_water_depth_to_severity(report.water_depth)
 
@@ -222,8 +231,8 @@ def get_unified_alerts(
                     title=title,
                     message=report.description or "Community flood report",
                     severity=severity,
-                    latitude=report.latitude,
-                    longitude=report.longitude,
+                    latitude=latitude,
+                    longitude=longitude,
                     url=None,
                     created_at=report.timestamp,
                 ))

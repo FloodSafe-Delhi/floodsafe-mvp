@@ -88,6 +88,41 @@ This automatically applies safe patterns. See `.claude/commands/data.md`.
 | ML Service | `apps/ml-service/` | PyTorch, GEE, Prophet |
 | IoT Ingestion | `apps/iot-ingestion/` | FastAPI (high-throughput) |
 
+## Production Deployment URLs
+
+| Service | URL | Platform |
+|---------|-----|----------|
+| **Frontend** | https://frontend-lime-psi-83.vercel.app | Vercel |
+| **Backend API** | https://floodsafe-backend-floodsafe-dda84554.koyeb.app | Koyeb |
+| **ML Service** | https://floodsafe-ml-floodsafe-9b7acbea.koyeb.app | Koyeb |
+| **Database** | Supabase (project: `udblirsscaghsepuxxqv`) | Supabase |
+
+### Health Check Commands
+```bash
+# Backend health
+curl https://floodsafe-backend-floodsafe-dda84554.koyeb.app/health
+
+# ML service health (may take 30s to wake from sleep)
+curl https://floodsafe-ml-floodsafe-9b7acbea.koyeb.app/health
+
+# Koyeb CLI status
+./koyeb-cli-extracted/koyeb.exe services list
+```
+
+### Deployment Commands (IMPORTANT)
+
+**Vercel (Frontend)**: Git integration is NOT connected. Must deploy manually:
+```bash
+cd apps/frontend && npx vercel --prod
+```
+
+**Koyeb (Backend)**: Redeploy from CLI:
+```bash
+./koyeb-cli-extracted/koyeb.exe services redeploy floodsafe-backend/backend
+```
+
+**Note**: `git push` does NOT trigger auto-deploy on either platform. Always run the deployment commands above after pushing code changes.
+
 ## Commands
 ```bash
 # Full stack (Docker)
@@ -142,6 +177,23 @@ cd apps/frontend && npm run screenshot
 | `code-reviewer` | Quality check | After completing code changes |
 | `planner` | Architecture | Complex multi-file features |
 
+### Prefer Serena for Code Analysis
+
+**Use Serena MCP tools instead of Explore agents when:**
+- Looking up specific symbols/functions (`find_symbol`)
+- Tracing function calls and references (`find_referencing_symbols`)
+- Understanding file structure (`get_symbols_overview`)
+- Refactoring across files (`rename_symbol`, `replace_symbol_body`)
+
+**Serena saves tokens** by returning only relevant code, not entire files.
+
+**Example - Finding how reports are created:**
+```
+# Instead of launching Explore agent to read entire files:
+mcp__plugin_serena_serena__find_symbol(name_path="create_report", include_body=True)
+mcp__plugin_serena_serena__find_referencing_symbols(name_path="create_report", ...)
+```
+
 ---
 
 ## MCP Servers (Model Context Protocol)
@@ -186,13 +238,34 @@ mcp__plugin_context7_context7__query-docs
 2. query-docs: libraryId="/maplibre/maplibre-gl-js", query="add GeoJSON layer"
 ```
 
-#### Serena (Code Intelligence)
+#### Serena (Code Intelligence) - USE PROACTIVELY
+
+**Activation**: Run `mcp__plugin_serena_serena__activate_project` with path `C:\Users\Anirudh Mohan\Desktop\FloodSafe`
+
 ```
-find_symbol           # Find symbol definitions
-find_referencing_symbols  # Find all references
-get_symbols_overview  # Get file/project symbols
-rename_symbol         # Safe refactoring
-replace_symbol_body   # Replace implementation
+find_symbol           # Find symbol definitions (use name_path like "MyClass/method")
+find_referencing_symbols  # Find all references to a symbol
+get_symbols_overview  # Get file/project symbols (use FIRST for new files)
+rename_symbol         # Safe refactoring across entire codebase
+replace_symbol_body   # Replace entire function/method body
+insert_after_symbol   # Add new code after a symbol
+insert_before_symbol  # Add new code before a symbol
+search_for_pattern    # Regex search across codebase
+```
+
+**When to Use Serena (PREFER over manual grep/read)**:
+- **Understanding a file**: `get_symbols_overview` first, then `find_symbol` with `include_body=True`
+- **Refactoring**: `rename_symbol` for safe renames, `find_referencing_symbols` to find all usages
+- **Editing code**: `replace_symbol_body` for entire functions, `replace_content` for partial edits
+- **Adding code**: `insert_after_symbol` or `insert_before_symbol` for precise placement
+- **Tracing dependencies**: `find_referencing_symbols` to trace call paths
+
+**Example Workflow**:
+```
+1. get_symbols_overview(relative_path="src/api/reports.py")  # See structure
+2. find_symbol(name_path="create_report", include_body=True)  # Get implementation
+3. find_referencing_symbols(name_path="create_report", relative_path="src/api/reports.py")  # Who calls it?
+4. replace_symbol_body(...)  # Edit the function
 ```
 
 #### Claude-in-Chrome (Browser Automation)

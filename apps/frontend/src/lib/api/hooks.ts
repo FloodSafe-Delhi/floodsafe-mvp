@@ -39,6 +39,11 @@ export interface Report {
     // Community feedback fields
     comment_count?: number;
     user_vote?: 'upvote' | 'downvote' | null;  // User's current vote on this report
+    // ML classification results (from backend)
+    ml_classification?: string;  // 'flood' or 'no_flood'
+    ml_confidence?: number;  // 0.0 to 1.0
+    ml_is_flood?: boolean;
+    ml_needs_review?: boolean;
 }
 
 export interface ReportCreate {
@@ -1444,19 +1449,43 @@ export function useClassifyFloodImage() {
             const formData = new FormData();
             formData.append('image', file);
 
-            // Use backend proxy instead of direct ML service call
-            // This works in both local dev (localhost:8000) and Docker (backend service)
-            const response = await fetch(`${API_BASE_URL}/ml/classify-flood`, {
-                method: 'POST',
-                body: formData,
-            });
+            // Create AbortController for explicit timeout
+            // 45s is generous for mobile networks - ML classification can take 15-30s
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => {
+                controller.abort();
+            }, 45000);
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Classification failed: ${errorText}`);
+            try {
+                // Use backend proxy instead of direct ML service call
+                // This works in both local dev (localhost:8000) and Docker (backend service)
+                const url = `${API_BASE_URL}/ml/classify-flood`;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal,
+                    cache: 'no-store', // Bypass service worker cache
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Classification failed: ${errorText}`);
+                }
+
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                clearTimeout(timeoutId);
+
+                // Provide clear error message for timeout
+                if (error instanceof Error && error.name === 'AbortError') {
+                    throw new Error('Classification timeout: slow network connection');
+                }
+                throw error;
             }
-
-            return response.json();
         },
         retry: 0, // Don't retry - this is a real-time UX enhancement, not critical
     });

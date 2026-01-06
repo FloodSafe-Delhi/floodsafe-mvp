@@ -88,6 +88,23 @@ def convert_report_to_response(report: models.Report, comment_count: int = 0) ->
         latitude = point.y
         longitude = point.x
 
+    # Extract ML classification from media_metadata JSON
+    ml_classification = None
+    ml_confidence = None
+    ml_is_flood = None
+    ml_needs_review = None
+
+    if report.media_metadata:
+        try:
+            metadata = json.loads(report.media_metadata) if isinstance(report.media_metadata, str) else report.media_metadata
+            ml_classification = metadata.get("ml_classification")
+            ml_confidence = metadata.get("ml_confidence")
+            ml_is_flood = metadata.get("ml_is_flood")
+            ml_needs_review = metadata.get("ml_needs_review")
+        except (json.JSONDecodeError, TypeError):
+            # If parsing fails, leave ML fields as None
+            pass
+
     return ReportResponse(
         id=report.id,
         user_id=report.user_id,
@@ -113,7 +130,11 @@ def convert_report_to_response(report: models.Report, comment_count: int = 0) ->
         prophet_prediction_match=report.prophet_prediction_match,
         location_verified=report.location_verified,
         archived_at=report.archived_at,
-        comment_count=comment_count
+        comment_count=comment_count,
+        ml_classification=ml_classification,
+        ml_confidence=ml_confidence,
+        ml_is_flood=ml_is_flood,
+        ml_needs_review=ml_needs_review,
     )
 
 

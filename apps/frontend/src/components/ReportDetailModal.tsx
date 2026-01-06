@@ -282,6 +282,30 @@ export function ReportDetailModal({ report, isOpen, onClose, onLocate }: ReportD
                         </div>
                     )}
 
+                    {/* ML Classification */}
+                    {report.ml_is_flood !== undefined && (
+                        <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                            {report.ml_is_flood ? (
+                                <>
+                                    <Droplets className="h-4 w-4 text-blue-600" />
+                                    <span className="text-gray-700">
+                                        AI Analysis: Flood Detected ({Math.round((report.ml_confidence || 0) * 100)}%)
+                                    </span>
+                                </>
+                            ) : report.ml_needs_review ? (
+                                <>
+                                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                    <span className="text-gray-700">AI Analysis: Needs Review</span>
+                                </>
+                            ) : (
+                                <>
+                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                    <span className="text-gray-700">AI Analysis: May Not Be Flood</span>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {/* Location */}
                     {report.latitude && report.longitude && onLocate && (
                         <button

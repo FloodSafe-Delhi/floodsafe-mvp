@@ -99,34 +99,62 @@ export default function PhotoCapture({ reportedLocation, onPhotoCapture, photo }
 
     // Run ML classification when a new photo is captured
     const runMlClassification = useCallback((file: File, photoData: PhotoData) => {
+        // Validate mutation hook is available
+        if (!classifyMutation || typeof classifyMutation.mutate !== 'function') {
+            console.error('ML classifyMutation not available');
+            toast.warning('Photo analysis unavailable. Your report can still be submitted.');
+            onPhotoCapture({ ...photoData, mlValidating: false, mlFailed: true });
+            return;
+        }
+
         // Mark as validating
         onPhotoCapture({ ...photoData, mlValidating: true });
 
-        // Run classification (non-blocking)
-        classifyMutation.mutate(file, {
-            onSuccess: (result) => {
-                // Update photo with ML results
-                onPhotoCapture({
-                    ...photoData,
-                    mlClassification: result,
-                    mlValidating: false,
-                });
+        // Use try-catch around mutate call to catch synchronous errors
+        try {
+            classifyMutation.mutate(file, {
+                onSuccess: (result) => {
+                    // Update photo with ML results
+                    onPhotoCapture({
+                        ...photoData,
+                        mlClassification: result,
+                        mlValidating: false,
+                    });
 
-                // Show toast feedback
-                if (result.is_flood) {
-                    toast.success(`Flood detected (${Math.round(result.confidence * 100)}% confidence)`);
-                } else if (result.needs_review) {
-                    toast.warning('Photo needs review - unclear if flood is present');
-                } else {
-                    toast.warning('Photo may not show flooding. You can still submit.');
-                }
-            },
-            onError: (error) => {
-                console.log('ML classification unavailable:', error);
-                // Don't block - set failed state so UI shows "unavailable"
-                onPhotoCapture({ ...photoData, mlValidating: false, mlFailed: true });
-            },
-        });
+                    // Show toast feedback
+                    if (result.is_flood) {
+                        toast.success(`Flood detected (${Math.round(result.confidence * 100)}% confidence)`);
+                    } else if (result.needs_review) {
+                        toast.warning('Photo needs review - unclear if flood is present');
+                    } else {
+                        toast.warning('Photo may not show flooding. You can still submit.');
+                    }
+                },
+                onError: (error) => {
+                    console.error('ML classification failed:', error);
+
+                    // Determine error type and show appropriate user message
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+
+                    if (errorMessage.includes('timeout') || errorMessage.includes('AbortError')) {
+                        toast.warning('Photo analysis timed out on slow network. Your report can still be submitted.');
+                    } else if (errorMessage.includes('NetworkError') || errorMessage.includes('Failed to fetch')) {
+                        toast.warning('Network error during photo analysis. Check your connection. Report can still be submitted.');
+                    } else if (errorMessage.includes('503') || errorMessage.includes('unavailable')) {
+                        toast.info('Photo analysis service temporarily unavailable. Your report can still be submitted.');
+                    } else {
+                        toast.warning('Could not analyze photo. Your report can still be submitted.');
+                    }
+
+                    // Don't block - set failed state so UI shows "unavailable"
+                    onPhotoCapture({ ...photoData, mlValidating: false, mlFailed: true });
+                },
+            });
+        } catch (syncError) {
+            console.error('ML mutation failed to start:', syncError);
+            toast.warning('Photo analysis failed to start. Your report can still be submitted.');
+            onPhotoCapture({ ...photoData, mlValidating: false, mlFailed: true });
+        }
     }, [classifyMutation, onPhotoCapture]);
 
     // Handle camera capture

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, MapPin, Camera, Award, Mic, MicOff, AlertCircle, X, Loader2, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { ArrowLeft, MapPin, Camera, Award, Mic, MicOff, AlertCircle, X, Loader2, AlertTriangle, CheckCircle, Info, Droplets } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
@@ -66,6 +66,52 @@ const isIOSDevice = () => {
 // Helper to detect Android devices
 const isAndroidDevice = () => {
     return /Android/.test(navigator.userAgent);
+};
+
+/**
+ * Normalize text for comparison - handles Android Chrome speech recognition quirks.
+ * - Lowercase for case-insensitive comparison
+ * - Collapse multiple whitespace to single space
+ * - Trim leading/trailing whitespace
+ */
+const normalizeText = (text: string): string => {
+    return text.toLowerCase().replace(/\s+/g, ' ').trim();
+};
+
+/**
+ * Check if newText overlaps with end of existingText and return the suffix to append.
+ * Handles Android Chrome emitting "hello" then "hello world" (should merge to "hello world").
+ * Returns null if newText is a duplicate (fully contained), or the suffix to append otherwise.
+ */
+const getOverlapSuffix = (existingText: string, newText: string): string | null => {
+    const normExisting = normalizeText(existingText);
+    const normNew = normalizeText(newText);
+
+    // Empty existing text - return full new text
+    if (!normExisting) {
+        return newText.trim();
+    }
+
+    // Exact duplicate (case-insensitive, whitespace-normalized)
+    if (normExisting.endsWith(normNew)) {
+        return null; // Skip - it's a duplicate
+    }
+
+    // Check if newText starts with something that matches the end of existingText
+    // E.g., existing="hello" new="hello world" -> overlap="hello", suffix=" world"
+    const newWords = normNew.split(' ');
+    for (let i = newWords.length - 1; i > 0; i--) {
+        const potentialOverlap = newWords.slice(0, i).join(' ');
+        if (normExisting.endsWith(potentialOverlap)) {
+            // Found overlap! Return only the non-overlapping part
+            // Use original transcript to preserve capitalization
+            const originalWords = newText.trim().split(/\s+/);
+            return originalWords.slice(i).join(' ');
+        }
+    }
+
+    // No overlap - return full new text for appending
+    return newText.trim();
 };
 
 // Helper to calculate distance between two GPS coordinates using Haversine formula
@@ -187,11 +233,18 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                             const finalTranscript = alternative.transcript.trim();
                             if (finalTranscript) {
                                 setDescription(prev => {
-                                    // De-duplicate: skip if text already ends with this phrase
-                                    if (prev.trim().endsWith(finalTranscript)) {
+                                    // Use overlap detection to handle Android Chrome's behavior
+                                    // where partial phrases are marked as final in sequence
+                                    // E.g., "there" → "there is" → "there is a flood"
+                                    const suffix = getOverlapSuffix(prev, finalTranscript);
+
+                                    // Duplicate detected - skip
+                                    if (suffix === null) {
                                         return prev;
                                     }
-                                    const newText = prev ? (prev + ' ' + finalTranscript).trim() : finalTranscript;
+
+                                    // Append suffix (may be full transcript or just non-overlapping part)
+                                    const newText = prev ? (prev.trim() + ' ' + suffix).trim() : suffix;
                                     return newText.slice(0, MAX_DESCRIPTION_LENGTH);
                                 });
                             }
@@ -1164,7 +1217,7 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                                     alt="Report photo"
                                                     className="w-16 h-16 object-cover rounded"
                                                 />
-                                                <div>
+                                                <div className="space-y-1">
                                                     {photo.isLocationVerified ? (
                                                         <Badge className="bg-green-500 text-white text-xs flex items-center gap-1 w-fit">
                                                             <CheckCircle className="w-3 h-3" />
@@ -1174,6 +1227,37 @@ export function ReportScreen({ onBack, onSubmit }: ReportScreenProps) {
                                                         <Badge className="bg-yellow-500 text-white text-xs flex items-center gap-1 w-fit">
                                                             <AlertTriangle className="w-3 h-3" />
                                                             {location ? `${Math.round(calculateDistance(photo.gps.lat, photo.gps.lng, location.latitude, location.longitude))}m away` : 'Location Mismatch'}
+                                                        </Badge>
+                                                    )}
+                                                    {/* ML Classification Badge */}
+                                                    {photo.mlValidating && (
+                                                        <Badge className="bg-gray-500 text-white text-xs flex items-center gap-1 w-fit">
+                                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                                            Analyzing...
+                                                        </Badge>
+                                                    )}
+                                                    {photo.mlClassification && !photo.mlValidating && (
+                                                        photo.mlClassification.is_flood ? (
+                                                            <Badge className="bg-blue-500 text-white text-xs flex items-center gap-1 w-fit">
+                                                                <Droplets className="w-3 h-3" />
+                                                                Flood Detected ({Math.round(photo.mlClassification.confidence * 100)}%)
+                                                            </Badge>
+                                                        ) : photo.mlClassification.needs_review ? (
+                                                            <Badge className="bg-yellow-500 text-white text-xs flex items-center gap-1 w-fit">
+                                                                <AlertTriangle className="w-3 h-3" />
+                                                                Needs Review
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge className="bg-orange-500 text-white text-xs flex items-center gap-1 w-fit">
+                                                                <AlertTriangle className="w-3 h-3" />
+                                                                May Not Be Flood
+                                                            </Badge>
+                                                        )
+                                                    )}
+                                                    {photo.mlFailed && !photo.mlValidating && !photo.mlClassification && (
+                                                        <Badge className="bg-gray-400 text-white text-xs flex items-center gap-1 w-fit">
+                                                            <AlertTriangle className="w-3 h-3" />
+                                                            Analysis Unavailable
                                                         </Badge>
                                                     )}
                                                     <p className="text-xs text-gray-500 mt-1">

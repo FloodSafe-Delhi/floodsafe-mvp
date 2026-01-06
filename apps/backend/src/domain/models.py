@@ -308,6 +308,12 @@ class ReportResponse(BaseModel):
     # User's vote status (populated when user is authenticated)
     user_vote: Optional[str] = None  # 'upvote', 'downvote', or None
 
+    # ML classification results (extracted from media_metadata)
+    ml_classification: Optional[str] = None  # 'flood' or 'no_flood'
+    ml_confidence: Optional[float] = None  # 0.0 to 1.0
+    ml_is_flood: Optional[bool] = None
+    ml_needs_review: Optional[bool] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 

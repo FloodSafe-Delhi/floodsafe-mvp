@@ -69,28 +69,42 @@ function FloodAtlasContent({
             setNavigationOrigin(fallbackCoords);
         };
 
-        // Try with coarse location first (faster), then retry with high accuracy if needed
-        navigator.geolocation.getCurrentPosition(
-            setLocationFromPosition,
-            (error) => {
-                if (error.code === error.TIMEOUT) {
-                    // Timeout: Retry with lower accuracy and longer timeout
-                    console.warn('Geolocation timeout, retrying with lower accuracy...');
-                    navigator.geolocation.getCurrentPosition(
-                        setLocationFromPosition,
-                        (retryError) => {
-                            console.warn('Geolocation retry failed:', retryError);
-                            applyFallback();
-                        },
-                        { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
-                    );
-                } else {
-                    console.warn('Geolocation error:', error.message);
-                    applyFallback();
-                }
-            },
-            { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
-        );
+        // Progressive retry strategy for geolocation
+        // Initial: high accuracy, 10s timeout
+        // Retry 1: lower accuracy, 20s timeout
+        // Retry 2: accept cached, 5s timeout (quick check)
+        // Fallback: use city center
+
+        const attemptGeolocation = (attemptNumber: number) => {
+            const options: PositionOptions[] = [
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },   // Attempt 1
+                { enableHighAccuracy: false, timeout: 20000, maximumAge: 120000 }, // Attempt 2
+                { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 },  // Attempt 3 (cached OK)
+            ];
+
+            const currentOptions = options[attemptNumber] || options[options.length - 1];
+
+            navigator.geolocation.getCurrentPosition(
+                setLocationFromPosition,
+                (error) => {
+                    if (error.code === error.TIMEOUT && attemptNumber < 2) {
+                        // Retry with next strategy
+                        if (attemptNumber === 0) {
+                            toast.info('Getting your location... This may take a moment.');
+                        }
+                        attemptGeolocation(attemptNumber + 1);
+                    } else {
+                        // Final failure - use fallback
+                        console.warn('Geolocation failed after retries:', error.message);
+                        toast.info('Using approximate location. Move outdoors for better accuracy.');
+                        applyFallback();
+                    }
+                },
+                currentOptions
+            );
+        };
+
+        attemptGeolocation(0);
     }, [city]);
 
     // Handle initial destination from HomeScreen (when user clicks "Alt Routes" on an alert)

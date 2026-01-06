@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+
+# Build outputs (Vercel builds on its own)
+dist
+
+# E2E test screenshot files only (NOT PWA icons)
+# Note: Do NOT use *.png as it blocks PWA icons!
+e2e-*.png
+screenshot-*.png
+hotspots-*.png
+mappicker-*.png
+mobile-*.png
+direct-*.png
+
+# Dev/test files
+*.backup
+*.log
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+nul
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Test artifacts
+coverage
+playwright-report
+
+# Mac
+.DS_Store
+
+# Local Vercel
+.vercel
+
+# Data files (fetched at build time if needed)
+data

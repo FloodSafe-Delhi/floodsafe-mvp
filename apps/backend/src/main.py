@@ -81,7 +81,7 @@ if settings.BACKEND_CORS_ORIGINS:
     )
 
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
-app.include_router(webhook.router, prefix="/api/webhooks", tags=["webhooks"])
+app.include_router(webhook.router, prefix="/api/whatsapp", tags=["whatsapp"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(sensors.router, prefix="/api/sensors", tags=["sensors"])

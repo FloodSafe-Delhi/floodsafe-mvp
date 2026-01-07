@@ -58,6 +58,101 @@ logger = logging.getLogger(__name__)
 # Session timeout (30 minutes)
 SESSION_TIMEOUT_MINUTES = 30
 
+# Rate limiting configuration
+RATE_LIMIT_MESSAGES = 10  # Max messages per window
+RATE_LIMIT_WINDOW_SECONDS = 60  # Window size in seconds
+_rate_limit_cache: dict[str, list[datetime]] = {}
+
+# Input validation patterns
+PHONE_E164_PATTERN = re.compile(r'^\+[1-9]\d{6,14}$')
+
+
+# =============================================================================
+# HEALTH CHECK & UTILITY FUNCTIONS
+# =============================================================================
+
+def check_rate_limit(phone: str) -> bool:
+    """
+    Check if phone number has exceeded rate limit.
+
+    Returns True if request is allowed, False if rate limited.
+    Uses in-memory cache (production should use Redis).
+    """
+    now = datetime.utcnow()
+    window_start = now - timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
+
+    if phone not in _rate_limit_cache:
+        _rate_limit_cache[phone] = []
+
+    # Clean old entries outside the window
+    _rate_limit_cache[phone] = [t for t in _rate_limit_cache[phone] if t > window_start]
+
+    if len(_rate_limit_cache[phone]) >= RATE_LIMIT_MESSAGES:
+        logger.warning(f"Rate limit exceeded for phone ***{phone[-4:]}")
+        return False  # Rate limited
+
+    _rate_limit_cache[phone].append(now)
+    return True
+
+
+def validate_phone_format(phone: str) -> bool:
+    """Validate phone number is in E.164 format."""
+    return bool(PHONE_E164_PATTERN.match(phone))
+
+
+def validate_coordinates(lat: float, lng: float) -> bool:
+    """Validate latitude and longitude are within valid ranges."""
+    return -90 <= lat <= 90 and -180 <= lng <= 180
+
+
+def check_ml_status() -> str:
+    """Check if ML service is enabled and configured."""
+    # ML is now embedded in backend (no separate service)
+    if not settings.ML_ENABLED:
+        return "disabled"
+    return "embedded"
+
+
+def check_db_health(db: Session) -> str:
+    """Check if database connection is healthy."""
+    from sqlalchemy import text
+    try:
+        # Simple query to verify connection
+        db.execute(text("SELECT 1"))
+        return "ok"
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        return f"error: {str(e)[:50]}"
+
+
+@router.get("/health")
+def whatsapp_health(db: Session = Depends(get_db)):
+    """
+    Health check endpoint for WhatsApp integration.
+
+    Verifies:
+    - Twilio credentials are configured
+    - Database connection works
+    - ML is enabled (embedded)
+    - Webhook URL is set
+
+    Returns JSON status for each component.
+    """
+    ml_status = check_ml_status()
+    db_status = check_db_health(db)
+
+    return {
+        "status": "healthy" if all([
+            settings.TWILIO_ACCOUNT_SID,
+            db_status == "ok"
+        ]) else "degraded",
+        "twilio_configured": bool(settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN),
+        "database": db_status,
+        "ml_service": ml_status,
+        "webhook_url": settings.TWILIO_WEBHOOK_URL or "NOT_SET",
+        "rate_limit": f"{RATE_LIMIT_MESSAGES} msgs/{RATE_LIMIT_WINDOW_SECONDS}s"
+    }
+
 
 def validate_twilio_signature(request: Request, form_data: dict) -> bool:
     """
@@ -207,7 +302,7 @@ def generate_twiml_response(message: str) -> Response:
     return Response(content=xml_content, media_type="application/xml")
 
 
-@router.post("/whatsapp")
+@router.post("")
 async def handle_whatsapp_webhook(
     request: Request,
     From: str = Form(...),
@@ -241,22 +336,58 @@ async def handle_whatsapp_webhook(
     # Parse phone number (remove "whatsapp:" prefix)
     phone = From.replace("whatsapp:", "").strip()
     has_media = MediaUrl0 is not None and MediaContentType0 and MediaContentType0.startswith("image/")
+
+    # Improved request logging (masked phone for privacy)
+    phone_masked = f"***{phone[-4:]}" if len(phone) >= 4 else "***"
+    msg_type = "button" if ButtonPayload else ("location+photo" if Latitude and has_media else
+                                                "location" if Latitude else
+                                                "photo" if has_media else "text")
     logger.info(
-        f"WhatsApp message from {phone}: Body='{Body}', "
-        f"Lat={Latitude}, Lng={Longitude}, Media={has_media}"
+        f"WhatsApp webhook: phone={phone_masked}, type={msg_type}, "
+        f"body={Body[:50] if Body else 'N/A'}"
     )
 
-    # Get or create session
-    session = get_or_create_session(db, phone)
+    # ===========================================
+    # RATE LIMITING (10 messages per minute)
+    # ===========================================
+    if not check_rate_limit(phone):
+        logger.warning(f"Rate limited: {phone_masked}")
+        return generate_twiml_response(
+            "You're sending too many messages. Please wait a minute and try again."
+        )
 
-    # Check if user has linked account
-    user = session.user_id and db.query(User).filter(User.id == session.user_id).first()
-    if not user:
-        user = find_user_by_phone(db, phone)
-        if user:
-            # Link user to session
-            session.user_id = user.id
-            db.commit()
+    # ===========================================
+    # INPUT VALIDATION
+    # ===========================================
+    # Validate coordinates if provided
+    if Latitude is not None and Longitude is not None:
+        if not validate_coordinates(Latitude, Longitude):
+            logger.warning(f"Invalid coordinates from {phone_masked}: ({Latitude}, {Longitude})")
+            return generate_twiml_response(
+                "Invalid location coordinates. Please send a valid location pin."
+            )
+
+    # ===========================================
+    # DATABASE OPERATIONS (with error handling)
+    # ===========================================
+    try:
+        # Get or create session
+        session = get_or_create_session(db, phone)
+
+        # Check if user has linked account
+        user = session.user_id and db.query(User).filter(User.id == session.user_id).first()
+        if not user:
+            user = find_user_by_phone(db, phone)
+            if user:
+                # Link user to session
+                session.user_id = user.id
+                db.commit()
+    except Exception as e:
+        logger.error(f"Database error for {phone_masked}: {e}")
+        db.rollback()
+        return generate_twiml_response(
+            "Sorry, we're experiencing technical difficulties. Please try again in a moment."
+        )
 
     # ===========================================
     # HANDLE BUTTON TAPS (Quick Reply Buttons)

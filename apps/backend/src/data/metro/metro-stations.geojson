@@ -1,0 +1,2555 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Whitefield (Kadugodi)",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7578215,
+          12.99519
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hopefarm Channasandra",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7538642,
+          12.9872074
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kadugodi Tree Park",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7465715,
+          12.9857936
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pattandur Agrahara",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7372451,
+          12.9875935
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sri Sathya Sai Hospital",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7274963,
+          12.9807354
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nallurahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7243495,
+          12.9766126
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kundalahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.715061,
+          12.9776292
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Seetharampalya",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7086129,
+          12.9813697
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hoodi",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7118453,
+          12.9891327
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Garudacharpalya",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7032966,
+          12.9935165
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Singayyanapalya",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6921457,
+          12.9966967
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Krishnarajapura",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6778421,
+          12.9998836
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Benniganahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6684788,
+          12.996496
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Baiyappanahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.652392,
+          12.9906745
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Swami Vivekananda Road",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6449072,
+          12.9859128
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Indiranagar",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6386592,
+          12.9783079
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Halasuru",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.626705,
+          12.9764915
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Trinity",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.617013,
+          12.9729953
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mahatma Gandhi Road",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6062979,
+          12.9756285
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Cubbon Park",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.597562,
+          12.9808954
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Dr. B. R. Ambedkar Station, Vidhana Soudha",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5911088,
+          12.9779727
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sir M. Visvesvaraya Stn., Central College",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5842326,
+          12.9745014
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nadaprabhu Kempegowda Station, Majestic (Purple Line)",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5728057,
+          12.9756704
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Krantivira Sangolli Rayanna Railway Station",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5653792,
+          12.9758581
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Magadi Road",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5553564,
+          12.975608
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sri Balagangadharanatha Swamiji Stn., Hosahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5456204,
+          12.974267
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Vijayanagara",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5374285,
+          12.9709391
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Attiguppe",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5335932,
+          12.9618581
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Deepanjali Nagar",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5370399,
+          12.9520466
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mysore Road",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5300896,
+          12.9466619
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pantharapalya - Nayandahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.525127,
+          12.9416608
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rajarajeshwari Nagar",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5196666,
+          12.9366362
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jnanabharathi",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5124194,
+          12.935405
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pattanagere",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4983713,
+          12.9242399
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kengeri Bus Terminal",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4878613,
+          12.9146648
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kengeri",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4765871,
+          12.9078971
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Challaghatta",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4612476,
+          12.897289
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Silk Institute",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5299083,
+          12.8616919
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Thalaghattapura",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5383625,
+          12.8714243
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Vajarahalli",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.544745,
+          12.8775389
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Doddakallasandra",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.552751,
+          12.8846862
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Konanakunte Cross",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5626569,
+          12.8889872
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Yelachenahalli",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5700982,
+          12.8960662
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jaya Prakash Nagar",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5731076,
+          12.907476
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Banashankari",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5735786,
+          12.9152242
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rashtreeya Vidyalaya Road",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5802479,
+          12.9213321
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jayanagar",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.580123,
+          12.9295065
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "South End Circle",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5800349,
+          12.9382617
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Lalbagh",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5799954,
+          12.9465339
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "National College",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5736697,
+          12.9505263
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Krishna Rajendra Market",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5746404,
+          12.960896
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Chickpete",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5745314,
+          12.9669249
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nadaprabhu Kempegowda Station, Majestic (Green Line)",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5728675,
+          12.9759557
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mantri Square Sampige Road",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5706929,
+          12.9904282
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Srirampura",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5632993,
+          12.9964948
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mahakavi Kuvempu Road",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5568746,
+          12.9984697
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rajajinagar",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5496166,
+          13.0005232
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mahalakshmi",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5487834,
+          13.0080774
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sandal Soap Factory",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5539915,
+          13.0147178
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Yeshwantpur",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5497052,
+          13.0232981
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Goraguntepalya",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5404372,
+          13.028613
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Peenya",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5331801,
+          13.0329814
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Peenya Industry",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5254867,
+          13.0362716
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jalahalli",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5197223,
+          13.0393735
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Dasarahalli",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5125345,
+          13.0432196
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nagasandra",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5001342,
+          13.0479383
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Manjunathanagara",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4944407,
+          13.0500685
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Chikkabidarakallu",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4879101,
+          13.0523412
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Madavara",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4728018,
+          13.0574004
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Challaghatta",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4612175,
+          12.8973303
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kengeri",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4765748,
+          12.9079284
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kengeri Bus Terminal",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4878484,
+          12.914711
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pattanagere",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4983378,
+          12.9242632
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jnanabharathi",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5124016,
+          12.9354476
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rajarajeshwari Nagar",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5196587,
+          12.9366736
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pantharapalya - Nayandahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5251045,
+          12.9416831
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mysore Road",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5300705,
+          12.9467026
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Deepanjali Nagar",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5369961,
+          12.9520333
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Attiguppe",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5335505,
+          12.9618745
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Vijayanagar",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5373851,
+          12.9709537
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sri Balagangadharanatha Swamiji Stn., Hosahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5456197,
+          12.9743117
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Magadi Road",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5553548,
+          12.9756527
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Krantivira Sangolli Rayanna Railway Station",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5653744,
+          12.9759026
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nadaprabhu Kempegowda Station, Majestic (Purple Line)",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5730887,
+          12.9757512
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sir M. Visvesvaraya Stn., Central College",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.584209,
+          12.9745398
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Dr. B. R. Ambedkar Station, Vidhana Soudha",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.591831,
+          12.978996
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Cubbon Park",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5975758,
+          12.9809794
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mahatma Gandhi Road",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6072648,
+          12.9754288
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Trinity",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6170235,
+          12.9730388
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Halasuru",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.626667,
+          12.9765165
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Indiranagar",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.638658,
+          12.9783526
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Swami Vivekananda Road",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6448902,
+          12.9859543
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Baiyappanahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6523733,
+          12.9907136
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Benniganahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6684581,
+          12.9965359
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Krishnarajapura",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6779104,
+          12.9999402
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Singayyanapalya",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6930464,
+          12.9964536
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Garudacharpalya",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7041125,
+          12.9933397
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hoodi",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7109265,
+          12.9885448
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Seetharampalya",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7088952,
+          12.980531
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kundalahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7160828,
+          12.9775256
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nallurahalli",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7253457,
+          12.9765754
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sri Sathya Sai Hospital",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7276627,
+          12.9817149
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Pattandur Agrahara",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7383542,
+          12.987637
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kadugodi Tree Park",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.747537,
+          12.9854806
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hopefarm Channasandra",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7539652,
+          12.9875337
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Whitefield (Kadugodi)",
+        "line": "Purple",
+        "color": "#e542de"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.7579756,
+          12.9959639
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Madavara",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4728077,
+          13.0574359
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Chikkabidarakallu",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4879224,
+          13.0523847
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Manjunathanagara",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.4944527,
+          13.0501121
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nagasandra",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5001473,
+          13.0479782
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Dasarahalli",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5125628,
+          13.0432956
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jalahalli",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5197626,
+          13.0394442
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Peenya Industry",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.525528,
+          13.0363428
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Peenya",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5332233,
+          13.0330515
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Goraguntepalya",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5411923,
+          13.0282471
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Yeshwantpur",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.549748,
+          13.0233685
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Sandal Soap Factory",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5540284,
+          13.0147177
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mahalakshmi",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5488245,
+          13.0080714
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rajajinagar",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5496996,
+          13.0005359
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mahakavi Kuvempu Road",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5568794,
+          12.9985238
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Srirampura",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5633115,
+          12.9965408
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Mantri Square Sampige Road",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5707615,
+          12.9904754
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Nadaprabhu Kempegowda Station, Majestic (Green Line)",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5730388,
+          12.9750646
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Chickpete",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5745737,
+          12.966924
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Krishna Rajendra Market",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5746822,
+          12.9608898
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "National College",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.573712,
+          12.9505258
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Lalbagh",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5800377,
+          12.9465345
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "South End Circle",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5800772,
+          12.938262
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jayanagar",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5801653,
+          12.9295069
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rashtreeya Vidyalaya Road",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5802892,
+          12.9213328
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Banashankari",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5736205,
+          12.9152186
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jaya Prakash Nagar",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5731495,
+          12.9074812
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Yelachenahalli",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.57014,
+          12.8960361
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Konanakunte Cross",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5627011,
+          12.8889432
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Doddakallasandra",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5527796,
+          12.8846245
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Vajarahalli",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5448072,
+          12.8775221
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Thalaghattapura",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.538419,
+          12.8713916
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Silk Institute",
+        "line": "Green",
+        "color": "#009933"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5299532,
+          12.8616662
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Delta Electronics Bommasandra",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6879957,
+          12.8197552
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Biocon Hebbagodi",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6812303,
+          12.8294441
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Huskur Road",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6771361,
+          12.839432
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Infosys Foundation Konappana Agrahara",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6709184,
+          12.8467985
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Electronic City",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6632379,
+          12.8567984
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Beratena Agrahara",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6575832,
+          12.8642294
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hosa Road",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6521471,
+          12.8710849
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Singasandra",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6446126,
+          12.8811794
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kudlu Gate",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6389484,
+          12.8903178
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hongasandra",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6316985,
+          12.9021241
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Bommanahalli",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6261256,
+          12.9111955
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Central Silk Board",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.620117,
+          12.9164026
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "BTM Layout",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6076327,
+          12.916573
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jayadeva Hospital",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5997303,
+          12.9167282
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Ragigudda",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5877835,
+          12.9170748
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rashtreeya Vidyalaya Road",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5800478,
+          12.92186
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Rashtreeya Vidyalaya Road",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.5800946,
+          12.9209601
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Ragigudda",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.588698,
+          12.9170892
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Jayadeva Hospital",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6004425,
+          12.9167643
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "BTM Layout",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6086222,
+          12.916598
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Central Silk Board",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6210257,
+          12.9167339
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Bommanahalli",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6267043,
+          12.910304
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hongasandra",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6322415,
+          12.9013317
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kudlu Gate",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.63947,
+          12.8895614
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Singasandra",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6451067,
+          12.8804315
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Hosa Road",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6527461,
+          12.8703997
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Beratena Agrahara",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6581956,
+          12.8635659
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Electronic City",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6637352,
+          12.8562795
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Infosys Foundation Konappana Agrahara",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6714519,
+          12.8460892
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Huskur Road",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6777338,
+          12.8387166
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Biocon Hebbagodi",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.6815497,
+          12.8285866
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Delta Electronics Bommasandra",
+        "line": "Yellow",
+        "color": "#ffff00"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          77.688657,
+          12.8190878
+        ]
+      }
+    }
+  ]
+}

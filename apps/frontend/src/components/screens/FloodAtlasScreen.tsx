@@ -165,9 +165,29 @@ function FloodAtlasContent({
                 title="Flood Atlas"
                 showControls={true}
                 showCitySelector={true}
-                navigationRoutes={navigationRoutes}
-                selectedRouteId={selectedRouteId ?? undefined}
-                navigationOrigin={navigationOrigin ?? undefined}
+                // During navigation, show live remaining route; otherwise show calculated routes
+                navigationRoutes={
+                    navState.isNavigating && navState.activeRoute && navState.remainingRouteCoordinates.length > 0
+                        ? [{
+                            id: navState.activeRoute.id,
+                            type: navState.activeRoute.type === 'fastest' ? 'fast' : navState.activeRoute.type === 'safest' ? 'safe' : 'metro',
+                            city_code: city === 'bangalore' ? 'BLR' : 'DEL',
+                            geometry: {
+                                type: 'LineString' as const,
+                                coordinates: navState.remainingRouteCoordinates
+                            },
+                            distance_meters: navState.distanceRemaining,
+                            duration_seconds: navState.etaSeconds,
+                            safety_score: 85, // Preserved from original route
+                            risk_level: 'low' as const,
+                            flood_intersections: 0
+                            // Note: instructions omitted - LiveNavigationPanel reads from navState.currentInstruction
+                        }]
+                        : navigationRoutes
+                }
+                selectedRouteId={navState.isNavigating ? navState.activeRoute?.id : (selectedRouteId ?? undefined)}
+                // Hide origin marker during navigation (user location dot shows position)
+                navigationOrigin={navState.isNavigating ? undefined : (navigationOrigin ?? undefined)}
                 navigationDestination={navigationDestination ?? undefined}
                 nearbyMetros={nearbyMetros}
                 floodZones={floodZones}

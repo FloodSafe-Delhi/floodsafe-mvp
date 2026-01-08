@@ -895,14 +895,23 @@ class RoutingService:
 
         filename = metro_files.get(city.upper(), metro_files["BLR"])
 
-        # Check if running in Docker (volume mounted at /frontend-public)
+        # Priority 1: Bundled data files (works in all deployments including Koyeb)
+        bundled_path = Path(__file__).parent.parent / "data" / "metro" / filename
+        if bundled_path.exists():
+            logger.info(f"Using bundled metro file: {bundled_path}")
+            return bundled_path
+
+        # Priority 2: Docker volume mount (local Docker development)
         docker_path = Path("/frontend-public") / filename
         if docker_path.exists():
+            logger.info(f"Using Docker-mounted metro file: {docker_path}")
             return docker_path
 
-        # Fall back to relative path for local development
+        # Priority 3: Relative path for local development without Docker
         base_path = Path(__file__).parent.parent.parent.parent.parent / "frontend" / "public"
-        return base_path / filename
+        local_path = base_path / filename
+        logger.info(f"Using local development metro file: {local_path}")
+        return local_path
 
     async def _fetch_normal_route(
         self,

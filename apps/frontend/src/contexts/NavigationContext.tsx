@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useVoiceGuidance } from './VoiceGuidanceContext';
-import { haversineDistance, isOffRoute, findNextInstruction, findNearbyHotspots } from '../lib/geo/distance';
+import { haversineDistance, isOffRoute, findNextInstruction, findNearbyHotspots, getRemainingRoute } from '../lib/geo/distance';
 import { useHotspots } from '../lib/api/hooks';
 import { useCurrentCity } from './CityContext';
 
@@ -36,6 +36,7 @@ interface NavigationState {
     isOffRoute: boolean;
     isRecalculating: boolean;
     nearbyHotspots: Array<{ id: number; name: string; fhi_level: string; fhi_color: string; distanceMeters: number }>;
+    remainingRouteCoordinates: [number, number][]; // Trimmed route for display (from current position to destination)
 }
 
 interface NavigationContextValue {
@@ -68,6 +69,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
         isOffRoute: false,
         isRecalculating: false,
         nearbyHotspots: [],
+        remainingRouteCoordinates: [],
     });
 
     const watchIdRef = useRef<number | null>(null);
@@ -84,6 +86,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
             isOffRoute: false,
             distanceRemaining: route.totalDistanceMeters,
             etaSeconds: route.totalDurationSeconds,
+            remainingRouteCoordinates: route.coordinates, // Full route at start
         }));
 
         spokenInstructionsRef.current.clear();
@@ -117,6 +120,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
             isOffRoute: false,
             isRecalculating: false,
             nearbyHotspots: [],
+            remainingRouteCoordinates: [],
         });
 
         speak('Navigation ended.', 'high');
@@ -164,6 +168,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
                     isRecalculating: false,
                     distanceRemaining: data.route.distance_meters,
                     etaSeconds: data.route.duration_seconds,
+                    remainingRouteCoordinates: data.route.coordinates, // New route from current position
                 }));
 
                 speak('Route recalculated. Follow the new route.', 'high');
@@ -242,6 +247,13 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
                         );
                     }
 
+                    // Compute remaining route for display (smooth segment interpolation)
+                    const remainingRoute = getRemainingRoute(
+                        currentPos.lat,
+                        currentPos.lng,
+                        prev.activeRoute.coordinates
+                    );
+
                     return {
                         ...prev,
                         currentPosition: currentPos,
@@ -251,6 +263,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
                         etaSeconds: Math.round(destDist / 10), // Rough estimate: 10 m/s avg speed
                         isOffRoute: offRoute,
                         nearbyHotspots,
+                        remainingRouteCoordinates: remainingRoute,
                     };
                 });
             },

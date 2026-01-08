@@ -184,3 +184,112 @@ export function findNextInstruction(
 
     return { instruction: next, distanceToNext };
 }
+
+/**
+ * Project a point onto a line segment and return the closest point on the segment.
+ * Uses vector math for accurate projection with parametric line representation.
+ *
+ * @param pointLat - Point latitude to project
+ * @param pointLng - Point longitude to project
+ * @param segStartLng - Segment start longitude
+ * @param segStartLat - Segment start latitude
+ * @param segEndLng - Segment end longitude
+ * @param segEndLat - Segment end latitude
+ * @returns Projected point [lng, lat] on the segment
+ */
+export function projectPointOntoSegment(
+    pointLat: number,
+    pointLng: number,
+    segStartLng: number,
+    segStartLat: number,
+    segEndLng: number,
+    segEndLat: number
+): [number, number] {
+    // Vector from segment start to point
+    const dx = pointLng - segStartLng;
+    const dy = pointLat - segStartLat;
+
+    // Vector from segment start to segment end
+    const segDx = segEndLng - segStartLng;
+    const segDy = segEndLat - segStartLat;
+
+    // Segment length squared (avoid sqrt for performance)
+    const segLengthSq = segDx * segDx + segDy * segDy;
+
+    if (segLengthSq === 0) {
+        // Segment is a point (start equals end)
+        return [segStartLng, segStartLat];
+    }
+
+    // Project point onto line using dot product
+    // t represents position along segment: 0 = start, 1 = end
+    let t = (dx * segDx + dy * segDy) / segLengthSq;
+
+    // Clamp t to [0, 1] to stay within segment bounds
+    t = Math.max(0, Math.min(1, t));
+
+    // Calculate projected point using parametric form: P = A + t*(B-A)
+    return [
+        segStartLng + t * segDx,
+        segStartLat + t * segDy
+    ];
+}
+
+/**
+ * Find the closest point on the route to the user's current position
+ * using line segment interpolation for smooth snapping.
+ *
+ * Returns the remaining route from the projected point to destination,
+ * prepended with the user's current position for smooth display.
+ *
+ * @param userLat - User's current latitude
+ * @param userLng - User's current longitude
+ * @param routeCoords - Full route coordinates [lng, lat][]
+ * @returns Remaining route coordinates starting from user's position
+ */
+export function getRemainingRoute(
+    userLat: number,
+    userLng: number,
+    routeCoords: [number, number][]
+): [number, number][] {
+    if (routeCoords.length === 0) return [];
+    if (routeCoords.length === 1) return [[userLng, userLat], ...routeCoords];
+
+    let closestSegmentIdx = 0;
+    let minDistance = Infinity;
+    let closestProjectedPoint: [number, number] = [userLng, userLat];
+
+    // Find the route SEGMENT closest to user (not just vertex)
+    for (let i = 0; i < routeCoords.length - 1; i++) {
+        const [startLng, startLat] = routeCoords[i];
+        const [endLng, endLat] = routeCoords[i + 1];
+
+        // Project user position onto this segment
+        const projected = projectPointOntoSegment(
+            userLat, userLng,
+            startLng, startLat,
+            endLng, endLat
+        );
+
+        // Calculate distance from user to projected point
+        const dist = haversineDistance(userLat, userLng, projected[1], projected[0]);
+
+        if (dist < minDistance) {
+            minDistance = dist;
+            closestSegmentIdx = i;
+            closestProjectedPoint = projected;
+        }
+    }
+
+    // Build remaining route:
+    // 1. User's current position (for smooth line from user marker)
+    // 2. Projected point on route segment (snap point)
+    // 3. All points from segment end to destination
+    const remainingRoute: [number, number][] = [
+        [userLng, userLat],            // Current user position
+        closestProjectedPoint,          // Smooth snap point on route
+        ...routeCoords.slice(closestSegmentIdx + 1)  // Rest of route
+    ];
+
+    return remainingRoute;
+}

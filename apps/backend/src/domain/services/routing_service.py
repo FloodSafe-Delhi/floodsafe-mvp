@@ -896,7 +896,8 @@ class RoutingService:
         filename = metro_files.get(city.upper(), metro_files["BLR"])
 
         # Priority 1: Bundled data files (works in all deployments including Koyeb)
-        bundled_path = Path(__file__).parent.parent / "data" / "metro" / filename
+        # Path: routing_service.py -> services -> domain -> src -> data/metro
+        bundled_path = Path(__file__).parent.parent.parent / "data" / "metro" / filename
         if bundled_path.exists():
             logger.info(f"Using bundled metro file: {bundled_path}")
             return bundled_path

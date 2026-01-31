@@ -204,17 +204,17 @@ class SearchService:
                     headers={"User-Agent": "FloodSafe-MVP/1.0 (https://floodsafe.app)"}
                 )
 
-                logger.warning(f"Photon HTTP {response.status_code}, body length={len(response.text)}")
+                logger.info(f"Photon HTTP {response.status_code}, body length={len(response.text)}")
 
                 if response.status_code != 200:
-                    logger.warning(f"Photon non-200: {response.text[:200]}")
+                    logger.info(f"Photon non-200: {response.text[:200]}")
                     return []
 
                 data = response.json()
 
                 # Parse GeoJSON FeatureCollection
                 if data.get("type") != "FeatureCollection":
-                    logger.warning(f"Photon unexpected type: {data.get('type')}")
+                    logger.info(f"Photon unexpected type: {data.get('type')}")
                     return []
 
                 locations = []
@@ -291,7 +291,7 @@ class SearchService:
                 return locations
 
         except Exception as e:
-            logger.warning(f"Photon search error: {e}", exc_info=True)
+            logger.info(f"Photon search error: {e}", exc_info=True)
             return []
 
     async def _search_locations(
@@ -331,14 +331,14 @@ class SearchService:
         photon_lng = longitude if longitude is not None else (city_bounds.get('min_lng', 77.1) + city_bounds.get('max_lng', 77.3)) / 2 if city_bounds else 77.2167
 
         # Try Photon first (use clean_query, NOT expanded)
-        logger.warning(f"Search: Photon query='{clean_query}' lat={photon_lat} lng={photon_lng}")
+        logger.info(f"Search: Photon query='{clean_query}' lat={photon_lat} lng={photon_lng}")
         photon_results = await self._search_photon(
             clean_query,
             lat=photon_lat,
             lng=photon_lng,
             limit=20
         )
-        logger.warning(f"Search: Photon returned {len(photon_results)} results")
+        logger.info(f"Search: Photon returned {len(photon_results)} results")
 
         # Use Nominatim as supplement if Photon returns < 3 results
         nominatim_results = []

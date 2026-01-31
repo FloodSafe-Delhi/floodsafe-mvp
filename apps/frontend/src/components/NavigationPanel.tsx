@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Navigation, MapPin, Clock, Shield, Bike, Car, Footprints, Train, Bookmark, Star, Trash2, LocateFixed, GitCompare, Loader2, Play } from 'lucide-react';
+import { Navigation, MapPin, Clock, Shield, Bike, Car, Footprints, Train, Bookmark, Star, Trash2, LocateFixed, GitCompare, Loader2, Play, MapPinned } from 'lucide-react';
 import { Sheet, SheetContent } from './ui/sheet';
 import { Button } from './ui/button';
 import SmartSearchBar from './SmartSearchBar';
+import MapPicker from './MapPicker';
 import { useEnhancedCompareRoutes, useNearbyMetros, useSavedRoutes, useCreateSavedRoute, useDeleteSavedRoute, useIncrementRouteUsage } from '../lib/api/hooks';
 import { RouteOption, MetroStation, EnhancedRouteComparisonResponse, FastestRouteOption, SafestRouteOption } from '../types';
 import { toast } from 'sonner';
@@ -57,6 +58,8 @@ export function NavigationPanel({
     const [avoidMLRisk, setAvoidMLRisk] = useState(false);
     const [comparison, setComparison] = useState<EnhancedRouteComparisonResponse | null>(null);
     const [selectedRouteType, setSelectedRouteType] = useState<'fastest' | 'metro' | 'safest' | null>(null);
+    const [showOriginPicker, setShowOriginPicker] = useState(false);
+    const [showDestPicker, setShowDestPicker] = useState(false);
 
     // Set origin from userLocation when using current location
     useEffect(() => {
@@ -126,6 +129,16 @@ export function NavigationPanel({
 
     const handleDestinationSelect = (lat: number, lng: number, name: string) => {
         setDestination({ lat, lng, name });
+    };
+
+    const handleOriginMapSelect = (location: { latitude: number; longitude: number; locationName: string }) => {
+        handleOriginSelect(location.latitude, location.longitude, location.locationName || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`);
+        setShowOriginPicker(false);
+    };
+
+    const handleDestMapSelect = (location: { latitude: number; longitude: number; locationName: string }) => {
+        handleDestinationSelect(location.latitude, location.longitude, location.locationName || `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`);
+        setShowDestPicker(false);
     };
 
     const handleFindRoutes = () => {
@@ -426,19 +439,33 @@ export function NavigationPanel({
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
                             <label className="text-sm font-medium">Starting Location</label>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleUseCurrentLocation}
-                                className={`text-xs h-7 ${useCurrentLocation ? 'text-green-600' : 'text-gray-500'}`}
-                            >
-                                <LocateFixed className="h-3 w-3 mr-1" />
-                                Use GPS
-                            </Button>
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleUseCurrentLocation}
+                                    className={`text-xs h-7 ${useCurrentLocation ? 'text-green-600' : 'text-gray-500'}`}
+                                >
+                                    <LocateFixed className="h-3 w-3 mr-1" />
+                                    GPS
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setShowOriginPicker(true)}
+                                    className="text-xs h-7 text-blue-500"
+                                >
+                                    <MapPinned className="h-3 w-3 mr-1" />
+                                    Pin on Map
+                                </Button>
+                            </div>
                         </div>
                         <SmartSearchBar
                             placeholder="Search for starting point..."
                             onLocationSelect={handleOriginSelect}
+                            cityKey={city}
+                            userLat={userLocation?.lat}
+                            userLng={userLocation?.lng}
                         />
                         {origin && (
                             <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200">
@@ -452,10 +479,24 @@ export function NavigationPanel({
 
                     {/* Destination Search */}
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Destination</label>
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium">Destination</label>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowDestPicker(true)}
+                                className="text-xs h-7 text-red-500"
+                            >
+                                <MapPinned className="h-3 w-3 mr-1" />
+                                Pin on Map
+                            </Button>
+                        </div>
                         <SmartSearchBar
                             placeholder="Search for destination..."
                             onLocationSelect={handleDestinationSelect}
+                            cityKey={city}
+                            userLat={userLocation?.lat}
+                            userLng={userLocation?.lng}
                         />
                         {destination && (
                             <div className="flex items-center gap-2 p-2 bg-red-50 rounded-lg border border-red-200">
@@ -655,6 +696,22 @@ export function NavigationPanel({
                     )}
                 </div>
             </SheetContent>
+
+            {/* Map Picker for Origin */}
+            <MapPicker
+                isOpen={showOriginPicker}
+                onClose={() => setShowOriginPicker(false)}
+                initialLocation={userLocation ? { latitude: userLocation.lat, longitude: userLocation.lng, accuracy: 10 } : null}
+                onLocationSelect={handleOriginMapSelect}
+            />
+
+            {/* Map Picker for Destination */}
+            <MapPicker
+                isOpen={showDestPicker}
+                onClose={() => setShowDestPicker(false)}
+                initialLocation={origin ? { latitude: origin.lat, longitude: origin.lng, accuracy: 10 } : null}
+                onLocationSelect={handleDestMapSelect}
+            />
         </Sheet>
     );
 }

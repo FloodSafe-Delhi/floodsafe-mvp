@@ -16,7 +16,18 @@ interface SmartSearchBarProps {
     placeholder?: string;
     className?: string;
     showTrending?: boolean;
+    /** City key for filtering location results. If not provided, searches all of India. */
+    cityKey?: 'delhi' | 'bangalore';
+    /** User's current latitude for proximity-sorted results */
+    userLat?: number;
+    /** User's current longitude for proximity-sorted results */
+    userLng?: number;
 }
+
+/** Initial number of results shown per section before "Show more" */
+const INITIAL_LOCATIONS = 8;
+const INITIAL_REPORTS = 8;
+const INITIAL_USERS = 5;
 
 /**
  * Custom hook for debouncing a value
@@ -43,20 +54,30 @@ export default function SmartSearchBar({
     onUserSelect,
     placeholder = 'Search locations, reports, or users...',
     className = '',
-    showTrending = true
+    showTrending = true,
+    cityKey,
+    userLat,
+    userLng
 }: SmartSearchBarProps) {
     const [query, setQuery] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
+    const [showAllLocations, setShowAllLocations] = useState(false);
+    const [showAllReports, setShowAllReports] = useState(false);
+    const [showAllUsers, setShowAllUsers] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Debounce the search query (30ms for fast response)
     const debouncedQuery = useDebounce(query, 30);
 
-    // Use the unified search hook
+    // Use the unified search hook with city filtering and proximity
     const { data: searchResults, isLoading, isFetching } = useUnifiedSearch({
         query: debouncedQuery,
+        city: cityKey,
+        lat: userLat,
+        lng: userLng,
+        limit: 30,
         enabled: debouncedQuery.length >= 2
     });
 
@@ -101,9 +122,12 @@ export default function SmartSearchBar({
         }
     }, [debouncedQuery]);
 
-    // Reset selected index when results change
+    // Reset selected index and collapse sections when results change
     useEffect(() => {
         setSelectedIndex(-1);
+        setShowAllLocations(false);
+        setShowAllReports(false);
+        setShowAllUsers(false);
     }, [searchResults]);
 
     // Handle keyboard navigation
@@ -241,7 +265,7 @@ export default function SmartSearchBar({
 
             {/* Dropdown Results */}
             {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-80 sm:max-h-96 flex flex-col font-sans">
+                <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-[32rem] flex flex-col font-sans">
 
                     {/* Dropdown Header with Close Button */}
                     <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
@@ -273,10 +297,13 @@ export default function SmartSearchBar({
                     {/* Locations */}
                     {showResults && deduplicatedLocations.length > 0 && (
                         <div>
-                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50">
-                                Locations
+                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50 flex items-center justify-between">
+                                <span>Locations</span>
+                                <span className="text-xs font-normal text-gray-400 normal-case">
+                                    {deduplicatedLocations.length} results
+                                </span>
                             </div>
-                            {deduplicatedLocations.map((location, index) => (
+                            {(showAllLocations ? deduplicatedLocations : deduplicatedLocations.slice(0, INITIAL_LOCATIONS)).map((location, index) => (
                                 <button
                                     key={`loc-${index}-${location.lat?.toFixed(4) || 'na'}-${location.lng?.toFixed(4) || 'na'}`}
                                     type="button"
@@ -296,17 +323,30 @@ export default function SmartSearchBar({
                                     </div>
                                 </button>
                             ))}
+                            {!showAllLocations && deduplicatedLocations.length > INITIAL_LOCATIONS && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllLocations(true)}
+                                    className="w-full px-4 py-2 text-xs text-blue-600 hover:bg-blue-50 transition-colors text-center font-medium"
+                                >
+                                    Show all {deduplicatedLocations.length} locations
+                                </button>
+                            )}
                         </div>
                     )}
 
                     {/* Reports */}
                     {showResults && searchResults.reports.length > 0 && (
                         <div>
-                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-t border-gray-100">
-                                Flood Reports
+                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                                <span>Flood Reports</span>
+                                <span className="text-xs font-normal text-gray-400 normal-case">
+                                    {searchResults.reports.length} results
+                                </span>
                             </div>
-                            {searchResults.reports.map((report, index) => {
-                                const resultIndex = deduplicatedLocations.length + index;
+                            {(showAllReports ? searchResults.reports : searchResults.reports.slice(0, INITIAL_REPORTS)).map((report, index) => {
+                                const visibleLocations = showAllLocations ? deduplicatedLocations.length : Math.min(deduplicatedLocations.length, INITIAL_LOCATIONS);
+                                const resultIndex = visibleLocations + index;
                                 return (
                                     <button
                                         key={`report-${report.id}`}
@@ -337,17 +377,31 @@ export default function SmartSearchBar({
                                     </button>
                                 );
                             })}
+                            {!showAllReports && searchResults.reports.length > INITIAL_REPORTS && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllReports(true)}
+                                    className="w-full px-4 py-2 text-xs text-orange-600 hover:bg-orange-50 transition-colors text-center font-medium"
+                                >
+                                    Show all {searchResults.reports.length} reports
+                                </button>
+                            )}
                         </div>
                     )}
 
                     {/* Users */}
                     {showResults && searchResults.users.length > 0 && (
                         <div>
-                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-t border-gray-100">
-                                Users
+                            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                                <span>Users</span>
+                                <span className="text-xs font-normal text-gray-400 normal-case">
+                                    {searchResults.users.length} results
+                                </span>
                             </div>
-                            {searchResults.users.map((user, index) => {
-                                const resultIndex = deduplicatedLocations.length + searchResults.reports.length + index;
+                            {(showAllUsers ? searchResults.users : searchResults.users.slice(0, INITIAL_USERS)).map((user, index) => {
+                                const visibleLocations = showAllLocations ? deduplicatedLocations.length : Math.min(deduplicatedLocations.length, INITIAL_LOCATIONS);
+                                const visibleReports = showAllReports ? searchResults.reports.length : Math.min(searchResults.reports.length, INITIAL_REPORTS);
+                                const resultIndex = visibleLocations + visibleReports + index;
                                 return (
                                     <button
                                         key={`user-${user.id}`}
@@ -376,6 +430,15 @@ export default function SmartSearchBar({
                                     </button>
                                 );
                             })}
+                            {!showAllUsers && searchResults.users.length > INITIAL_USERS && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllUsers(true)}
+                                    className="w-full px-4 py-2 text-xs text-purple-600 hover:bg-purple-50 transition-colors text-center font-medium"
+                                >
+                                    Show all {searchResults.users.length} users
+                                </button>
+                            )}
                         </div>
                     )}
 

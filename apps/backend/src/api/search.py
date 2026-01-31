@@ -105,7 +105,7 @@ async def unified_search(
     lat: Optional[float] = Query(None, description="Latitude for spatial search"),
     lng: Optional[float] = Query(None, description="Longitude for spatial search"),
     radius: float = Query(5000, ge=100, le=50000, description="Search radius in meters"),
-    limit: int = Query(10, ge=1, le=50, description="Max results per category"),
+    limit: int = Query(30, ge=1, le=100, description="Max results per category"),
     city: str = Query("all", description="City filter: 'delhi', 'bangalore', or 'all'"),
     db: Session = Depends(get_db)
 ):
@@ -154,7 +154,7 @@ async def unified_search(
 @router.get("/locations/", response_model=List[LocationResult])
 async def search_locations(
     q: str = Query(..., min_length=2, description="Location search query"),
-    limit: int = Query(10, ge=1, le=20, description="Max results"),
+    limit: int = Query(30, ge=1, le=50, description="Max results"),
     city: Optional[str] = Query(None, regex="^(delhi|bangalore)$", description="City filter: 'delhi' or 'bangalore'"),
     db: Session = Depends(get_db)
 ):
@@ -190,7 +190,7 @@ async def search_reports(
     lat: Optional[float] = Query(None, description="Center latitude"),
     lng: Optional[float] = Query(None, description="Center longitude"),
     radius: float = Query(5000, ge=100, le=50000, description="Radius in meters"),
-    limit: int = Query(10, ge=1, le=50, description="Max results"),
+    limit: int = Query(30, ge=1, le=100, description="Max results"),
     db: Session = Depends(get_db)
 ):
     """
@@ -221,7 +221,7 @@ async def search_reports(
 @router.get("/users/", response_model=List[UserResult])
 async def search_users(
     q: str = Query(..., min_length=2, description="Username search query"),
-    limit: int = Query(10, ge=1, le=50, description="Max results"),
+    limit: int = Query(15, ge=1, le=50, description="Max results"),
     db: Session = Depends(get_db)
 ):
     """

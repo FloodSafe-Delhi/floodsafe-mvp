@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, uploadFile } from './client';
 import { API_BASE_URL } from './config';
-import { User, GeocodingResult, DailyRoute, DailyRouteCreate, WatchArea, WatchAreaCreate, RouteCalculationRequest, RouteCalculationResponse, MetroStation, RouteOption, RouteComparisonRequest, RouteComparisonResponse, EnhancedRouteComparisonResponse, FastestRouteOption, SafestRouteOption, WatchAreaRiskAssessment } from '../../types';
+import { User, GeocodingResult, DailyRoute, DailyRouteCreate, WatchArea, WatchAreaCreate, RouteCalculationRequest, RouteCalculationResponse, MetroStation, RouteOption, RouteComparisonRequest, RouteComparisonResponse, EnhancedRouteComparisonResponse, FastestRouteOption, SafestRouteOption, WatchAreaRiskAssessment, FloodHubStatus, FloodHubGauge, FloodHubForecast } from '../../types';
 import { validateUsers, validateSensors, validateReports } from './validators';
 
 // Types
@@ -458,7 +458,7 @@ export interface UnifiedSearchOptions {
  * Uses backend /api/search/ endpoint with smart intent detection
  */
 export function useUnifiedSearch(options: UnifiedSearchOptions) {
-    const { query, type, lat, lng, radius = 5000, limit = 10, city, enabled = true } = options;
+    const { query, type, lat, lng, radius = 5000, limit = 30, city, enabled = true } = options;
 
     return useQuery({
         queryKey: ['unified-search', query, type, lat, lng, radius, limit, city],
@@ -1541,5 +1541,84 @@ export function useResendVerificationEmail() {
             // Invalidate verification status to trigger re-fetch
             queryClient.invalidateQueries({ queryKey: ['verification-status'] });
         },
+    });
+}
+
+// ============================================================================
+// GOOGLE FLOODHUB HOOKS (Flood Forecasting for Delhi Yamuna River)
+// ============================================================================
+
+/**
+ * Get overall FloodHub status for a city.
+ *
+ * Returns enabled status and severity data.
+ * - For Delhi: Returns current flood status from Google FloodHub API
+ * - For other cities: Returns "Coming soon" message
+ * - When API key not configured: Returns "Not configured" message
+ *
+ * NO SILENT FALLBACKS - errors are surfaced to frontend.
+ *
+ * @param city - City code (use 'DEL' for Delhi)
+ */
+export function useFloodHubStatus(city: string) {
+    return useQuery({
+        queryKey: ['floodhub-status', city],
+        queryFn: async (): Promise<FloodHubStatus> => {
+            const cityCode = city.toLowerCase() === 'delhi' ? 'DEL' : city.toUpperCase();
+            return fetchJson<FloodHubStatus>(`/floodhub/status?city=${cityCode}`);
+        },
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        gcTime: 10 * 60 * 1000, // 10 minutes
+        refetchOnWindowFocus: false,
+        retry: 1,
+    });
+}
+
+/**
+ * Get all Delhi Yamuna River gauges with current flood status.
+ *
+ * Returns empty array if FloodHub is disabled (no API key).
+ * Throws error (502) if API request fails - NO SILENT FALLBACK.
+ *
+ * Each gauge includes:
+ * - Location (lat/lng)
+ * - Current severity level (EXTREME, SEVERE, ABOVE_NORMAL, NO_FLOODING)
+ * - Last update time
+ */
+export function useFloodHubGauges() {
+    return useQuery({
+        queryKey: ['floodhub-gauges'],
+        queryFn: async (): Promise<FloodHubGauge[]> => {
+            return fetchJson<FloodHubGauge[]>('/floodhub/gauges');
+        },
+        staleTime: 10 * 60 * 1000, // 10 minutes (matches backend cache TTL)
+        gcTime: 20 * 60 * 1000, // 20 minutes
+        refetchOnWindowFocus: false,
+        retry: 1,
+    });
+}
+
+/**
+ * Get 7-day forecast for a specific gauge.
+ *
+ * Returns forecast time series with water levels and threshold markers.
+ * Use this when user selects a gauge to view detailed forecast chart.
+ *
+ * NO SILENT FALLBACK - returns 404 if forecast unavailable, 502 on API error.
+ *
+ * @param gaugeId - Gauge ID from useFloodHubGauges result (null to disable)
+ */
+export function useFloodHubForecast(gaugeId: string | null) {
+    return useQuery({
+        queryKey: ['floodhub-forecast', gaugeId],
+        queryFn: async (): Promise<FloodHubForecast | null> => {
+            if (!gaugeId) return null;
+            return fetchJson<FloodHubForecast>(`/floodhub/forecast/${gaugeId}`);
+        },
+        enabled: !!gaugeId,
+        staleTime: 15 * 60 * 1000, // 15 minutes (forecasts update less frequently)
+        gcTime: 30 * 60 * 1000, // 30 minutes
+        refetchOnWindowFocus: false,
+        retry: 1,
     });
 }

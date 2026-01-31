@@ -2,13 +2,14 @@
 Search Service - Unified search across locations, reports, and users.
 
 Provides intelligent search with:
-- Location geocoding (Nominatim with caching)
+- Location geocoding (Photon + Nominatim with caching)
 - Full-text search on reports
 - User search by username/display name
 - Smart query intent detection
 """
 
 import httpx
+import math
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -93,7 +94,7 @@ class SearchService:
         # Run searches based on detected intent for optimal results
         if intent == 'location' or run_locations:
             results["locations"] = await self._search_locations(
-                query, limit, city_bounds
+                query, limit, city_bounds, latitude=latitude, longitude=longitude
             )
 
         if intent == 'report' or run_reports:
@@ -151,80 +152,282 @@ class SearchService:
         # Default to mixed search
         return 'mixed'
 
+    @staticmethod
+    def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+        """Calculate distance in meters between two points."""
+        R = 6371000  # Earth radius in meters
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+    async def _search_photon(
+        self,
+        query: str,
+        lat: Optional[float],
+        lng: Optional[float],
+        limit: int = 20,
+        lang: str = "en"
+    ) -> List[Dict]:
+        """
+        Search locations using Photon geocoder API.
+
+        Args:
+            query: Search string
+            lat/lng: Optional location bias for prioritizing nearby results
+            limit: Maximum number of results
+            lang: Language code for results
+
+        Returns:
+            List of location dicts in Nominatim-compatible format
+        """
+        try:
+            params = {
+                "q": query,
+                "limit": limit,
+                "lang": lang
+            }
+
+            # Add location bias if provided
+            if lat is not None and lng is not None:
+                params["lat"] = lat
+                params["lon"] = lng
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    "https://photon.komoot.io/api/",
+                    params=params
+                )
+
+                if response.status_code != 200:
+                    return []
+
+                data = response.json()
+
+                # Parse GeoJSON FeatureCollection
+                if data.get("type") != "FeatureCollection":
+                    return []
+
+                locations = []
+                for feature in data.get("features", []):
+                    props = feature.get("properties", {})
+                    coords = feature.get("geometry", {}).get("coordinates", [])
+
+                    if len(coords) < 2:
+                        continue
+
+                    # Extract coordinates (GeoJSON is [lng, lat])
+                    result_lng, result_lat = coords[0], coords[1]
+
+                    # Build address dict (map Photon fields to Nominatim-style)
+                    address = {}
+                    if props.get("street"):
+                        address["road"] = props["street"]
+                    if props.get("housenumber"):
+                        address["house_number"] = props["housenumber"]
+                    if props.get("postcode"):
+                        address["postcode"] = props["postcode"]
+                    if props.get("city"):
+                        address["city"] = props["city"]
+                    if props.get("state"):
+                        address["state"] = props["state"]
+                    if props.get("country"):
+                        address["country"] = props["country"]
+
+                    # Use name as suburb if it's a place/locality
+                    if props.get("osm_key") == "place" and props.get("name"):
+                        address["suburb"] = props["name"]
+
+                    # Build formatted name (similar to _format_location_name)
+                    name_parts = []
+                    if props.get("name"):
+                        name_parts.append(props["name"])
+                    if props.get("street"):
+                        name_parts.append(props["street"])
+                    if props.get("city"):
+                        name_parts.append(props["city"])
+                    formatted_name = ", ".join(name_parts[:3]) if name_parts else props.get("name", "")
+
+                    # Build display name from all available address parts
+                    display_parts = [
+                        props.get("name"),
+                        props.get("street"),
+                        props.get("city"),
+                        props.get("state"),
+                        props.get("country")
+                    ]
+                    display_name = ", ".join(p for p in display_parts if p)
+
+                    # Estimate importance from OSM value (default 0.5)
+                    importance = 0.5
+                    osm_value = props.get("osm_value", "")
+                    # Higher importance for major features
+                    if osm_value in ["city", "town"]:
+                        importance = 0.9
+                    elif osm_value in ["suburb", "neighbourhood", "village"]:
+                        importance = 0.7
+                    elif osm_value in ["road", "street"]:
+                        importance = 0.6
+
+                    locations.append({
+                        "type": "location",
+                        "display_name": display_name,
+                        "lat": float(result_lat),
+                        "lng": float(result_lng),
+                        "address": address,
+                        "importance": importance,
+                        "formatted_name": formatted_name
+                    })
+
+                return locations
+
+        except Exception as e:
+            print(f"Photon search error: {e}")
+            return []
+
     async def _search_locations(
         self,
         query: str,
         limit: int,
-        city_bounds: Optional[Dict[str, float]] = None
+        city_bounds: Optional[Dict[str, float]] = None,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None
     ) -> List[Dict]:
         """
-        Search locations using Nominatim with caching.
+        Search locations using Photon + Nominatim with caching.
         Expands common abbreviations (HSR -> HSR Layout Bangalore) for better results.
+        Uses dual-source strategy: Photon for speed, Nominatim as supplement.
         """
         # Clean query of prefixes
         clean_query = re.sub(r'^(@location:|loc:)\s*', '', query, flags=re.IGNORECASE)
 
-        # Expand query with location aliases for better accuracy
+        # Expand query with location aliases for Nominatim
         # "HSR" -> "HSR Layout Bangalore", "CP" -> "Connaught Place Delhi"
         expanded_query = expand_query_with_aliases(clean_query)
 
         # Check cache using expanded query
-        cache_key = f"geo:{expanded_query.lower()}"
+        cache_key = f"photon:{clean_query.lower()}"
         if cache_key in _geocode_cache:
             cached_results, cached_time = _geocode_cache[cache_key]
             if datetime.utcnow() - cached_time < timedelta(minutes=CACHE_TTL_MINUTES):
                 # Filter by bounds if provided
                 if city_bounds:
-                    return self._filter_by_bounds(cached_results, city_bounds, limit)
+                    filtered = self._filter_by_bounds(cached_results, city_bounds, limit)
+                    return filtered
                 return cached_results[:limit]
 
-        # Query Nominatim with expanded query
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    "https://nominatim.openstreetmap.org/search",
-                    params={
-                        "q": expanded_query,  # Use expanded query for better results
-                        "format": "json",
-                        "limit": 10,  # Fetch more for filtering
-                        "countrycodes": "in",
-                        "addressdetails": 1
-                    },
-                    headers={
-                        "User-Agent": "FloodSafe-MVP/1.0 (https://floodsafe.app)"
-                    }
-                )
+        # Try Photon first (use clean_query, NOT expanded)
+        photon_results = await self._search_photon(
+            clean_query,
+            lat=latitude,
+            lng=longitude,
+            limit=20
+        )
 
-                if response.status_code == 200:
-                    results = response.json()
+        # Use Nominatim as supplement if Photon returns < 3 results
+        nominatim_results = []
+        if len(photon_results) < 3:
+            try:
+                # Build params with optional viewbox for city filtering
+                params = {
+                    "q": expanded_query,  # Use expanded query for better results
+                    "format": "json",
+                    "limit": 30,  # Increased from 10 to 30
+                    "countrycodes": "in",
+                    "addressdetails": 1,
+                    "dedupe": 0  # Disable deduplication for more results
+                }
 
-                    # Transform to our format
-                    locations = [
-                        {
-                            "type": "location",
-                            "display_name": r.get("display_name", ""),
-                            "lat": float(r.get("lat", 0)),
-                            "lng": float(r.get("lon", 0)),
-                            "address": r.get("address", {}),
-                            "importance": float(r.get("importance", 0)),
-                            "formatted_name": self._format_location_name(r)
+                # Add viewbox parameter when city_bounds provided (pre-filter at API level)
+                # viewbox format: left,top,right,bottom (minLng,maxLat,maxLng,minLat)
+                if city_bounds:
+                    params["viewbox"] = (
+                        f"{city_bounds['min_lng']},{city_bounds['max_lat']},"
+                        f"{city_bounds['max_lng']},{city_bounds['min_lat']}"
+                    )
+                    params["bounded"] = 1  # Strictly limit results to viewbox
+
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(
+                        "https://nominatim.openstreetmap.org/search",
+                        params=params,
+                        headers={
+                            "User-Agent": "FloodSafe-MVP/1.0 (https://floodsafe.app)"
                         }
-                        for r in results
-                    ]
+                    )
 
-                    # Cache results
-                    _geocode_cache[cache_key] = (locations, datetime.utcnow())
+                    if response.status_code == 200:
+                        results = response.json()
 
-                    # Filter by bounds if provided
-                    if city_bounds:
-                        return self._filter_by_bounds(locations, city_bounds, limit)
+                        # If bounded search returns < 5 results, retry without bounds
+                        if city_bounds and len(results) < 5:
+                            params_unbounded = {k: v for k, v in params.items() if k not in ["bounded", "viewbox"]}
+                            response_unbounded = await client.get(
+                                "https://nominatim.openstreetmap.org/search",
+                                params=params_unbounded,
+                                headers={
+                                    "User-Agent": "FloodSafe-MVP/1.0 (https://floodsafe.app)"
+                                }
+                            )
+                            if response_unbounded.status_code == 200:
+                                results = response_unbounded.json()
 
-                    return locations[:limit]
+                        # Transform to our format
+                        nominatim_results = [
+                            {
+                                "type": "location",
+                                "display_name": r.get("display_name", ""),
+                                "lat": float(r.get("lat", 0)),
+                                "lng": float(r.get("lon", 0)),
+                                "address": r.get("address", {}),
+                                "importance": float(r.get("importance", 0)),
+                                "formatted_name": self._format_location_name(r)
+                            }
+                            for r in results
+                        ]
 
-        except Exception as e:
-            print(f"Nominatim search error: {e}")
+            except Exception as e:
+                print(f"Nominatim search error: {e}")
 
-        return []
+        # Merge Photon + Nominatim results, deduplicate by coordinates
+        merged_results = photon_results.copy()
+
+        for nom_result in nominatim_results:
+            # Check if this coordinate already exists in merged results
+            is_duplicate = False
+            for existing in merged_results:
+                if (abs(existing["lat"] - nom_result["lat"]) < 0.0005 and
+                    abs(existing["lng"] - nom_result["lng"]) < 0.0005):
+                    is_duplicate = True
+                    break
+
+            if not is_duplicate:
+                merged_results.append(nom_result)
+
+        # Sort results
+        if latitude is not None and longitude is not None:
+            # Sort by distance to user
+            for result in merged_results:
+                result["_distance"] = self._haversine_distance(
+                    latitude, longitude, result["lat"], result["lng"]
+                )
+            merged_results.sort(key=lambda x: x.get("_distance", float('inf')))
+            # Remove temporary distance field
+            for result in merged_results:
+                result.pop("_distance", None)
+        else:
+            # Sort by importance descending
+            merged_results.sort(key=lambda x: x.get("importance", 0), reverse=True)
+
+        # Cache merged results
+        _geocode_cache[cache_key] = (merged_results, datetime.utcnow())
+
+        # Filter by bounds if provided
+        if city_bounds:
+            return self._filter_by_bounds(merged_results, city_bounds, limit)
+
+        return merged_results[:limit]
 
     def _format_location_name(self, result: Dict) -> str:
         """Format location name for display."""

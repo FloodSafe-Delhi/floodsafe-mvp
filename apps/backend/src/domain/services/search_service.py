@@ -197,19 +197,24 @@ class SearchService:
                 params["lat"] = lat
                 params["lon"] = lng
 
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=8.0) as client:
                 response = await client.get(
-                    "https://photon.komoot.io/api/",
-                    params=params
+                    "https://photon.komoot.io/api",
+                    params=params,
+                    headers={"User-Agent": "FloodSafe-MVP/1.0 (https://floodsafe.app)"}
                 )
 
+                logger.warning(f"Photon HTTP {response.status_code}, body length={len(response.text)}")
+
                 if response.status_code != 200:
+                    logger.warning(f"Photon non-200: {response.text[:200]}")
                     return []
 
                 data = response.json()
 
                 # Parse GeoJSON FeatureCollection
                 if data.get("type") != "FeatureCollection":
+                    logger.warning(f"Photon unexpected type: {data.get('type')}")
                     return []
 
                 locations = []

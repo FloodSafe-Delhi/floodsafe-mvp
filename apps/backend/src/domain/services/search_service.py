@@ -10,8 +10,11 @@ Provides intelligent search with:
 
 import httpx
 import math
+import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func, text
 from geoalchemy2.functions import ST_X, ST_Y, ST_DWithin, ST_MakePoint, ST_SetSRID
@@ -283,7 +286,7 @@ class SearchService:
                 return locations
 
         except Exception as e:
-            print(f"Photon search error: {e}")
+            logger.error(f"Photon search error: {e}", exc_info=True)
             return []
 
     async def _search_locations(
@@ -318,12 +321,14 @@ class SearchService:
                 return cached_results[:limit]
 
         # Try Photon first (use clean_query, NOT expanded)
+        logger.info(f"Search: Photon query='{clean_query}' lat={latitude} lng={longitude}")
         photon_results = await self._search_photon(
             clean_query,
             lat=latitude,
             lng=longitude,
             limit=20
         )
+        logger.info(f"Search: Photon returned {len(photon_results)} results")
 
         # Use Nominatim as supplement if Photon returns < 3 results
         nominatim_results = []

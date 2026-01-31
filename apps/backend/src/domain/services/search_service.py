@@ -286,7 +286,7 @@ class SearchService:
                 return locations
 
         except Exception as e:
-            logger.error(f"Photon search error: {e}", exc_info=True)
+            logger.warning(f"Photon search error: {e}", exc_info=True)
             return []
 
     async def _search_locations(
@@ -321,14 +321,14 @@ class SearchService:
                 return cached_results[:limit]
 
         # Try Photon first (use clean_query, NOT expanded)
-        logger.info(f"Search: Photon query='{clean_query}' lat={latitude} lng={longitude}")
+        logger.warning(f"Search: Photon query='{clean_query}' lat={latitude} lng={longitude}")
         photon_results = await self._search_photon(
             clean_query,
             lat=latitude,
             lng=longitude,
             limit=20
         )
-        logger.info(f"Search: Photon returned {len(photon_results)} results")
+        logger.warning(f"Search: Photon returned {len(photon_results)} results")
 
         # Use Nominatim as supplement if Photon returns < 3 results
         nominatim_results = []

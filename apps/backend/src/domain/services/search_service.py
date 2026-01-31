@@ -320,12 +320,17 @@ class SearchService:
                     return filtered
                 return cached_results[:limit]
 
+        # Default to Delhi center when no user location provided (Photon needs geo-bias
+        # from non-Indian servers like Koyeb Frankfurt to return Indian results)
+        photon_lat = latitude if latitude is not None else (city_bounds.get('min_lat', 28.6) + city_bounds.get('max_lat', 28.7)) / 2 if city_bounds else 28.6315
+        photon_lng = longitude if longitude is not None else (city_bounds.get('min_lng', 77.1) + city_bounds.get('max_lng', 77.3)) / 2 if city_bounds else 77.2167
+
         # Try Photon first (use clean_query, NOT expanded)
-        logger.warning(f"Search: Photon query='{clean_query}' lat={latitude} lng={longitude}")
+        logger.warning(f"Search: Photon query='{clean_query}' lat={photon_lat} lng={photon_lng}")
         photon_results = await self._search_photon(
             clean_query,
-            lat=latitude,
-            lng=longitude,
+            lat=photon_lat,
+            lng=photon_lng,
             limit=20
         )
         logger.warning(f"Search: Photon returned {len(photon_results)} results")

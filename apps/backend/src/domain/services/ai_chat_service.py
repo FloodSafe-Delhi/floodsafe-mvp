@@ -123,7 +123,11 @@ CRITICAL RULES — DATA INTEGRITY:
 
 CONTEXT INJECTION:
 If live data appears in the CURRENT SESSION block, use it to give specific, grounded answers. Mention the actual numbers naturally.
-If NO live data appears, be helpful but honest — do NOT make up numbers to fill the gap."""
+If NO live data appears, be helpful but honest — do NOT make up numbers to fill the gap.
+
+WATCH AREA SUGGESTION:
+When you provide location-specific risk data, briefly suggest: "To get ongoing alerts for this area, you can add it as a Watch Point on the Flood Atlas map."
+Keep this suggestion short and natural — one sentence at the end, not every message. Only suggest it once per conversation."""
 
 # ---------------------------------------------------------------------------
 # Main chat function
@@ -247,6 +251,7 @@ def _build_system_prompt(city: str, context: Optional[Dict[str, Any]]) -> str:
 
     prompt += f"\n\nCURRENT SESSION:\nCity: {city_display}"
 
+    has_live_data = False
     if context:
         fhi = context.get("fhi_score")
         risk = context.get("risk_level")
@@ -258,12 +263,17 @@ def _build_system_prompt(city: str, context: Optional[Dict[str, Any]]) -> str:
             prompt += f"\nUser location: {location}"
         if fhi is not None:
             prompt += f"\nCurrent FHI: {fhi:.2f}/1.00"
+            has_live_data = True
         if risk:
             prompt += f"\nRisk level: {risk.upper()}"
+            has_live_data = True
         if rain is not None and rain > 0:
             prompt += f"\nRecent rainfall: {rain:.1f}mm"
         if alerts is not None and alerts > 0:
             prompt += f"\nActive official alerts: {alerts}"
+
+    if not has_live_data:
+        prompt += "\nLive FHI data: NOT AVAILABLE (user location unknown — do NOT cite any FHI numbers or risk levels)"
 
     return prompt
 

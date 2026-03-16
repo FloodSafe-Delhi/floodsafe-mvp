@@ -2134,6 +2134,18 @@ export function useWatchHotspot() {
   });
 }
 
+export function useDeletePin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (pinId: string) =>
+      fetchJson(`/watch-areas/${pinId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-pins'] });
+      queryClient.invalidateQueries({ queryKey: ['watchAreas'] });
+    },
+  });
+}
+
 export function usePinFhiHistory(pinId: string) {
   return useQuery({
     queryKey: ['pin-fhi-history', pinId],

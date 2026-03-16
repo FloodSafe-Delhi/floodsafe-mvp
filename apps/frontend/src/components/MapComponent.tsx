@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMap } from '../lib/map/useMap';
-import { useSensors, useReports, useHistoricalFloods, useHotspots, useFloodHubGauges, useFloodHubInundation, useCreatePin, useWatchHotspot, Sensor, Report } from '../lib/api/hooks';
+import { useSensors, useReports, useHistoricalFloods, useHotspots, useFloodHubGauges, useFloodHubInundation, useCreatePin, useWatchHotspot, useMyPins, useDeletePin, Sensor, Report } from '../lib/api/hooks';
 // usePredictionGrid removed - ensemble models not trained (see line 95-105)
 import maplibregl from 'maplibre-gl';
 import { Button } from './ui/button';
@@ -48,6 +48,7 @@ interface LayersVisibility {
     floodhub: boolean;     // Google Flood Forecasting inundation extent
     pubCCTVs: boolean;     // PUB flood monitoring CCTVs (Singapore only)
     aliasLabels: boolean;  // Area/neighborhood name labels on map
+    personalPins: boolean; // User's personal watch point pins
 }
 
 interface MapBounds {
@@ -94,6 +95,7 @@ export default function MapComponent({
         floodhub: true,     // Google Flood Forecasting inundation ON by default
         pubCCTVs: false,    // PUB CCTVs OFF by default
         aliasLabels: true,  // Area labels ON by default (subtle, like Google Maps)
+        personalPins: true, // User's personal watch pins ON by default
     });
     const [_mapBounds, setMapBounds] = useState<MapBounds | null>(null);
     const [showHistoricalPanel, setShowHistoricalPanel] = useState(false);
@@ -114,8 +116,12 @@ export default function MapComponent({
     }, [pinDropActive]);
     const [pinConfirm, setPinConfirm] = useState<{ lat: number; lng: number } | null>(null);
     const [pinName, setPinName] = useState('');
+    const [pinAlertRadius, setPinAlertRadius] = useState<string>('my_street');
+    const [pinVisibility, setPinVisibility] = useState<string>('private');
     const createPinMutation = useCreatePin();
     const watchHotspotMutation = useWatchHotspot();
+    const deletePinMutation = useDeletePin();
+    const { data: myPins } = useMyPins();
     // NOTE: Groundsource clusters are admin-only data (overlap_status, confidence, etc.)
     // They belong in AdminDashboard Discovery tab, NOT the public map.
     // Removed from public map — see commit history for the layer code if needed later.
@@ -159,6 +165,19 @@ export default function MapComponent({
         window.addEventListener('watch-hotspot', handler);
         return () => window.removeEventListener('watch-hotspot', handler);
     }, [city, watchHotspotMutation]);
+
+    // Delete personal pin via CustomEvent from popup
+    useEffect(() => {
+        const handler = (e: Event) => {
+            const { id } = (e as CustomEvent).detail;
+            deletePinMutation.mutate(id, {
+                onSuccess: () => toast.success('Pin removed'),
+                onError: (err: Error) => toast.error('Failed to remove pin', { description: err.message }),
+            });
+        };
+        window.addEventListener('delete-pin', handler);
+        return () => window.removeEventListener('delete-pin', handler);
+    }, [deletePinMutation]);
 
     // ML predictions (ensemble) are Delhi-only and currently disabled
     const isDelhiCity = city === 'delhi';
@@ -1599,6 +1618,149 @@ export default function MapComponent({
 
     }, [map, isLoaded, mapStyleReady, sensors, reports, hotspotsData, hasHotspots, navigationRoutes, selectedRouteId, navigationOrigin, navigationDestination, nearbyMetros, floodZones, onMetroClick, inundationGeoJSON, activeInundationGauge, isPinDropMode]);
 
+    // ── Personal pins layer ──────────────────────────────────────────────
+    // Renders user's personal watch point pins as map markers with FHI coloring.
+    // Distinct from hotspot circles: smaller radius, thick white stroke, different glow.
+    useEffect(() => {
+        if (!map || !isLoaded || !user || !myPins) return;
+
+        const getPinFhiColor = (level?: string): string => {
+            switch (level?.toLowerCase()) {
+                case 'low': return '#22c55e';
+                case 'moderate': return '#eab308';
+                case 'high': return '#f97316';
+                case 'extreme': return '#ef4444';
+                default: return '#9ca3af';
+            }
+        };
+
+        try {
+            const pinsGeoJSON: GeoJSON.FeatureCollection = {
+                type: 'FeatureCollection',
+                features: myPins.map(pin => ({
+                    type: 'Feature' as const,
+                    geometry: { type: 'Point' as const, coordinates: [pin.longitude, pin.latitude] },
+                    properties: {
+                        id: pin.id,
+                        name: pin.name,
+                        fhi_score: pin.fhi_score ?? null,
+                        fhi_level: pin.fhi_level ?? null,
+                        historical_episode_count: pin.historical_episode_count ?? 0,
+                        visibility: pin.visibility,
+                        road_name: pin.road_name ?? null,
+                        snap_distance_m: pin.snap_distance_m ?? null,
+                        fhi_color: getPinFhiColor(pin.fhi_level),
+                    },
+                })),
+            };
+
+            const existingSource = map.getSource('personal-pins') as maplibregl.GeoJSONSource;
+            if (existingSource) {
+                existingSource.setData(pinsGeoJSON);
+            } else {
+                map.addSource('personal-pins', { type: 'geojson', data: pinsGeoJSON });
+
+                // Layer 1: Outer glow ring
+                map.addLayer({
+                    id: 'personal-pins-ring',
+                    type: 'circle',
+                    source: 'personal-pins',
+                    paint: {
+                        'circle-radius': 14,
+                        'circle-color': ['coalesce', ['get', 'fhi_color'], '#9ca3af'],
+                        'circle-opacity': 0.2,
+                        'circle-blur': 0.5,
+                    },
+                });
+
+                // Layer 2: Pin marker — smaller + thick white stroke to distinguish from hotspots
+                map.addLayer({
+                    id: 'personal-pins-marker',
+                    type: 'circle',
+                    source: 'personal-pins',
+                    paint: {
+                        'circle-radius': 6,
+                        'circle-color': ['coalesce', ['get', 'fhi_color'], '#9ca3af'],
+                        'circle-stroke-width': 2.5,
+                        'circle-stroke-color': '#ffffff',
+                        'circle-opacity': 0.95,
+                    },
+                });
+
+                // Layer 3: Labels below markers
+                map.addLayer({
+                    id: 'personal-pins-labels',
+                    type: 'symbol',
+                    source: 'personal-pins',
+                    layout: {
+                        'text-field': ['get', 'name'],
+                        'text-font': ['Open Sans Regular'],
+                        'text-size': 10,
+                        'text-offset': [0, 1.8],
+                        'text-anchor': 'top',
+                        'text-max-width': 8,
+                        'text-allow-overlap': false,
+                        'visibility': 'visible',
+                    },
+                    paint: {
+                        'text-color': '#6b21a8',
+                        'text-halo-color': '#ffffff',
+                        'text-halo-width': 1.5,
+                    },
+                });
+
+                // Click handler: show FHI popup
+                map.on('click', 'personal-pins-marker', (e: maplibregl.MapMouseEvent) => {
+                    if (isPinDropMode) return; // Don't open popup during pin-drop mode
+                    const features = map.queryRenderedFeatures(e.point, { layers: ['personal-pins-marker'] });
+                    if (!features || features.length === 0) return;
+
+                    const feature = features[0];
+                    const coordinates = (feature.geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+                    const props = feature.properties;
+
+                    const fhiColor = props?.fhi_color || '#9ca3af';
+                    const fhiLevel = props?.fhi_level || 'Unknown';
+                    const fhiScore = props?.fhi_score != null ? (Number(props.fhi_score) * 100).toFixed(0) + '%' : 'N/A';
+                    const episodes = props?.historical_episode_count || 0;
+                    const roadInfo = props?.road_name && props.road_name !== 'null' ? `Near ${props.road_name}` : 'No mapped road nearby';
+                    const pinId = props?.id || '';
+
+                    const popupHTML = `
+                        <div class="p-3 min-w-[200px]" style="max-width: min(320px, calc(100vw - 32px))">
+                            <div class="font-semibold text-sm" style="color: #111827">${props?.name || 'Watch Point'}</div>
+                            <div style="font-size: 11px; color: #6b7280; margin-top: 2px">${roadInfo}</div>
+                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 8px">
+                                <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${fhiColor}"></span>
+                                <span style="font-size: 12px; font-weight: 500; color: #374151">${fhiLevel} Risk (FHI: ${fhiScore})</span>
+                            </div>
+                            <div style="font-size: 11px; color: #6b7280; margin-top: 6px">
+                                ${Number(episodes) > 0 ? `${episodes} historical flood${Number(episodes) !== 1 ? 's' : ''} nearby` : 'No historical flood data nearby'}
+                            </div>
+                            <div style="display: flex; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #f3f4f6">
+                                <button onclick="window.dispatchEvent(new CustomEvent('delete-pin', { detail: { id: '${pinId}' } })); this.disabled=true; this.textContent='Removing...';"
+                                    style="flex: 1; text-align: center; font-size: 11px; font-weight: 500; color: #dc2626; background: #fef2f2; border: none; border-radius: 8px; padding: 6px 12px; cursor: pointer; transition: background 0.15s">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    new maplibregl.Popup({ offset: 15, maxWidth: 'min(340px, calc(100vw - 32px))' })
+                        .setLngLat(coordinates)
+                        .setHTML(popupHTML)
+                        .addTo(map);
+                });
+
+                // Hover cursor
+                map.on('mouseenter', 'personal-pins-marker', () => { map.getCanvas().style.cursor = 'pointer'; });
+                map.on('mouseleave', 'personal-pins-marker', () => { map.getCanvas().style.cursor = ''; });
+            }
+        } catch (error) {
+            console.error('Error rendering personal pins layer:', error);
+        }
+    }, [map, isLoaded, myPins, user, isPinDropMode]);
+
     // Auto-zoom map to fit routes when calculated
     useEffect(() => {
         if (!map || !isLoaded || !navigationRoutes || navigationRoutes.length === 0) return;
@@ -1726,6 +1888,17 @@ export default function MapComponent({
             map.setLayoutProperty('hotspots-labels', 'visibility', layersVisible.hotspots ? 'visible' : 'none');
         }
 
+        // Toggle personal pins layers
+        if (map.getLayer('personal-pins-ring')) {
+            map.setLayoutProperty('personal-pins-ring', 'visibility', layersVisible.personalPins ? 'visible' : 'none');
+        }
+        if (map.getLayer('personal-pins-marker')) {
+            map.setLayoutProperty('personal-pins-marker', 'visibility', layersVisible.personalPins ? 'visible' : 'none');
+        }
+        if (map.getLayer('personal-pins-labels')) {
+            map.setLayoutProperty('personal-pins-labels', 'visibility', layersVisible.personalPins ? 'visible' : 'none');
+        }
+
         // Toggle FloodHub inundation layers
         if (map.getLayer('floodhub-inundation-fill')) {
             map.setLayoutProperty('floodhub-inundation-fill', 'visibility', layersVisible.floodhub ? 'visible' : 'none');
@@ -1775,12 +1948,26 @@ export default function MapComponent({
     const handleConfirmPin = () => {
         if (!pinConfirm || !pinName.trim()) return;
         createPinMutation.mutate(
-            { latitude: pinConfirm.lat, longitude: pinConfirm.lng, name: pinName.trim(), city },
             {
-                onSuccess: () => {
-                    toast.success('Pin created', { description: pinName.trim(), duration: 3000 });
+                latitude: pinConfirm.lat,
+                longitude: pinConfirm.lng,
+                name: pinName.trim(),
+                city,
+                alert_radius_label: pinAlertRadius,
+                visibility: pinVisibility,
+            },
+            {
+                onSuccess: (data) => {
+                    const level = data.fhi_level || 'unknown';
+                    const episodes = data.historical_episode_count || 0;
+                    toast.success('Watch point saved', {
+                        description: `${level} risk • ${episodes} historical floods nearby`,
+                        duration: 4000,
+                    });
                     setPinConfirm(null);
                     setPinName('');
+                    setPinAlertRadius('my_street');
+                    setPinVisibility('private');
                     setIsPinDropMode(false);
                 },
                 onError: (err: Error) => toast.error('Failed to create pin', { description: err.message }),
@@ -1791,6 +1978,8 @@ export default function MapComponent({
     const handleCancelPin = () => {
         setPinConfirm(null);
         setPinName('');
+        setPinAlertRadius('my_street');
+        setPinVisibility('private');
         setIsPinDropMode(false);
     };
 
@@ -2079,26 +2268,78 @@ export default function MapComponent({
                 </div>
             )}
 
-            {/* Pin-drop confirmation dialog */}
+            {/* Pin-drop confirmation modal — rich version per spec (Phase 4a) */}
             {pinConfirm && (
                 <div
-                    className="absolute left-1/2 pointer-events-auto bg-card border border-border rounded-xl shadow-2xl p-4 w-72 max-w-[calc(100vw-32px)]"
-                    style={{ top: '72px', transform: 'translateX(-50%)', zIndex: 120 }}
+                    className="absolute left-1/2 pointer-events-auto bg-card border border-border rounded-xl shadow-2xl p-4 w-80 max-w-[calc(100vw-32px)] overflow-y-auto"
+                    style={{ top: '72px', transform: 'translateX(-50%)', zIndex: 120, maxHeight: 'calc(100vh - 160px)' }}
                 >
-                    <h3 className="font-semibold text-sm text-foreground mb-1">Place pin here?</h3>
+                    <h3 className="font-semibold text-sm text-foreground mb-0.5 flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        New Watch Point
+                    </h3>
                     <p className="text-xs text-muted-foreground mb-3">
                         {pinConfirm.lat.toFixed(5)}, {pinConfirm.lng.toFixed(5)}
                     </p>
+
+                    {/* Name input */}
                     <input
                         type="text"
                         placeholder="Pin name (e.g. Home, Office)"
                         value={pinName}
                         onChange={e => setPinName(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleConfirmPin()}
-                        className="w-full border border-border rounded-lg px-3 py-1.5 text-sm bg-background text-foreground mb-3 focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground mb-3 focus:outline-none focus:ring-2 focus:ring-primary"
                         autoFocus
                         maxLength={60}
                     />
+
+                    {/* Alert radius selector */}
+                    <div className="mb-3">
+                        <p className="text-xs font-medium text-foreground mb-1.5">Alert me for:</p>
+                        <div className="space-y-1">
+                            {([
+                                { value: 'just_this_spot', label: 'Just this spot (100m)' },
+                                { value: 'my_street', label: 'My street (300m)' },
+                                { value: 'my_neighborhood', label: 'My neighborhood (500m)' },
+                                { value: 'wider_area', label: 'Wider area (1km)' },
+                            ] as const).map(opt => (
+                                <label key={opt.value} className="flex items-center gap-2 cursor-pointer py-1 px-2 rounded-md hover:bg-muted/50 transition-colors">
+                                    <input
+                                        type="radio"
+                                        name="pin-radius"
+                                        value={opt.value}
+                                        checked={pinAlertRadius === opt.value}
+                                        onChange={() => setPinAlertRadius(opt.value)}
+                                        className="accent-primary w-3.5 h-3.5"
+                                    />
+                                    <span className="text-xs text-foreground">{opt.label}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Visibility toggle */}
+                    <div className="mb-3">
+                        <p className="text-xs font-medium text-foreground mb-1.5">Visibility:</p>
+                        <div className="flex gap-2">
+                            <label className={`flex-1 flex items-center justify-center gap-1.5 cursor-pointer py-1.5 px-2 rounded-lg border text-xs transition-colors ${pinVisibility === 'private' ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border text-muted-foreground hover:bg-muted/50'}`}>
+                                <input type="radio" name="pin-visibility" value="private" checked={pinVisibility === 'private'} onChange={() => setPinVisibility('private')} className="sr-only" />
+                                Private
+                            </label>
+                            <label className={`flex-1 flex items-center justify-center gap-1.5 cursor-pointer py-1.5 px-2 rounded-lg border text-xs transition-colors ${pinVisibility === 'circles' ? 'bg-primary/10 border-primary text-primary font-medium' : 'border-border text-muted-foreground hover:bg-muted/50'}`}>
+                                <input type="radio" name="pin-visibility" value="circles" checked={pinVisibility === 'circles'} onChange={() => setPinVisibility('circles')} className="sr-only" />
+                                Share with Circles
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Info note */}
+                    <p className="text-[10px] text-muted-foreground mb-3 leading-relaxed">
+                        Flood risk score will be calculated after saving.
+                    </p>
+
+                    {/* Action buttons */}
                     <div className="flex gap-2">
                         <Button
                             size="sm"
@@ -2106,12 +2347,12 @@ export default function MapComponent({
                             disabled={!pinName.trim() || createPinMutation.isPending}
                             className="flex-1"
                         >
-                            {createPinMutation.isPending ? 'Saving...' : 'Save pin'}
+                            {createPinMutation.isPending ? 'Saving...' : 'Save Watch Point'}
                         </Button>
                         <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setPinConfirm(null)}
+                            onClick={() => { setPinConfirm(null); setPinAlertRadius('my_street'); setPinVisibility('private'); }}
                             className="flex-1"
                         >
                             Cancel
@@ -2189,6 +2430,16 @@ export default function MapComponent({
                         >
                             <Droplets className="h-4 w-4" />
                         </Button>
+                        {user && (
+                            <Button
+                                size="icon"
+                                onClick={() => setLayersVisible(prev => ({ ...prev, personalPins: !prev.personalPins }))}
+                                className={`${layersVisible.personalPins ? '!bg-rose-500 hover:!bg-rose-600 !text-white' : '!bg-card/90 backdrop-blur-sm !text-foreground border border-border hover:!bg-secondary'} shadow-lg rounded-full w-9 h-9 md:w-10 md:h-10 !opacity-100`}
+                                title="Toggle your watch points"
+                            >
+                                <MapPin className="h-4 w-4" />
+                            </Button>
+                        )}
                         <Button
                             size="icon"
                             onClick={() => setLayersVisible(prev => ({ ...prev, floodhub: !prev.floodhub }))}

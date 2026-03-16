@@ -944,6 +944,7 @@ export interface PersonalPin {
   visibility: string;
   alert_radius_label?: string;
   snap_distance_m?: number;
+  road_name?: string;
   created_at: string;
 }
 

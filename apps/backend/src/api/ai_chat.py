@@ -7,6 +7,7 @@ Endpoints:
   GET  /api/ai/alert-summary/{alert_id} — plain-language explanation of an external alert
 """
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from uuid import UUID
@@ -97,6 +98,7 @@ async def ai_chat(
     # Build context from real data — server-side FHI enrichment
     context: Dict[str, Any] = data.context or {}
     if data.latitude is not None and data.longitude is not None:
+        # Path 1: Frontend provided explicit coordinates (GPS/geolocation)
         try:
             fhi_score, risk_level = await _get_fhi_for_point(
                 data.latitude, data.longitude, data.city
@@ -107,6 +109,23 @@ async def ai_chat(
                 context["risk_level"] = risk_level
         except Exception as e:
             logger.warning("FHI enrichment failed for chat: %s", e)
+    else:
+        # Path 2: No coordinates — try to extract and geocode a location from the message
+        location_name = _extract_location_hint(data.message)
+        if location_name:
+            try:
+                lat, lng, geocoded = await _geocode_address(location_name, data.city)
+                if geocoded and lat is not None and lng is not None:
+                    fhi_score, risk_level = await _get_fhi_for_point(lat, lng, data.city)
+                    if fhi_score is not None:
+                        context["fhi_score"] = fhi_score
+                    if risk_level:
+                        context["risk_level"] = risk_level
+                    context["location_name"] = location_name
+                    context["geocoded_lat"] = lat
+                    context["geocoded_lng"] = lng
+            except Exception as e:
+                logger.warning("Chat geocode enrichment failed for '%s': %s", location_name, e)
 
     # Count active alerts for the city
     alert_count = _count_active_alerts(db, data.city)
@@ -303,6 +322,36 @@ async def simulate_scenario(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _extract_location_hint(message: str) -> Optional[str]:
+    """
+    Extract a place name from a chat message for geocoding.
+
+    Uses simple pattern matching — looks for "at/in/near/around <Place>"
+    or "risk of/for <Place>" patterns. Returns None if no location found.
+    Not a full NLP pipeline — just catches the common phrasings.
+    """
+    # Patterns: "at Minto Bridge", "in Connaught Place", "near ITO", "around Rajghat"
+    # Also: "risk of Lalbagh", "risk at Nehru Park", "flooding in Dwarka"
+    patterns = [
+        r'(?:at|in|near|around|for)\s+([A-Z][A-Za-z\s\-\.]+?)(?:\?|$|,|\.|!)',
+        r'(?:risk|flood|safe|danger)\s+(?:at|in|of|for|near)\s+([A-Z][A-Za-z\s\-\.]+?)(?:\?|$|,|\.|!)',
+        r'(?:how\s+is|what\s+about|check)\s+([A-Z][A-Za-z\s\-\.]+?)(?:\?|$|,|\.|!)',
+        r'[Ii]s\s+([A-Z][A-Za-z\s\-\.]+?)\s+(?:safe|flooded|risky|at risk|dangerous)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, message)
+        if match:
+            candidate = match.group(1).strip()
+            # Filter out common false positives (generic words that start with caps at sentence start)
+            skip = {'I', 'My', 'The', 'This', 'It', 'Is', 'What', 'How', 'Can', 'Do', 'Will',
+                    'Are', 'Should', 'Where', 'When', 'Please', 'Help', 'Tell', 'Me', 'We'}
+            if candidate.split()[0] in skip:
+                continue
+            if len(candidate) >= 3:
+                return candidate
+    return None
 
 
 def _count_active_alerts(db: Session, city: str) -> int:

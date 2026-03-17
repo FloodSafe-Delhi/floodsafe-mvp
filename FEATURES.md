@@ -700,7 +700,7 @@ missing: Depth estimation, fake detection, real storage
 ```yaml
 files:
   Backend:
-  - apps/backend/src/api/admin.py - Admin API (645 lines, 19 endpoints)
+  - apps/backend/src/api/admin.py - Admin API (645+ lines, 32 endpoints)
   - apps/backend/src/domain/services/admin_service.py - AdminService (887 lines)
 
   Frontend:
@@ -752,6 +752,26 @@ endpoints:
   - GET /api/admin/invites - List invites
   - DELETE /api/admin/invites/{id} - Revoke invite
   - GET /api/admin/audit-log - Audit trail
+
+  Community Intelligence (4):
+  - GET /api/admin/clusters - List Groundsource clusters
+  - PATCH /api/admin/clusters/{id}/review - Review/approve cluster
+  - GET /api/admin/pins - List all personal pins
+  - PATCH /api/admin/pins/{id}/relocate - Relocate a personal pin
+
+  Analytics (3):
+  - GET /api/admin/analytics/reports - Report analytics
+  - GET /api/admin/analytics/users - User analytics
+  - GET /api/admin/analytics/cities - Per-city analytics
+
+  Additional User Management (3):
+  - POST /api/admin/users/{id}/ban - Ban user
+  - POST /api/admin/users/{id}/unban - Unban user
+  - DELETE /api/admin/users/{id} - Delete user account
+  - POST /api/admin/reports - Admin-created report
+  - DELETE /api/admin/reports/{id} - Delete report
+  - GET /api/admin/ambassadors - Ambassador candidates
+  - POST /api/admin/users/{id}/ambassador - Promote to ambassador
 
 migration: python -m apps.backend.src.scripts.migrate_add_admin_invites
 ```
@@ -1163,6 +1183,66 @@ endpoints:
     response: { id, status, total, sent, failed, results: [...] }
 ```
 
+### @community-intelligence (COMPLETE)
+```yaml
+files:
+  Backend:
+  - apps/backend/src/api/ai_chat.py - AI chat endpoint (Groq-backed, 5-turn memory, 30min TTL)
+  - apps/backend/src/api/watch_areas.py - Personal pin CRUD (POST /api/watch-areas/pin, GET /api/watch-areas/my-pins, DELETE)
+  - apps/backend/src/domain/services/watch_area_service.py - Pin FHI compute, historical episode count
+  - apps/backend/src/api/admin.py - Cluster management endpoints
+  - apps/backend/scripts/cluster_personal_pins.py - DBSCAN clustering on personal pins (Phase 6 planned)
+
+  Frontend:
+  - apps/frontend/src/components/MapComponent.tsx - Personal pin MapLibre layer (FHI-colored markers, popups)
+  - apps/frontend/src/lib/api/hooks.ts - useMyPins, useDeletePin hooks
+  - apps/frontend/src/lib/api/admin-hooks.ts - Admin cluster management hooks
+  - apps/frontend/src/types.ts - PersonalPin type (includes road_name field)
+
+phases:
+  Phase 1 (Groundsource data): COMPLETE
+    - 3,217 historical flood episodes + 125 clusters loaded into production DB
+    - Cross-validation FAILED (polygon centroids vs point landmarks mismatch)
+    - Data serves as informational context only
+  Phase 2 (AI chat): COMPLETE
+    - POST /api/ai/chat — Groq Llama-backed, 5-turn memory, 30min TTL, 200 conversation LRU
+    - Auto-geocode location mentions: extracts place name via regex, geocodes via Nominatim,
+      computes real FHI from weather APIs, injects into system prompt
+    - Explicit "NOT AVAILABLE" signal when no FHI data — prevents LLM hallucination
+    - Watch area suggestion after providing location-specific risk data
+    - Friendly language: "historical floods nearby" instead of "flood events within 2km"
+  Phase 3 (Admin cluster management): COMPLETE
+    - Admin endpoints for managing Groundsource clusters
+    - Historical floods API serving episode data
+    - Scenario simulation ("What If?" in chatbot)
+  Phase 4a (Personal pins frontend): COMPLETE
+    - Rich pin creation modal with 4 alert radius options:
+      Just this spot (100m), My street (300m), My neighborhood (500m), Wider area (1km)
+    - Visibility toggle: Private / Share with Circles
+    - Pins rendered on Flood Atlas as MapLibre layer with FHI-colored markers
+      (green/amber/orange/red), thick white stroke to distinguish from hotspot circles, purple labels
+    - Pin click popup: FHI score %, risk level, historical floods count within 2km,
+      road info, Remove button
+    - Rose/pink layer toggle button in map sidebar controls (authenticated users only)
+    - useDeletePin() hook with dual cache invalidation (my-pins + watchAreas)
+    - PersonalPin type includes road_name field
+    - 25-pin limit per user
+  Phase 5 (Hotspot watch button + scenario simulation): COMPLETE
+    - Watch hotspot button in Flood Atlas
+    - Scenario simulation ("What If?" in chatbot)
+    - Pin-drop button in Flood Atlas + hotspot historical evidence link
+  Phase 6 (Community flywheel): PLANNED
+    - DBSCAN clustering on personal pins (script exists: cluster_personal_pins.py)
+    - Admin promotion flow: cluster → candidate hotspot
+    - WhatsApp location message → auto-create personal pin
+
+endpoints:
+  - POST /api/ai/chat - AI chat with location-aware FHI enrichment
+  - POST /api/watch-areas/pin - Create personal pin (auth required, 25-pin limit)
+  - GET /api/watch-areas/my-pins - List user's personal pins with FHI + historical count
+  - DELETE /api/watch-areas/pin/{id} - Remove personal pin
+```
+
 ### @edge-ai (PLANNED)
 ```yaml
 concept: ANN model running on IoT devices (ESP32/Raspberry Pi)
@@ -1228,7 +1308,7 @@ next: Install native Capacitor plugins for push, geolocation, camera
 | Admin Login | `AdminLoginScreen.tsx` | ✅ |
 | Admin Register | `AdminRegisterScreen.tsx` | ✅ |
 
-## Frontend Contexts (8)
+## Frontend Contexts (9)
 
 | Context | File | Purpose |
 |---------|------|---------|
@@ -1240,8 +1320,9 @@ next: Install native Capacitor plugins for push, geolocation, camera
 | Voice Guidance | `VoiceGuidanceContext.tsx` | TTS for navigation + onboarding bot |
 | Install Prompt | `InstallPromptContext.tsx` | PWA install state |
 | Onboarding Bot | `OnboardingBotContext.tsx` | Tour state, language, phase management |
+| Language | `LanguageContext.tsx` | i18n language preference |
 
-## Backend API Files (30)
+## Backend API Files (30 routers + deps.py)
 
 | File | Domain | Endpoints |
 |------|--------|-----------|
@@ -1273,10 +1354,11 @@ next: Install native Capacitor plugins for push, geolocation, camera
 | `whatsapp_meta.py` | @whatsapp | WhatsApp webhook (Meta Cloud API) |
 | `push.py` | @push-notifications | FCM token registration |
 | `sos.py` | @sos | Emergency SOS fanout |
-| `admin.py` | @admin | Admin dashboard, invites, role management (19 endpoints) |
+| `admin.py` | @admin | Admin dashboard, invites, role management, analytics, cluster review, pin management (32 endpoints) |
+| `ai_chat.py` | @community-intelligence | AI chat with location-aware FHI enrichment |
 | `deps.py` | (shared) | auth dependencies, role checks |
 
-## Database Models (27)
+## Database Models (31)
 
 | Model | Table | Key Fields |
 |-------|-------|------------|
@@ -1307,6 +1389,11 @@ next: Install native Capacitor plugins for push, geolocation, camera
 | CityRoad | city_roads | city, osm_id, name, road_type, is_underpass, is_bridge, geometry (PostGIS) |
 | CandidateHotspot | candidate_hotspots | city, road_segment_id, centroid, report_count, status, reviewed_by |
 | Invite | invites | code, role, created_by, max_uses, used_count, expires_at |
+| PasswordResetToken | password_reset_tokens | user_id, token, expires_at |
+| AdminAuditLog | admin_audit_logs | admin_id, action, target_type, target_id, details |
+| HistoricalFloodEpisode | historical_flood_episodes | location (PostGIS), city, date, source, severity |
+| GroundsourceCluster | groundsource_clusters | city, centroid, polygon (PostGIS), episode_count, radius_km |
+| WatchAreaFhiHistory | watch_area_fhi_history | watch_area_id, fhi_score, recorded_at |
 
 ---
 
@@ -1377,6 +1464,10 @@ Reports, map, alerts, onboarding, auth (Email/Google/Phone), E2E tests, communit
 - [x] City-specific flood hotspot profiling pipeline (GEE + SAR, 6 phases — in progress)
 - [x] Community learning loop: report enrichment + road snapping + hotspot discovery
 - [x] Fuzzy search with backend difflib matching + instant hotspot cache results
+- [x] Community Intelligence: AI chat (Groq Llama, location-aware FHI, auto-geocode, 5-turn memory)
+- [x] Personal pins on Flood Atlas (FHI-colored markers, pin creation modal, 4 radius options, 25-pin limit)
+- [x] Scenario simulation + watch hotspot button + pin-drop in Flood Atlas
+- [ ] Community flywheel: DBSCAN pin clustering → admin promotion → candidate hotspots (PLANNED)
 - [ ] Multi-language UI (Hindi, Kannada, Indonesian — onboarding bot covers 3 languages, WhatsApp Hindi done)
 - [ ] GNN for flood propagation modeling
 - [ ] Real photo storage (S3/Blob, currently mocked)

@@ -70,7 +70,7 @@ FloodSafe is designed to be deployed in any flood-prone city. Here's what each c
 
 | Feature | Description |
 |---------|-------------|
-| **Flood Hazard Index (FHI)** | Custom 6-component heuristic: `0.35×P + 0.18×I + 0.12×S + 0.12×A + 0.08×R + 0.15×E`. Weights empirically tuned (not from published research). 14-day exponential decay for soil saturation, ceiling-only P95 percentiles from ERA5, per-city calibration with rain-gate thresholds. Weather sources: Open-Meteo, NEA (Singapore, 5-min), OpenWeatherMap (Yogyakarta) |
+| **Flood Hazard Index (FHI)** | Custom 6-component heuristic: `0.35×P + 0.18×I + 0.12×S + 0.12×A + 0.08×R + 0.15×E`. Weights empirically tuned (not from published research) with domain rationale: **P (35%)** dominates because urban flooding requires rain (normalized to IMD's 64.4mm "heavy rain" threshold); **I (18%)** captures burst intensity that overwhelms drainage (50mm/hr extreme reference); **E (15%)** is the key static factor — lower elevation accumulates water (city-specific bounds); **S (12%)** uses a hybrid saturation proxy (70% antecedent rainfall + 30% soil moisture, since LSM isn't validated for urban impervious surfaces); **A (12%)** tracks 3-day accumulation (150mm saturation benchmark); **R (8%)** is smallest — low pressure indicates storm systems but is an indirect signal. Rain-gate per city caps FHI at 0.15 when below threshold (no flood without rain). Per-city calibration for elevation, wet season, urban density. Weather sources: Open-Meteo, NEA (Singapore, 5-min), OpenWeatherMap (Yogyakarta) |
 | **Waterlogging Hotspots** | 499 locations across 5 cities with live FHI color coding (green/yellow/orange/red). Per-city data: 90 Delhi (MCD + OSM), 200 Bangalore (BBMP), 76 Yogyakarta (BPBD + PetaBencana), 60 Singapore (PUB), 73 Indore (IMC + news) |
 | **Google Flood Forecasting** | Live API — Delhi Yamuna gauge (CWC_015-UYDDEL), 28-hour forecasts, 3-tier thresholds (warning/danger/extreme), inundation maps (KML→GeoJSON), significant events with population impact. 5 endpoints |
 | **Flood Photo Classifier** | MobileNet v1 via TFLite, threshold 0.3 (safety-first to minimize false negatives) |
@@ -288,9 +288,25 @@ User sends photo + location via WhatsApp
 
 ### Active Models
 
+**FHI Calculator** — Real-time waterlogging risk score (0–1). Custom 6-component heuristic, checked against 20 documented Delhi flood events for calibration (not independent scientific validation).
+
+| Component | Weight | What It Measures | Data Source | Reference Threshold | Why This Weight |
+|-----------|:------:|-----------------|-------------|--------------------:|----------------|
+| **P** Precipitation | 35% | 3-day weighted rainfall (50% day1 + 30% day2 + 20% day3) | Open-Meteo `precipitation_sum`, NEA (Singapore), OWM (Yogyakarta) | 64.4mm (IMD "heavy rain") | Dominant driver — no rain, no urban flood |
+| **I** Intensity | 18% | Maximum hourly precipitation rate | Open-Meteo `precipitation` hourly, NEA 5-min extrapolated | 50mm/hr (extreme) | Burst intensity overwhelms drainage capacity |
+| **E** Elevation | 15% | Inverted elevation within city bounds (lower = higher risk) | Open-Meteo Elevation API (SRTM 30m) | City-specific (e.g., Delhi 190–320m) | Key static factor — water accumulates at low points. Dampened per city (E_dampen: 0.3–1.0) |
+| **S** Saturation | 12% | Hybrid: 70% antecedent rainfall proxy + 30% soil moisture | Open-Meteo `soil_moisture_0_to_7cm` + calculated antecedent | 50mm/3d (drainage saturation), 0.5 m³/m³ (soil) | Urban impervious surfaces (75% Delhi) make LSM unreliable alone — hybrid approach captures both drainage and regional moisture |
+| **A** Antecedent | 12% | 3-day cumulative rainfall accumulation | Open-Meteo `precipitation_sum` × correction factor | 150mm/3d (very high) | Multi-day accumulation saturates ground and drainage systems |
+| **R** Runoff | 8% | Low atmospheric pressure = storm systems = higher runoff | Open-Meteo `surface_pressure` | 1013 hPa standard, 30 hPa deviation significant | Smallest weight — indirect signal of storm conditions |
+
+**Additional FHI mechanisms:**
+- **Rain-gate**: Per-city threshold (5–20mm) — below = FHI capped at 0.15. Physically justified: low pressure and elevation don't cause flooding without rain
+- **Probability correction**: 1.0–2.25× multiplier based on `precipitation_probability_max` from forecast API (compensates for systematic under-prediction)
+- **Wet season amplification**: 1.2× during monsoon/wet months (city-specific: Delhi Jun–Sep, Singapore Nov–Feb)
+- **Urban terrain correction**: 1.5–2.25× based on impervious surface fraction
+
 | Model | Purpose | Details |
 |-------|---------|---------|
-| **FHI Calculator** | Real-time waterlogging risk (0–1) | Custom heuristic with 6 weather components. Per-city calibration for elevation, wet season, urban density, and rain-gate threshold. Checked against 20 documented Delhi flood events for calibration (not independent scientific validation) |
 | **MobileNet Classifier** | Flood photo detection | TFLite, 224×224 input, threshold 0.3. Safety-first: minimizes false negatives |
 
 ### AI Services

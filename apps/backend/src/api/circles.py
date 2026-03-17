@@ -110,6 +110,78 @@ async def list_my_circles(
     return [_circle_to_response(r["circle"], r["member_count"]) for r in results]
 
 
+# ═══════════════════════════════════════════════════════════════
+# Circle Alerts — MUST be registered BEFORE /{circle_id} routes
+# to prevent FastAPI from matching "alerts" as a UUID parameter.
+# See CLAUDE.md gotcha: "static routes MUST be registered before
+# dynamic /{param} routes"
+# ═══════════════════════════════════════════════════════════════
+
+
+@router.get("/alerts", response_model=list[CircleAlertResponse])
+async def get_circle_alerts(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get circle alerts for all circles the user is a member of."""
+    service = CircleService(db)
+    results = service.get_user_circle_alerts(user.id, limit=limit, offset=offset)
+    return [
+        {
+            "id": r["alert"].id,
+            "circle_id": r["alert"].circle_id,
+            "circle_name": r["circle_name"],
+            "report_id": r["alert"].report_id,
+            "reporter_name": r["reporter_name"],
+            "message": r["alert"].message,
+            "is_read": r["alert"].is_read,
+            "notification_sent": r["alert"].notification_sent,
+            "notification_channel": r["alert"].notification_channel,
+            "created_at": r["alert"].created_at,
+        }
+        for r in results
+    ]
+
+
+@router.patch("/alerts/{alert_id}/read")
+async def mark_alert_read(
+    alert_id: UUID,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark a single circle alert as read."""
+    try:
+        service = CircleService(db)
+        service.mark_alert_read(alert_id, user.id)
+        return {"message": "Alert marked as read"}
+    except CircleServiceError as e:
+        _handle_service_error(e)
+
+
+@router.patch("/alerts/read-all")
+async def mark_all_alerts_read(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark all unread circle alerts as read."""
+    service = CircleService(db)
+    count = service.mark_all_alerts_read(user.id)
+    return {"message": f"Marked {count} alerts as read", "count": count}
+
+
+@router.get("/alerts/unread-count")
+async def get_unread_count(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get count of unread circle alerts."""
+    service = CircleService(db)
+    count = service.get_unread_alert_count(user.id)
+    return {"count": count}
+
+
 @router.get("/{circle_id}", response_model=SafetyCircleDetailResponse)
 async def get_circle_detail(
     circle_id: UUID,
@@ -303,70 +375,3 @@ async def leave_circle(
         _handle_service_error(e)
 
 
-# ═══════════════════════════════════════════════════════════════
-# Circle Alerts
-# ═══════════════════════════════════════════════════════════════
-
-
-@router.get("/alerts", response_model=list[CircleAlertResponse])
-async def get_circle_alerts(
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get circle alerts for all circles the user is a member of."""
-    service = CircleService(db)
-    results = service.get_user_circle_alerts(user.id, limit=limit, offset=offset)
-    return [
-        {
-            "id": r["alert"].id,
-            "circle_id": r["alert"].circle_id,
-            "circle_name": r["circle_name"],
-            "report_id": r["alert"].report_id,
-            "reporter_name": r["reporter_name"],
-            "message": r["alert"].message,
-            "is_read": r["alert"].is_read,
-            "notification_sent": r["alert"].notification_sent,
-            "notification_channel": r["alert"].notification_channel,
-            "created_at": r["alert"].created_at,
-        }
-        for r in results
-    ]
-
-
-@router.patch("/alerts/{alert_id}/read")
-async def mark_alert_read(
-    alert_id: UUID,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Mark a single circle alert as read."""
-    try:
-        service = CircleService(db)
-        service.mark_alert_read(alert_id, user.id)
-        return {"message": "Alert marked as read"}
-    except CircleServiceError as e:
-        _handle_service_error(e)
-
-
-@router.patch("/alerts/read-all")
-async def mark_all_alerts_read(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Mark all unread circle alerts as read."""
-    service = CircleService(db)
-    count = service.mark_all_alerts_read(user.id)
-    return {"message": f"Marked {count} alerts as read", "count": count}
-
-
-@router.get("/alerts/unread-count")
-async def get_unread_count(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get count of unread circle alerts."""
-    service = CircleService(db)
-    count = service.get_unread_alert_count(user.id)
-    return {"count": count}

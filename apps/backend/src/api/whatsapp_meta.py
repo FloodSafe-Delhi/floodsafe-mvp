@@ -51,7 +51,8 @@ from ..domain.services.whatsapp.meta_client import (
 from ..domain.services.whatsapp import (
     TemplateKey, get_message, get_user_language,
     process_sos_with_photo, get_severity_from_classification,
-    handle_risk_command, handle_warnings_command, handle_my_areas_command,
+    handle_risk_command, handle_risk_command_with_pin_offer,
+    handle_warnings_command, handle_my_areas_command,
     handle_help_command, handle_status_command, get_readable_location,
 )
 from ..domain.services.wit_service import classify_message, get_mapped_command, is_wit_enabled
@@ -593,7 +594,20 @@ async def _handle_text(
         last_loc = None
         if session.data and "last_lat" in session.data:
             last_loc = (session.data["last_lat"], session.data["last_lng"])
-        response = await handle_risk_command(db, user, place_name, last_loc, city=city)
+        response, offer_pin, pin_data = await handle_risk_command_with_pin_offer(
+            db, user, place_name, last_loc, city=city
+        )
+        # Offer to save as personal watch area for non-hotspot locations (linked users only)
+        if offer_pin and pin_data and session and session.user_id:
+            location_display = pin_data.get("name", "this location")
+            offer_text = get_message(TemplateKey.PIN_OFFER, language, location=location_display)
+            response = response + "\n\n" + offer_text
+            session.state = "awaiting_pin_confirm"
+            session_data = dict(session.data or {})
+            session_data["pending_pin"] = pin_data
+            session.data = session_data
+            session.updated_at = datetime.utcnow()
+            db.commit()
         if not await meta_send_text(phone, response):
             logger.error(f"SEND FAILED risk result to ***{phone[-4:]}")
         return

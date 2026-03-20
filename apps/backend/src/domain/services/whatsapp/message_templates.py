@@ -49,6 +49,9 @@ class TemplateKey:
     CIRCLE_INVALID_CODE = "CIRCLE_INVALID_CODE"
     CIRCLE_INVITE_SHARE = "CIRCLE_INVITE_SHARE"
     CIRCLE_NOT_LINKED = "CIRCLE_NOT_LINKED"
+    PIN_OFFER = "PIN_OFFER"
+    PIN_SAVED = "PIN_SAVED"
+    PIN_SAVE_FAILED = "PIN_SAVE_FAILED"
 
 
 TEMPLATES = {
@@ -901,6 +904,48 @@ Reply LINK to connect your FloodSafe account.""",
         "id": """Hubungkan akun Anda terlebih dahulu untuk mengelola lingkaran.
 
 Balas LINK untuk menghubungkan akun FloodSafe Anda."""
+    },
+
+    TemplateKey.PIN_OFFER: {
+        "en": """Would you like to save {location} as a personal watch area?
+
+Reply YES to save — I'll alert you when flooding is reported nearby.""",
+
+        "hi": """क्या आप {location} को अपने watch area में सहेजना चाहते हैं?
+
+YES भेजें — पास में बाढ़ की रिपोर्ट होने पर आपको अलर्ट मिलेगा।""",
+
+        "id": """Apakah Anda ingin menyimpan {location} sebagai area pantauan pribadi?
+
+Balas YA untuk menyimpan — saya akan memberitahu Anda saat banjir dilaporkan di dekatnya."""
+    },
+
+    TemplateKey.PIN_SAVED: {
+        "en": """Saved! You're now watching: {name}{fhi_display}
+
+View on floodsafe.live/map""",
+
+        "hi": """सहेजा गया! अब आप देख रहे हैं: {name}{fhi_display}
+
+floodsafe.live/map पर देखें""",
+
+        "id": """Tersimpan! Anda kini memantau: {name}{fhi_display}
+
+Lihat di floodsafe.live/map"""
+    },
+
+    TemplateKey.PIN_SAVE_FAILED: {
+        "en": """{reason}
+
+You can still view this location on floodsafe.live/map""",
+
+        "hi": """{reason}
+
+आप इस स्थान को floodsafe.live/map पर देख सकते हैं""",
+
+        "id": """{reason}
+
+Anda masih bisa melihat lokasi ini di floodsafe.live/map"""
     },
 }
 

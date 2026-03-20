@@ -17,6 +17,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -27,7 +28,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 
 from ..infrastructure.database import get_db
-from ..infrastructure.models import User, WhatsAppSession
+from ..infrastructure.models import User, WhatsAppSession, WhatsAppLoginChallenge
 from ..core.config import settings
 from ..core.phone_utils import normalize_phone
 from ..domain.services.whatsapp.meta_client import (
@@ -57,6 +58,42 @@ from ..domain.services.wit_service import classify_message, get_mapped_command, 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Login code pattern — matches "LOGIN-XXXXXX" (case-insensitive, 6 alphanumeric chars)
+LOGIN_PATTERN = re.compile(r'^LOGIN-([A-Z0-9]{6})$', re.IGNORECASE)
+
+
+async def _try_handle_login_code(db: Session, phone: str, text: str) -> Optional[str]:
+    """Check if incoming WhatsApp message is a login code. Returns response text or None."""
+    match = LOGIN_PATTERN.match(text.strip())
+    if not match:
+        return None
+
+    code = match.group(1).upper()
+    normalized = normalize_phone(phone)
+
+    challenge = db.query(WhatsAppLoginChallenge).filter(
+        WhatsAppLoginChallenge.phone == normalized,
+        WhatsAppLoginChallenge.code == code,
+        WhatsAppLoginChallenge.verified == False,
+        WhatsAppLoginChallenge.expires_at > datetime.utcnow(),
+    ).first()
+
+    if not challenge:
+        return "Invalid or expired login code. Please try again on the website."
+
+    # Verify phone ownership — create or find user
+    from ..domain.services.auth_service import AuthService
+    auth_service = AuthService()
+    user = auth_service.get_or_create_phone_user(phone=normalized, db=db)
+
+    challenge.verified = True
+    challenge.verified_at = datetime.utcnow()
+    challenge.user_id = user.id
+    db.commit()
+
+    return "Login verified! You can return to your browser now."
+
 
 # Session timeout (30 minutes)
 SESSION_TIMEOUT_MINUTES = 30
@@ -466,6 +503,12 @@ async def _handle_text(
 ):
     """Handle text message — Wit.ai NLU + keyword fallback."""
     text_lower = text.lower()
+
+    # Check for login code FIRST (before session state or command routing)
+    login_response = await _try_handle_login_code(db, phone, text)
+    if login_response:
+        await meta_send_text(phone, login_response)
+        return
 
     # Handle session states (onboarding flow)
     if session.state == "awaiting_choice":

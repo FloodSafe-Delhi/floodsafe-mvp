@@ -61,6 +61,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
     const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
     const [localError, setLocalError] = useState<string | null>(null);
+    const [lockedUntil, setLockedUntil] = useState<Date | null>(null);
+    const [lockoutMinutes, setLockoutMinutes] = useState(0);
     const [scriptStatus, setScriptStatus] = useState<'loading' | 'ready' | 'error'>('loading');
     const googleButtonRef = useRef<HTMLDivElement>(null);
     const initAttempted = useRef(false);
@@ -233,8 +235,18 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             if (isSignUp) { await registerWithEmail(email, password); }
             else { await loginWithEmail(email, password); }
             onLoginSuccess?.();
-        } catch (err) {
-            if (err instanceof Error) setLocalError(err.message);
+        } catch (err: unknown) {
+            if (err instanceof Error) {
+                try {
+                    const parsed = JSON.parse(err.message);
+                    if (parsed.locked_until) {
+                        setLockedUntil(new Date(parsed.locked_until));
+                        setLockoutMinutes(parsed.remaining_minutes || 15);
+                        return;
+                    }
+                } catch { /* not JSON — fall through to regular error */ }
+                setLocalError(err.message);
+            }
         }
     };
 
@@ -356,6 +368,14 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                                 <p className="text-muted-foreground text-sm mb-6">
                                     {isSignUp ? t(language, 'login.subheading.create') : t(language, 'login.subheading.signin')}
                                 </p>
+
+                                {/* Lockout Banner */}
+                                {lockedUntil && new Date() < lockedUntil && (
+                                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-center">
+                                        <p className="text-red-700 font-medium text-sm">Account locked</p>
+                                        <p className="text-red-600 text-xs">Try again in {lockoutMinutes} minute(s)</p>
+                                    </div>
+                                )}
 
                                 {/* Error */}
                                 {displayError && (

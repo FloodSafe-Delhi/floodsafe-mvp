@@ -353,7 +353,11 @@ class AuthService:
             remaining = (user.locked_until - datetime.utcnow()).seconds // 60 + 1
             raise HTTPException(
                 status_code=403,
-                detail=f"Account temporarily locked due to too many failed attempts. Try again in {remaining} minute(s)."
+                detail={
+                    "message": f"Account temporarily locked. Try again in {remaining} minute(s).",
+                    "locked_until": user.locked_until.isoformat() + "Z",
+                    "remaining_minutes": remaining,
+                }
             )
 
         # Verify password

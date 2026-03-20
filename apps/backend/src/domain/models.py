@@ -219,7 +219,7 @@ class UserResponse(BaseModel):
     """Response DTO for user data (excludes sensitive fields)"""
     id: UUID
     username: str
-    email: str
+    email: Optional[str] = None
     role: str
     created_at: datetime
     points: int

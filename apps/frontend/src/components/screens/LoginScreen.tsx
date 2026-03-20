@@ -10,7 +10,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage, type AppLanguage } from '../../contexts/LanguageContext';
 import { t } from '../../lib/onboarding-bot/translations';
 import { cn } from '../../lib/utils';
-import { AlertCircle, Loader2, Shield, Phone, ArrowRight, ArrowLeft, Check, Eye, EyeOff, Globe } from 'lucide-react';
+import { AlertCircle, Loader2, Shield, Phone, ArrowRight, ArrowLeft, Eye, EyeOff, Globe } from 'lucide-react';
+import { API_BASE_URL } from '../../lib/api/config';
+import { TokenStorage } from '../../lib/auth/token-storage';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
@@ -73,9 +75,13 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     const [phoneNumber, setPhoneNumber] = useState('');
     const [countryCode, setCountryCode] = useState('+91');
     const [otpStep, setOtpStep] = useState(false);
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
-    const [countdown, setCountdown] = useState(0);
-    const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+    // WhatsApp login state
+    const [loginCode, setLoginCode] = useState('');
+    const [sessionId, setSessionId] = useState('');
+    const [waLink, setWaLink] = useState<string | null>(null);
+    const [expiresAt, setExpiresAt] = useState<Date | null>(null);
+    const [isPhoneLoading, setIsPhoneLoading] = useState(false);
 
     useEffect(() => {
         clearError();
@@ -185,12 +191,37 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }
     }, [authMethod, scriptStatus, handleGoogleCallback]);
 
+    // ── WhatsApp login polling ──
     useEffect(() => {
-        if (countdown > 0) {
-            const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [countdown]);
+        if (!sessionId || !otpStep) return;
+
+        const interval = setInterval(async () => {
+            try {
+                const response = await fetch(
+                    `${API_BASE_URL}/auth/whatsapp-login/status?session_id=${sessionId}`
+                );
+                const data = await response.json();
+
+                if (data.status === 'verified' && data.access_token) {
+                    clearInterval(interval);
+                    TokenStorage.setTokens(data.access_token, data.refresh_token);
+                    window.location.href = '/app';
+                } else if (data.status === 'expired') {
+                    clearInterval(interval);
+                    setLocalError('Verification timed out. Please try again.');
+                    setOtpStep(false);
+                    setLoginCode('');
+                    setSessionId('');
+                    setWaLink(null);
+                    setExpiresAt(null);
+                }
+            } catch {
+                // Network error — keep polling
+            }
+        }, 2000);
+
+        return () => clearInterval(interval);
+    }, [sessionId, otpStep]);
 
     // ── Form handlers ──
     const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -207,37 +238,38 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         }
     };
 
-    const handlePhoneSubmit = (e: React.FormEvent) => {
+    const handlePhoneSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (phoneNumber.length >= 10) {
+        if (phoneNumber.length < 8) return;
+        setLocalError(null);
+        setIsPhoneLoading(true);
+        try {
+            const countryMap: Record<string, string> = { '+91': 'IN', '+62': 'ID', '+65': 'SG' };
+            const response = await fetch(`${API_BASE_URL}/auth/whatsapp-login/initiate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone: phoneNumber,
+                    country_code: countryMap[countryCode] || 'IN',
+                }),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || 'Failed to initiate login');
+            }
+            const data = await response.json();
+            setLoginCode(data.code);
+            setSessionId(data.session_id);
+            setWaLink(data.wa_link);
+            setExpiresAt(new Date(data.expires_at));
             setOtpStep(true);
-            setCountdown(30);
-            setTimeout(() => otpRefs.current[0]?.focus(), 100);
+        } catch (err: unknown) {
+            setLocalError(err instanceof Error ? err.message : 'Failed to start WhatsApp login');
+        } finally {
+            setIsPhoneLoading(false);
         }
     };
 
-    const handleOtpChange = (index: number, value: string) => {
-        const digit = value.replace(/[^0-9]/g, '').slice(-1);
-        const newOtp = [...otp];
-        newOtp[index] = digit;
-        setOtp(newOtp);
-        if (digit && index < 5) otpRefs.current[index + 1]?.focus();
-    };
-
-    const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-        if (e.key === 'Backspace' && !otp[index] && index > 0) otpRefs.current[index - 1]?.focus();
-    };
-
-    const handleOtpPaste = (e: React.ClipboardEvent) => {
-        e.preventDefault();
-        const paste = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
-        const newOtp = [...otp];
-        paste.split('').forEach((digit, i) => { newOtp[i] = digit; });
-        setOtp(newOtp);
-        if (paste.length > 0) otpRefs.current[Math.min(paste.length, 5)]?.focus();
-    };
-
-    const isOtpComplete = otp.every(d => d !== '');
     const displayError = localError || error;
 
     return (
@@ -449,10 +481,9 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                                                 onChange={(e) => setCountryCode(e.target.value)}
                                                 className="px-3 py-2.5 bg-secondary border-r border-border text-foreground text-sm focus:outline-none font-medium"
                                             >
-                                                <option value="+91">+91</option>
-                                                <option value="+1">+1</option>
-                                                <option value="+44">+44</option>
-                                                <option value="+61">+61</option>
+                                                <option value="+91">🇮🇳 +91</option>
+                                                <option value="+62">🇮🇩 +62</option>
+                                                <option value="+65">🇸🇬 +65</option>
                                             </select>
                                             <input
                                                 type="tel"
@@ -460,59 +491,73 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                                                 onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9]/g, ''))}
                                                 placeholder={t(language, 'login.phone.placeholder')}
                                                 className="flex-1 px-3.5 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none text-sm bg-transparent"
-                                                maxLength={10}
+                                                maxLength={15}
                                             />
                                         </div>
                                         <button
                                             type="submit"
-                                            disabled={phoneNumber.length < 10}
+                                            disabled={isPhoneLoading || phoneNumber.length < 8}
                                             className="w-full py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg flex items-center justify-center gap-2 transition-all text-sm"
                                         >
-                                            {t(language, 'login.phone.sendCode')}<ArrowRight className="w-4 h-4" />
+                                            {isPhoneLoading ? (
+                                                <><Loader2 className="w-4 h-4 animate-spin" />Starting...</>
+                                            ) : (
+                                                <>Continue with WhatsApp<ArrowRight className="w-4 h-4" /></>
+                                            )}
                                         </button>
                                     </form>
                                 ) : (
                                     <div className="space-y-4">
                                         <button
-                                            onClick={() => { setOtpStep(false); setOtp(['', '', '', '', '', '']); }}
+                                            onClick={() => {
+                                                setOtpStep(false);
+                                                setLoginCode('');
+                                                setSessionId('');
+                                                setWaLink(null);
+                                                setExpiresAt(null);
+                                            }}
                                             className="flex items-center gap-1.5 text-muted-foreground hover:text-primary text-sm transition-colors"
                                         >
-                                            <ArrowLeft className="w-4 h-4" />{t(language, 'login.phone.changeNumber')}
+                                            <ArrowLeft className="w-4 h-4" />Change number
                                         </button>
+
                                         <p className="text-sm text-muted-foreground">
-                                            {t(language, 'login.phone.codeSent')} <span className="font-medium text-foreground">{countryCode} {phoneNumber}</span>
+                                            Send this code to FloodSafe on WhatsApp:
                                         </p>
-                                        <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
-                                            {otp.map((digit, index) => (
-                                                <input
-                                                    key={index}
-                                                    ref={(el) => { otpRefs.current[index] = el; }}
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    maxLength={1}
-                                                    value={digit}
-                                                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                                                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                                                    className={`w-10 h-12 text-center text-lg font-semibold border rounded-lg transition-all focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 ${
-                                                        digit ? 'border-primary bg-primary/5' : 'border-border bg-secondary'
-                                                    }`}
-                                                />
-                                            ))}
+
+                                        {/* Prominent code display */}
+                                        <div className="text-center py-4 px-6 bg-primary/5 border-2 border-primary/20 rounded-xl">
+                                            <p className="text-3xl font-mono font-bold tracking-[0.3em] text-primary">
+                                                LOGIN-{loginCode}
+                                            </p>
                                         </div>
-                                        <p className="text-xs text-muted-foreground text-center">
-                                            {countdown > 0 ? `Resend in ${countdown}s` : (
-                                                <button onClick={() => setCountdown(30)} className="text-primary hover:underline">{t(language, 'login.phone.resend')}</button>
-                                            )}
-                                        </p>
-                                        <button
-                                            disabled={!isOtpComplete}
-                                            className="w-full py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg flex items-center justify-center gap-2 transition-all text-sm"
-                                        >
-                                            {t(language, 'login.phone.verify')}<Check className="w-4 h-4" />
-                                        </button>
+
+                                        {/* Open WhatsApp button */}
+                                        {waLink && (
+                                            <a
+                                                href={waLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg flex items-center justify-center gap-2 transition-all text-sm"
+                                            >
+                                                Open WhatsApp
+                                            </a>
+                                        )}
+
+                                        {/* Polling status */}
+                                        <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Waiting for verification...
+                                        </div>
+
+                                        {/* Expiry countdown */}
+                                        {expiresAt && (
+                                            <p className="text-xs text-muted-foreground text-center">
+                                                Code expires in {Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 60000))} minutes
+                                            </p>
+                                        )}
                                     </div>
                                 )}
-                                <div id="recaptcha-container" />
                                 <button
                                     type="button"
                                     onClick={() => setAuthMethod('email')}

@@ -89,7 +89,7 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_origins=settings.BACKEND_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+        allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With", "X-Firebase-AppCheck"],
     )
 
 # Security headers (production only)

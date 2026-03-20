@@ -12,7 +12,7 @@ class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=True)
     role = Column(String, default="user")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -217,7 +217,7 @@ class FloodZone(Base):
 class WatchArea(Base):
     __tablename__ = "watch_areas"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     name = Column(String)
     location = Column(Geometry('POINT', srid=4326))
     radius = Column(Float, default=1000.0) # meters
@@ -498,6 +498,26 @@ class WhatsAppSession(Base):
     # - awaiting_choice: User asked "1. Create account" or "2. Submit anonymously"
     # - awaiting_email: User chose to create account, waiting for email
     # - sos_active: User in active SOS flow (location pending)
+
+
+class WhatsAppLoginChallenge(Base):
+    """
+    Short-lived login challenges for WhatsApp-mediated web login.
+    Flow: web generates code -> user sends to WhatsApp bot -> bot verifies -> web polls for JWT.
+    Challenges expire after 5 minutes. See spec section 6.
+    """
+    __tablename__ = "whatsapp_login_challenges"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    phone = Column(String(20), nullable=False)
+    code = Column(String(10), nullable=False)
+    session_id = Column(UUID(as_uuid=True), unique=True, nullable=False, default=uuid.uuid4)
+    expires_at = Column(DateTime, nullable=False)
+    verified = Column(Boolean, default=False)
+    verified_at = Column(DateTime, nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    tokens_issued = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 # ============================================================================

@@ -63,6 +63,76 @@ logger = logging.getLogger(__name__)
 # Login code pattern — matches "LOGIN-XXXXXX" (case-insensitive, 6 alphanumeric chars)
 LOGIN_PATTERN = re.compile(r'^LOGIN-([A-Z0-9]{6})$', re.IGNORECASE)
 
+# Affirmative responses per language for pin confirmation
+AFFIRMATIVE_PATTERNS = {
+    "en": {"yes", "y", "save", "add", "ok", "sure", "yeah"},
+    "hi": {"haan", "ha", "haa", "ji", "theek", "save"},
+    "id": {"ya", "iya", "simpan", "tambah", "ok", "oke", "boleh"},
+}
+
+
+def _is_affirmative(text: str, language: str) -> bool:
+    """Return True if text is an affirmative response in the given language."""
+    normalized = text.strip().lower()
+    patterns = AFFIRMATIVE_PATTERNS.get(language, AFFIRMATIVE_PATTERNS["en"])
+    return normalized in patterns
+
+
+async def _create_pin_from_session(db: Session, session: WhatsAppSession, language: str) -> str:
+    """
+    Create a personal pin from pending session data.
+
+    Returns a user-facing confirmation or error message string.
+    Clears pending_pin state on success.
+    """
+    pending = session.data.get("pending_pin") if session.data else None
+    if not pending:
+        return get_message(TemplateKey.PIN_SAVE_FAILED, language, reason="No pending location to save.")
+    if not session.user_id:
+        return get_message(
+            TemplateKey.PIN_SAVE_FAILED, language,
+            reason="Please set up your account first. Send HI to start."
+        )
+
+    from ..domain.services.watch_area_service import WatchAreaService
+    service = WatchAreaService(db)
+
+    try:
+        pin = await service.create_personal_pin(
+            user_id=session.user_id,
+            latitude=pending["lat"],
+            longitude=pending["lng"],
+            name=pending["name"],
+            city=pending.get("city"),
+            alert_radius_label="my_neighborhood",
+            visibility="private",
+        )
+    except ValueError as e:
+        # Clear state even on expected errors (duplicate, limit reached)
+        session.state = "idle"
+        session_data = dict(session.data or {})
+        session_data.pop("pending_pin", None)
+        session.data = session_data
+        session.updated_at = datetime.utcnow()
+        db.commit()
+        return get_message(TemplateKey.PIN_SAVE_FAILED, language, reason=str(e))
+
+    # Clear pending state on success
+    session.state = "idle"
+    session_data = dict(session.data or {})
+    session_data.pop("pending_pin", None)
+    session.data = session_data
+    session.updated_at = datetime.utcnow()
+    db.commit()
+
+    fhi = pending.get("fhi", 0)
+    fhi_display = f" (FHI: {fhi:.2f})" if fhi else ""
+    return get_message(
+        TemplateKey.PIN_SAVED, language,
+        name=pending["name"],
+        fhi_display=fhi_display,
+    )
+
 
 async def _try_handle_login_code(db: Session, phone: str, text: str) -> Optional[str]:
     """Check if incoming WhatsApp message is a login code. Returns response text or None."""
@@ -509,6 +579,23 @@ async def _handle_text(
     login_response = await _try_handle_login_code(db, phone, text)
     if login_response:
         await meta_send_text(phone, login_response)
+        return
+
+    # Handle pin confirmation state — user was offered a pin save after a RISK query
+    if session and session.state == "awaiting_pin_confirm":
+        if _is_affirmative(text, language):
+            result = await _create_pin_from_session(db, session, language)
+            await meta_send_text(phone, result)
+        else:
+            # Not affirmative — cancel and fall through to normal command routing
+            session.state = "idle"
+            session_data = dict(session.data or {})
+            session_data.pop("pending_pin", None)
+            session.data = session_data
+            session.updated_at = datetime.utcnow()
+            db.commit()
+            # Fall through: process the message as a normal command below
+            await _handle_text(db, session, phone, user, text, language)
         return
 
     # Handle session states (onboarding flow)

@@ -411,6 +411,13 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                                             <>{isSignUp ? t(language, 'login.button.create') : t(language, 'login.button.signin')}<ArrowRight className="w-4 h-4" /></>
                                         )}
                                     </button>
+                                    {!isSignUp && (
+                                        <div className="text-center mt-2">
+                                            <a href="/forgot-password" className="text-sm text-blue-600 hover:underline">
+                                                Forgot password?
+                                            </a>
+                                        </div>
+                                    )}
                                 </form>
 
                                 {/* Divider */}

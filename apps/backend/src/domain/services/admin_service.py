@@ -235,6 +235,7 @@ def list_users_filtered(
             or_(
                 User.username.ilike(search_term),
                 User.email.ilike(search_term),
+                User.phone.ilike(search_term),
                 User.display_name.ilike(search_term),
             )
         )

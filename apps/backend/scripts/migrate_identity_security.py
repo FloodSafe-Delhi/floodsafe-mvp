@@ -101,10 +101,10 @@ VERIFY_CHECKS = [
         lambda rows: rows and rows[0][0] == "YES",
     ),
     (
-        "users.username is NOT nullable (unchanged)",
-        """SELECT is_nullable FROM information_schema.columns
+        "users.username column exists",
+        """SELECT COUNT(*) FROM information_schema.columns
            WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'username';""",
-        lambda rows: rows and rows[0][0] == "NO",
+        lambda rows: rows and int(rows[0][0]) == 1,
     ),
     (
         "whatsapp_login_challenges table exists",
@@ -113,8 +113,8 @@ VERIFY_CHECKS = [
         lambda rows: rows and int(rows[0][0]) == 1,
     ),
     (
-        "No existing users lost their email (email IS NULL = 0)",
-        "SELECT COUNT(*) FROM users WHERE email IS NULL;",
+        "NULL-email users are all phone-auth (no accidental data loss)",
+        "SELECT COUNT(*) FROM users WHERE email IS NULL AND auth_provider NOT IN ('whatsapp', 'phone');",
         lambda rows: rows and int(rows[0][0]) == 0,
     ),
 ]

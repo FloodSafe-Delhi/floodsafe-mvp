@@ -16,6 +16,26 @@ import { TokenStorage } from '../../lib/auth/token-storage';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+function PasswordStrengthIndicator({ password }: { password: string }) {
+    const rules = [
+        { label: 'At least 8 characters', met: password.length >= 8 },
+        { label: 'Uppercase letter', met: /[A-Z]/.test(password) },
+        { label: 'Lowercase letter', met: /[a-z]/.test(password) },
+        { label: 'Number', met: /\d/.test(password) },
+        { label: 'Special character', met: /[^A-Za-z0-9]/.test(password) },
+    ];
+    if (!password) return null;
+    return (
+        <ul className="text-xs space-y-0.5 mt-1.5">
+            {rules.map((r) => (
+                <li key={r.label} className={r.met ? 'text-green-600' : 'text-gray-400'}>
+                    {r.met ? '✓' : '○'} {r.label}
+                </li>
+            ))}
+        </ul>
+    );
+}
+
 interface LoginScreenProps {
     onLoginSuccess?: () => void;
 }
@@ -419,6 +439,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                                                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
                                         </div>
+                                        {isSignUp && <PasswordStrengthIndicator password={password} />}
                                     </div>
                                     <button
                                         type="submit"

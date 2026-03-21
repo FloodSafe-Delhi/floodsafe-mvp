@@ -50,26 +50,52 @@ patterns: Watch areas, PostGIS ST_DWithin, notification badges
 ```yaml
 files:
   Backend:
-  - apps/backend/src/api/auth.py - /register/email, /login/email, /verify-email
+  - apps/backend/src/api/auth.py - /register/email, /login/email, /verify-email, /forgot-password, /reset-password, /whatsapp-login/initiate, /whatsapp-login/status
   - apps/backend/src/api/otp.py - OTP send/verify endpoints
-  - apps/backend/src/domain/services/auth_service.py - register_email_user, authenticate_email_user
+  - apps/backend/src/domain/services/auth_service.py - register_email_user, authenticate_email_user, create_tokens, structured lockout
   - apps/backend/src/domain/services/otp_service.py - OTP generation and verification
   - apps/backend/src/domain/services/email_service.py - SendGrid email delivery
   - apps/backend/src/domain/services/security.py - hash_password, verify_password (bcrypt)
-  - apps/backend/src/infrastructure/models.py - password_hash, EmailVerificationToken, RefreshToken
+  - apps/backend/src/core/app_check.py - Firebase App Check middleware (log-only, global dependency)
+  - apps/backend/src/infrastructure/models.py - password_hash, EmailVerificationToken, RefreshToken, WhatsAppLoginChallenge
 
   Frontend:
   - apps/frontend/src/contexts/AuthContext.tsx - registerWithEmail, loginWithEmail
-  - apps/frontend/src/components/screens/LoginScreen.tsx - Email/Google/Phone tabs
+  - apps/frontend/src/components/screens/LoginScreen.tsx - Email/Google/Phone tabs, lockout countdown, password strength indicator
   - apps/frontend/src/components/screens/EmailVerifiedScreen.tsx - Verification confirmation
+  - apps/frontend/src/components/screens/ForgotPasswordScreen.tsx - Password reset request (no info leakage)
+  - apps/frontend/src/components/screens/ResetPasswordScreen.tsx - Token-based password reset with strength indicator
+  - apps/frontend/src/components/VerificationReminderBanner.tsx - Email verification banner (email users only)
+  - apps/frontend/src/lib/firebase.ts - App Check initialization (reCAPTCHA Enterprise)
+  - apps/frontend/src/lib/api/client.ts - App Check token on fetchJson + uploadFile
 
 auth_methods:
   - Email/Password: bcrypt hashing, 8+ char minimum, email verification via SendGrid
   - Google OAuth: Firebase integration
-  - Phone OTP: Firebase SMS
+  - Phone via WhatsApp: WhatsApp-mediated code verification (user sends LOGIN-{code} to bot, free)
+  - Phone via Firebase SMS: Available as infra, no UI built (costs ~$0.06/OTP)
 
-models: User (password_hash), RefreshToken (rotation), EmailVerificationToken
-migration: python -m apps.backend.src.scripts.migrate_add_password_auth
+identity_unification: |
+  Phone number (E.164) is the unified identity key. normalize_phone() ensures
+  the same number links WhatsApp bot users, web phone-login users, and
+  profile-linked accounts to a single User record with nullable email.
+  get_or_create_phone_user() is the single entry point for phone-based identity.
+
+security_hardening:
+  - Firebase App Check: reCAPTCHA Enterprise on frontend, verify_app_check global FastAPI dependency
+  - App Check modes: "log" (default, never blocks), "auth" (POST /auth/* only), "all" (full enforce)
+  - Account lockout: 5 failed attempts → 15min lockout, structured 403 with locked_until timestamp
+  - Lockout UI: Countdown timer, submit button disabled during lockout
+  - Password strength: 5-rule real-time indicator (8+ chars, upper, lower, number, special)
+  - Phone-only adaptations: No password UI, no verify-email banner, "add email" recovery prompt
+  - WhatsApp login: 5-min code expiry, 3 attempts/10min rate limit, tokens_issued race guard
+
+models: User (password_hash, phone, email nullable), RefreshToken (rotation), EmailVerificationToken, WhatsAppLoginChallenge
+migration:
+  - python -m apps.backend.src.scripts.migrate_add_password_auth
+  - python apps/backend/scripts/migrate_identity_security.py (nullable email, challenges table, watch_areas FK cascade)
+
+design_spec: docs/superpowers/specs/2026-03-18-identity-security-hardening-design.md
 ```
 
 ### @onboarding (COMPLETE)
@@ -619,8 +645,8 @@ files:
   Shared Services:
   - apps/backend/src/domain/services/whatsapp/
     - button_sender.py - Quick Reply buttons (9 types)
-    - command_handlers.py - RISK, WARNINGS, MY AREAS commands
-    - message_templates.py - Message templating (bilingual EN/HI)
+    - command_handlers.py - RISK, WARNINGS, MY AREAS, pin confirmation, risk→pin offer
+    - message_templates.py - Message templating (bilingual EN/HI, pin saved, login verified)
     - photo_handler.py - Photo ingestion + ML classification
 
 dual_transport: |
@@ -629,9 +655,19 @@ dual_transport: |
   - Meta:   POST /api/whatsapp-meta (JSON, Graph API outbound, HMAC-SHA256 signature validation)
   Both use same WhatsAppSession, Wit.ai NLU, and ML classification pipeline.
 
-inbound: Location pin → SOS, photo → ML classify, text commands, Quick Reply buttons
+inbound: Location pin → SOS, photo → ML classify, text commands, Quick Reply buttons, LOGIN-{code} verification
 outbound: Alerts to watch areas via Twilio
-commands: Send location (SOS), LINK, STATUS, START/STOP, RISK, WARNINGS, MY AREAS
+commands: Send location (SOS), LINK, STATUS, START/STOP, RISK, WARNINGS, MY AREAS, LOGIN-{code}
+
+whatsapp_pin_on_risk: |
+  Risk query ("Is Connaught Place safe?") now offers "Save as watch area?" after showing FHI.
+  Affirmative reply ("yes", "save") creates a personal pin via WatchAreaService.
+  200m duplicate detection, 25-pin limit, non-affirmative cancels session.
+
+whatsapp_web_login: |
+  Bot recognizes LOGIN-{code} messages, verifies against whatsapp_login_challenges table.
+  On match: marks challenge verified, responds "Login verified! Return to floodsafe.live".
+  Web frontend polls /auth/whatsapp-login/status → receives JWT tokens on verification.
 
 quick_reply_buttons:
   - report_flood, check_risk, view_alerts, add_photo

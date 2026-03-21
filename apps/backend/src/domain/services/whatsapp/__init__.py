@@ -32,6 +32,7 @@ from .photo_handler import (
 from .command_handlers import (
     geocode_location,
     handle_risk_command,
+    handle_risk_command_with_pin_offer,
     handle_warnings_command,
     handle_my_areas_command,
     handle_help_command,
@@ -70,6 +71,7 @@ __all__ = [
     # Command handlers
     "geocode_location",
     "handle_risk_command",
+    "handle_risk_command_with_pin_offer",
     "handle_warnings_command",
     "handle_my_areas_command",
     "handle_help_command",

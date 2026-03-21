@@ -41,6 +41,8 @@ const LandingPage = lazy(() => import('./components/screens/LandingPage'));
 const AdminLoginScreen = lazy(() => import('./components/screens/AdminLoginScreen').then(m => ({ default: m.AdminLoginScreen })));
 const AdminDashboard = lazy(() => import('./components/screens/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const AdminRegisterScreen = lazy(() => import('./components/screens/AdminRegisterScreen').then(m => ({ default: m.AdminRegisterScreen })));
+const ForgotPasswordScreen = lazy(() => import('./components/screens/ForgotPasswordScreen').then(m => ({ default: m.ForgotPasswordScreen })));
+const ResetPasswordScreen = lazy(() => import('./components/screens/ResetPasswordScreen').then(m => ({ default: m.ResetPasswordScreen })));
 
 const queryClient = new QueryClient();
 
@@ -365,6 +367,24 @@ export default function App() {
                                                             </Suspense>
                                                         } />
                                                         <Route path="/login" element={<LoginPage />} />
+                                                        <Route path="/forgot-password" element={
+                                                            <Suspense fallback={
+                                                                <div className="min-h-screen flex items-center justify-center">
+                                                                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                                                                </div>
+                                                            }>
+                                                                <ForgotPasswordScreen />
+                                                            </Suspense>
+                                                        } />
+                                                        <Route path="/reset-password" element={
+                                                            <Suspense fallback={
+                                                                <div className="min-h-screen flex items-center justify-center">
+                                                                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                                                                </div>
+                                                            }>
+                                                                <ResetPasswordScreen />
+                                                            </Suspense>
+                                                        } />
                                                         <Route path="/email-verified" element={
                                                             <>
                                                                 <EmailVerifiedScreen />

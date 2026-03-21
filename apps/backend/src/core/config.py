@@ -138,6 +138,13 @@ class Settings(BaseSettings):
     META_APP_SECRET: str = ""                      # App secret for signature validation
     META_WHATSAPP_ENABLED: bool = True             # Auto-disabled if META_WHATSAPP_TOKEN is empty
 
+    # WhatsApp-mediated web login — the actual phone number digits for wa.me links
+    # NOT the same as META_PHONE_NUMBER_ID (Meta Graph API numeric ID)
+    WHATSAPP_BUSINESS_DISPLAY_PHONE: str = ""  # e.g., "15551234567" (no + prefix)
+
+    # Firebase App Check enforcement mode: "log" | "auth" | "all"
+    APP_CHECK_ENFORCE_MODE: str = "log"
+
     # Google FloodHub Integration
     GOOGLE_FLOODHUB_API_KEY: str = ""             # Google Flood Forecasting API key (waitlist required)
     PUB_API_KEY: str = ""                          # Singapore PUB data.gov.sg API key (optional, for higher rate limits)

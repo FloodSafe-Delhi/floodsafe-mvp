@@ -247,8 +247,8 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
                 </a>
               )}
             </div>
-            <p className="text-sm opacity-90">{user.email}</p>
-            {user.phone && <p className="text-xs opacity-75 mt-1">{user.phone}</p>}
+            {user.email && <p className="text-sm opacity-90">{user.email}</p>}
+            {user.phone && <p className="text-sm opacity-90">{user.phone}</p>}
             <p className="text-xs opacity-75 mt-1">Joined {memberSince}</p>
           </div>
           <div className="flex-shrink-0">
@@ -336,6 +336,16 @@ export function ProfileScreen({ onNavigate }: ProfileScreenProps) {
           {/* RIGHT COLUMN: Settings / Areas */}
           <div className="space-y-4 mt-4 md:mt-0">
             <h2 className="text-lg font-semibold text-foreground px-1">Settings & Preferences</h2>
+
+        {/* Phone-only: prompt to add email for account recovery */}
+        {authUser?.auth_provider === 'phone' && !user.email && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-blue-800 text-sm font-medium">Add email for account recovery</p>
+            <p className="text-blue-600 text-xs mt-1">
+              Optional — helps recover your account if you change phone numbers.
+            </p>
+          </div>
+        )}
 
         {/* Watch Areas */}
         <Card className="p-6">

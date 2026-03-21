@@ -1,9 +1,13 @@
 """
 Authentication API endpoints for FloodSafe.
-Handles Google OAuth, Phone Auth, Email/Password, and token management.
+Handles Google OAuth, Phone Auth, Email/Password, WhatsApp Login, and token management.
 """
 import re
+import secrets
+import uuid
+from datetime import datetime, timedelta
 from typing import Optional
+from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
@@ -11,11 +15,12 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from src.infrastructure.database import get_db
-from src.infrastructure.models import User
+from src.infrastructure.models import User, WhatsAppLoginChallenge
 from src.domain.services.auth_service import auth_service
 from src.domain.services.email_service import email_service
 from src.domain.services.verification_service import verification_service
 from src.core.config import settings
+from src.core.phone_utils import normalize_phone
 from .deps import get_current_user, check_rate_limit
 
 
@@ -641,3 +646,110 @@ async def reset_password(
     db.commit()
 
     return MessageResponse(message="Password reset successfully. Please log in with your new password.")
+
+
+# =============================================================================
+# WhatsApp-Mediated Login Endpoints
+# =============================================================================
+
+# Login code alphabet: A-Z minus O,I,L + 0-9 minus 0,1 = 31 chars
+# Ambiguous glyphs removed to prevent user transcription errors.
+LOGIN_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+def generate_login_code(length: int = 6) -> str:
+    return "".join(secrets.choice(LOGIN_CODE_ALPHABET) for _ in range(length))
+
+
+class WhatsAppLoginRequest(BaseModel):
+    phone: str
+    country_code: str = "IN"
+
+
+@router.post("/whatsapp-login/initiate", tags=["authentication"])
+async def initiate_whatsapp_login(
+    request: WhatsAppLoginRequest,
+    http_request: Request,
+    db: Session = Depends(get_db)
+):
+    """Generate login code for WhatsApp-mediated web login. Zero SMS cost."""
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    check_rate_limit(f"wa_login:{request.phone}", max_requests=3, window_seconds=600)
+
+    phone = normalize_phone(request.phone, default_country=request.country_code)
+
+    # Delete pending challenges for this phone (one active challenge at a time)
+    db.query(WhatsAppLoginChallenge).filter(
+        WhatsAppLoginChallenge.phone == phone,
+        WhatsAppLoginChallenge.verified == False,
+    ).delete()
+
+    # Opportunistic stale cleanup (challenges expired more than 1 hour ago)
+    db.query(WhatsAppLoginChallenge).filter(
+        WhatsAppLoginChallenge.expires_at < datetime.utcnow() - timedelta(hours=1)
+    ).delete()
+
+    code = generate_login_code()
+    session_id = uuid.uuid4()
+
+    challenge = WhatsAppLoginChallenge(
+        phone=phone,
+        code=code,
+        session_id=session_id,
+        expires_at=datetime.utcnow() + timedelta(minutes=5),
+    )
+    db.add(challenge)
+    db.commit()
+
+    wa_number = settings.WHATSAPP_BUSINESS_DISPLAY_PHONE
+    wa_link = f"https://wa.me/{wa_number}?text=LOGIN-{code}" if wa_number else None
+
+    return {
+        "session_id": str(session_id),
+        "wa_link": wa_link,
+        "code": code,
+        "expires_at": challenge.expires_at.isoformat() + "Z",
+    }
+
+
+@router.get("/whatsapp-login/status", tags=["authentication"])
+async def check_whatsapp_login_status(
+    session_id: UUID,
+    http_request: Request,
+    db: Session = Depends(get_db)
+):
+    """Poll for WhatsApp login verification status."""
+    client_ip = http_request.client.host if http_request.client else "unknown"
+    check_rate_limit(f"wa_poll:{client_ip}", max_requests=30, window_seconds=60)
+
+    challenge = db.query(WhatsAppLoginChallenge).filter(
+        WhatsAppLoginChallenge.session_id == session_id
+    ).first()
+
+    if not challenge:
+        raise HTTPException(status_code=404, detail="Login session not found")
+
+    if challenge.expires_at < datetime.utcnow():
+        return {"status": "expired"}
+
+    if not challenge.verified:
+        return {"status": "pending"}
+
+    if challenge.tokens_issued:
+        raise HTTPException(status_code=409, detail="Tokens already issued")
+
+    # Mark tokens as issued BEFORE creating them to prevent race condition
+    # (concurrent polls could both pass the guard above)
+    challenge.tokens_issued = True
+    db.flush()
+
+    user = db.query(User).filter(User.id == challenge.user_id).first()
+    if not user:
+        raise HTTPException(status_code=500, detail="User not found after verification")
+
+    tokens = auth_service.create_tokens(user, db)
+
+    db.delete(challenge)
+    db.commit()
+
+    return {"status": "verified", **tokens}

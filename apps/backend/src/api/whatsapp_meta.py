@@ -17,6 +17,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 import time
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -27,7 +28,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 
 from ..infrastructure.database import get_db
-from ..infrastructure.models import User, WhatsAppSession
+from ..infrastructure.models import User, WhatsAppSession, WhatsAppLoginChallenge
 from ..core.config import settings
 from ..core.phone_utils import normalize_phone
 from ..domain.services.whatsapp.meta_client import (
@@ -50,13 +51,120 @@ from ..domain.services.whatsapp.meta_client import (
 from ..domain.services.whatsapp import (
     TemplateKey, get_message, get_user_language,
     process_sos_with_photo, get_severity_from_classification,
-    handle_risk_command, handle_warnings_command, handle_my_areas_command,
+    handle_risk_command, handle_risk_command_with_pin_offer,
+    handle_warnings_command, handle_my_areas_command,
     handle_help_command, handle_status_command, get_readable_location,
 )
 from ..domain.services.wit_service import classify_message, get_mapped_command, is_wit_enabled
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Login code pattern — matches "LOGIN-XXXXXX" (case-insensitive, 6 alphanumeric chars)
+LOGIN_PATTERN = re.compile(r'^LOGIN-([A-Z0-9]{6})$', re.IGNORECASE)
+
+# Affirmative responses per language for pin confirmation
+AFFIRMATIVE_PATTERNS = {
+    "en": {"yes", "y", "save", "add", "ok", "sure", "yeah"},
+    "hi": {"haan", "ha", "haa", "ji", "theek", "save"},
+    "id": {"ya", "iya", "simpan", "tambah", "ok", "oke", "boleh"},
+}
+
+
+def _is_affirmative(text: str, language: str) -> bool:
+    """Return True if text is an affirmative response in the given language."""
+    normalized = text.strip().lower()
+    patterns = AFFIRMATIVE_PATTERNS.get(language, AFFIRMATIVE_PATTERNS["en"])
+    return normalized in patterns
+
+
+async def _create_pin_from_session(db: Session, session: WhatsAppSession, language: str) -> str:
+    """
+    Create a personal pin from pending session data.
+
+    Returns a user-facing confirmation or error message string.
+    Clears pending_pin state on success.
+    """
+    pending = session.data.get("pending_pin") if session.data else None
+    if not pending:
+        return get_message(TemplateKey.PIN_SAVE_FAILED, language, reason="No pending location to save.")
+    if not session.user_id:
+        return get_message(
+            TemplateKey.PIN_SAVE_FAILED, language,
+            reason="Please set up your account first. Send HI to start."
+        )
+
+    from ..domain.services.watch_area_service import WatchAreaService
+    service = WatchAreaService(db)
+
+    try:
+        pin = await service.create_personal_pin(
+            user_id=session.user_id,
+            latitude=pending["lat"],
+            longitude=pending["lng"],
+            name=pending["name"],
+            city=pending.get("city"),
+            alert_radius_label="my_neighborhood",
+            visibility="private",
+        )
+    except ValueError as e:
+        # Clear state even on expected errors (duplicate, limit reached)
+        session.state = "idle"
+        session_data = dict(session.data or {})
+        session_data.pop("pending_pin", None)
+        session.data = session_data
+        session.updated_at = datetime.utcnow()
+        db.commit()
+        return get_message(TemplateKey.PIN_SAVE_FAILED, language, reason=str(e))
+
+    # Clear pending state on success
+    session.state = "idle"
+    session_data = dict(session.data or {})
+    session_data.pop("pending_pin", None)
+    session.data = session_data
+    session.updated_at = datetime.utcnow()
+    db.commit()
+
+    fhi = pending.get("fhi", 0)
+    fhi_display = f" (FHI: {fhi:.2f})" if fhi else ""
+    return get_message(
+        TemplateKey.PIN_SAVED, language,
+        name=pending["name"],
+        fhi_display=fhi_display,
+    )
+
+
+async def _try_handle_login_code(db: Session, phone: str, text: str) -> Optional[str]:
+    """Check if incoming WhatsApp message is a login code. Returns response text or None."""
+    match = LOGIN_PATTERN.match(text.strip())
+    if not match:
+        return None
+
+    code = match.group(1).upper()
+    normalized = normalize_phone(phone)
+
+    challenge = db.query(WhatsAppLoginChallenge).filter(
+        WhatsAppLoginChallenge.phone == normalized,
+        WhatsAppLoginChallenge.code == code,
+        WhatsAppLoginChallenge.verified == False,
+        WhatsAppLoginChallenge.expires_at > datetime.utcnow(),
+    ).first()
+
+    if not challenge:
+        return "Invalid or expired login code. Please try again on the website."
+
+    # Verify phone ownership — create or find user
+    from ..domain.services.auth_service import AuthService
+    auth_service = AuthService()
+    user = auth_service.get_or_create_phone_user(phone=normalized, db=db)
+
+    challenge.verified = True
+    challenge.verified_at = datetime.utcnow()
+    challenge.user_id = user.id
+    db.commit()
+
+    return "Login verified! You can return to your browser now."
+
 
 # Session timeout (30 minutes)
 SESSION_TIMEOUT_MINUTES = 30
@@ -467,6 +575,29 @@ async def _handle_text(
     """Handle text message — Wit.ai NLU + keyword fallback."""
     text_lower = text.lower()
 
+    # Check for login code FIRST (before session state or command routing)
+    login_response = await _try_handle_login_code(db, phone, text)
+    if login_response:
+        await meta_send_text(phone, login_response)
+        return
+
+    # Handle pin confirmation state — user was offered a pin save after a RISK query
+    if session and session.state == "awaiting_pin_confirm":
+        if _is_affirmative(text, language):
+            result = await _create_pin_from_session(db, session, language)
+            await meta_send_text(phone, result)
+        else:
+            # Not affirmative — cancel and fall through to normal command routing
+            session.state = "idle"
+            session_data = dict(session.data or {})
+            session_data.pop("pending_pin", None)
+            session.data = session_data
+            session.updated_at = datetime.utcnow()
+            db.commit()
+            # Fall through: process the message as a normal command below
+            await _handle_text(db, session, phone, user, text, language)
+        return
+
     # Handle session states (onboarding flow)
     if session.state == "awaiting_choice":
         await _handle_account_choice(db, session, phone, user, text, language)
@@ -550,7 +681,20 @@ async def _handle_text(
         last_loc = None
         if session.data and "last_lat" in session.data:
             last_loc = (session.data["last_lat"], session.data["last_lng"])
-        response = await handle_risk_command(db, user, place_name, last_loc, city=city)
+        response, offer_pin, pin_data = await handle_risk_command_with_pin_offer(
+            db, user, place_name, last_loc, city=city
+        )
+        # Offer to save as personal watch area for non-hotspot locations (linked users only)
+        if offer_pin and pin_data and session and session.user_id:
+            location_display = pin_data.get("name", "this location")
+            offer_text = get_message(TemplateKey.PIN_OFFER, language, location=location_display)
+            response = response + "\n\n" + offer_text
+            session.state = "awaiting_pin_confirm"
+            session_data = dict(session.data or {})
+            session_data["pending_pin"] = pin_data
+            session.data = session_data
+            session.updated_at = datetime.utcnow()
+            db.commit()
         if not await meta_send_text(phone, response):
             logger.error(f"SEND FAILED risk result to ***{phone[-4:]}")
         return

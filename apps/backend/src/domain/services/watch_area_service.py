@@ -80,6 +80,31 @@ class WatchAreaService:
                 f"Pin limit reached. You can have at most {MAX_PINS_PER_USER} personal pins."
             )
 
+        # 1b. Check for duplicate pin within 200m (raw SQL — consistent with helper methods)
+        try:
+            dup_result = self.db.execute(
+                text("""
+                    SELECT id, name
+                    FROM watch_areas
+                    WHERE user_id = :user_id
+                      AND is_personal_hotspot = TRUE
+                      AND ST_DWithin(
+                          location::geography,
+                          ST_MakePoint(:lng, :lat)::geography,
+                          200
+                      )
+                    LIMIT 1
+                """),
+                {"user_id": str(user_id), "lat": latitude, "lng": longitude},
+            )
+            dup_row = dup_result.fetchone()
+        except Exception as exc:
+            logger.warning("Duplicate-pin proximity check failed: %s — skipping check", exc)
+            dup_row = None
+
+        if dup_row:
+            raise ValueError(f"You already have a nearby watch area: {dup_row[1]}")
+
         # 2. Resolve alert radius
         alert_radius = ALERT_RADIUS_MAP.get(alert_radius_label, 500.0)
 

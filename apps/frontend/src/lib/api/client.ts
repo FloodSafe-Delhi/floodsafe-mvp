@@ -1,5 +1,6 @@
 import { TokenStorage } from '../auth/token-storage';
 import { API_BASE_URL } from './config';
+import { getAppCheckToken } from '../firebase';
 
 /**
  * Get authorization headers if user is authenticated.
@@ -44,12 +45,15 @@ async function handleUnauthorized(): Promise<boolean> {
 }
 
 export async function fetchJson<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const appCheckToken = await getAppCheckToken();
+
     const makeRequest = async () => {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
                 ...getAuthHeaders(),
+                ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}),
                 ...options?.headers,
             },
         });
@@ -87,11 +91,14 @@ export async function fetchJson<T>(endpoint: string, options?: RequestInit): Pro
 }
 
 export async function uploadFile<T>(endpoint: string, formData: FormData): Promise<T> {
+    const appCheckToken = await getAppCheckToken();
+
     const makeRequest = async () => {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}),
             },
             body: formData,
         });

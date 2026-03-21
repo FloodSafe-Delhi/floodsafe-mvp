@@ -366,6 +366,71 @@ Reply LINK to connect your account."""
     )
 
 
+async def handle_risk_command_with_pin_offer(
+    db: Session,
+    user: Optional[User],
+    place_name: Optional[str] = None,
+    last_location: Optional[Tuple[float, float]] = None,
+    city: str = "delhi",
+) -> Tuple[str, bool, Optional[dict]]:
+    """
+    Wrapper around handle_risk_command that adds pin-save offer metadata.
+
+    The original handle_risk_command return type is unchanged — this wrapper
+    calls it and re-derives coordinates to decide whether to offer a pin save.
+
+    Returns:
+        (response_text, offer_pin, pin_data)
+        - offer_pin: True when we resolved coordinates AND the location is NOT
+          a known hotspot (so saving is meaningful).
+        - pin_data: dict with lat/lng/name/fhi/city, or None.
+    """
+    import re as _re
+
+    response = await handle_risk_command(db, user, place_name, last_location, city)
+
+    # Re-derive coordinates using the same logic as handle_risk_command
+    latitude, longitude, location_name = None, None, None
+
+    if place_name:
+        result = await geocode_location(place_name, city=city)
+        if result:
+            latitude, longitude, location_name = result
+    elif last_location:
+        latitude, longitude = last_location
+        location_name = f"Location ({latitude:.4f}, {longitude:.4f})"
+
+    if latitude is None or longitude is None:
+        # No coordinates resolved — no pin offer
+        return response, False, None
+
+    # Determine whether this is a known hotspot by inspecting the response text.
+    # handle_risk_command embeds "Known waterlogging" via format_risk_factors when
+    # is_hotspot=True, so we look for that phrase.
+    is_hotspot = (
+        "known waterlogging" in response.lower()
+        or "known" in response.lower() and "waterlogging" in response.lower()
+    )
+
+    if is_hotspot:
+        return response, False, None
+
+    # Extract FHI score from the response if Llama appended it, or from the
+    # API data embedded in the response string (best-effort regex).
+    fhi_match = _re.search(r'\bFHI[:\s]+(\d+\.?\d*)', response, _re.IGNORECASE)
+    fhi = float(fhi_match.group(1)) if fhi_match else 0.0
+
+    pin_data = {
+        "lat": latitude,
+        "lng": longitude,
+        "name": location_name or place_name or f"({latitude:.4f}, {longitude:.4f})",
+        "fhi": fhi,
+        "city": city,
+    }
+
+    return response, True, pin_data
+
+
 def get_readable_location(latitude: float, longitude: float) -> str:
     """
     Get a human-readable location description.

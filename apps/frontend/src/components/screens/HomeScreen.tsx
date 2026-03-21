@@ -68,7 +68,7 @@ export function HomeScreen({
     onNavigateToProfile,
     onNavigateToMapWithRoute
 }: HomeScreenProps) {
-    const { user } = useAuth();
+    const { user, refreshUser } = useAuth();
     const { city: currentCity, setCity, syncCityToUser } = useCityContext();
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>('10m'); // Default 10 minutes
@@ -284,6 +284,17 @@ export function HomeScreen({
 
     // User's daily routes count (from backend)
     const userRoutesCount = userDailyRoutes.length;
+
+    // Re-check email verification status when user returns to this tab
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && user?.email && !user?.email_verified) {
+                refreshUser();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, [user, refreshUser]);
 
     // Auto-refresh with configurable interval
     useEffect(() => {

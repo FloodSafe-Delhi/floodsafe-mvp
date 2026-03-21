@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from uuid import UUID
 from datetime import datetime, timedelta
 from typing import List
@@ -77,7 +77,7 @@ async def update_my_profile(
             if existing:
                 raise HTTPException(status_code=400, detail="Username already taken")
 
-        if "email" in update_data:
+        if "email" in update_data and update_data["email"] is not None:
             existing = db.query(models.User).filter(
                 models.User.email == update_data["email"],
                 models.User.id != current_user.id
@@ -111,10 +111,11 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     Register a new user.
     """
     try:
-        # Check if user already exists
-        existing_user = db.query(models.User).filter(
-            (models.User.email == user.email) | (models.User.username == user.username)
-        ).first()
+        # Check if user already exists (NULL-safe: only check email if provided)
+        conditions = [models.User.username == user.username]
+        if user.email is not None:
+            conditions.append(models.User.email == user.email)
+        existing_user = db.query(models.User).filter(or_(*conditions)).first()
 
         if existing_user:
             raise HTTPException(status_code=400, detail="Username or email already registered")
@@ -289,7 +290,7 @@ def update_user(
             if existing:
                 raise HTTPException(status_code=400, detail="Username already taken")
 
-        if "email" in update_data:
+        if "email" in update_data and update_data["email"] is not None:
             existing = db.query(models.User).filter(
                 models.User.email == update_data["email"],
                 models.User.id != user_id

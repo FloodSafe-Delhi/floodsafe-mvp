@@ -19,6 +19,12 @@ import {
     ConfirmationResult,
 } from 'firebase/auth';
 import { getMessaging, getToken, onMessage, type Messaging } from 'firebase/messaging';
+import {
+    initializeAppCheck,
+    ReCaptchaEnterpriseProvider,
+    getToken as getAppCheckTokenFn,
+    AppCheck,
+} from 'firebase/app-check';
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -34,6 +40,7 @@ const firebaseConfig = {
 let firebaseApp: FirebaseApp | null = null;
 let firebaseAuth: Auth | null = null;
 let recaptchaVerifier: RecaptchaVerifier | null = null;
+let appCheck: AppCheck | null = null;
 
 /**
  * Check if Firebase is configured.
@@ -57,9 +64,47 @@ export function getFirebaseApp(): FirebaseApp | null {
 
     if (!firebaseApp) {
         firebaseApp = initializeApp(firebaseConfig);
+        initializeFirebaseAppCheck();
     }
 
     return firebaseApp;
+}
+
+/**
+ * Initialize Firebase App Check with reCAPTCHA Enterprise.
+ * Called automatically when Firebase initializes.
+ */
+export function initializeFirebaseAppCheck(): AppCheck | null {
+    const app = getFirebaseApp();
+    if (!app) return null;
+
+    const siteKey = import.meta.env.VITE_RECAPTCHA_ENTERPRISE_SITE_KEY;
+    if (!siteKey) return null;
+
+    if (!appCheck) {
+        if (import.meta.env.DEV) {
+            (self as unknown as Record<string, unknown>).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+        }
+        appCheck = initializeAppCheck(app, {
+            provider: new ReCaptchaEnterpriseProvider(siteKey),
+            isTokenAutoRefreshEnabled: true,
+        });
+    }
+    return appCheck;
+}
+
+/**
+ * Get a current App Check token to attach to API requests.
+ * Returns null if App Check is not initialized — fails open so API calls proceed.
+ */
+export async function getAppCheckToken(): Promise<string | null> {
+    if (!appCheck) return null;
+    try {
+        const result = await getAppCheckTokenFn(appCheck, false);
+        return result.token;
+    } catch {
+        return null; // Fail open — don't block API calls
+    }
 }
 
 /**

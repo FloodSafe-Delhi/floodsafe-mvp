@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from .infrastructure import models  # noqa: F401 - ensures models are loaded
+from .core.app_check import verify_app_check
 
 # NOTE: Database schema is now managed by Alembic migrations.
 # Run `alembic upgrade head` to apply migrations.
@@ -77,7 +78,11 @@ async def lifespan(app: FastAPI):
     logger.info("External alerts scheduler stopped")
 
 
-app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    lifespan=lifespan,
+    dependencies=[Depends(verify_app_check)],
+)
 
 # GZIP compression for responses >= 1KB (3-5x smaller GeoJSON, hotspot payloads)
 app.add_middleware(GZipMiddleware, minimum_size=1000)

@@ -738,6 +738,11 @@ async def check_whatsapp_login_status(
     if challenge.tokens_issued:
         raise HTTPException(status_code=409, detail="Tokens already issued")
 
+    # Mark tokens as issued BEFORE creating them to prevent race condition
+    # (concurrent polls could both pass the guard above)
+    challenge.tokens_issued = True
+    db.flush()
+
     user = db.query(User).filter(User.id == challenge.user_id).first()
     if not user:
         raise HTTPException(status_code=500, detail="User not found after verification")

@@ -443,7 +443,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                                     </div>
                                     <button
                                         type="submit"
-                                        disabled={isLoading || !email || password.length < 8}
+                                        disabled={isLoading || !email || password.length < 8 || (!!lockedUntil && new Date() < lockedUntil)}
                                         className="w-full py-2.5 mt-1 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg flex items-center justify-center gap-2 transition-all text-sm"
                                     >
                                         {isLoading ? (

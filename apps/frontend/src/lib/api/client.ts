@@ -91,11 +91,14 @@ export async function fetchJson<T>(endpoint: string, options?: RequestInit): Pro
 }
 
 export async function uploadFile<T>(endpoint: string, formData: FormData): Promise<T> {
+    const appCheckToken = await getAppCheckToken();
+
     const makeRequest = async () => {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',
             headers: {
                 ...getAuthHeaders(),
+                ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}),
             },
             body: formData,
         });
